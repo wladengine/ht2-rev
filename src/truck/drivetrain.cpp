@@ -169,33 +169,38 @@ float Car_CruiseGear(int type, float load, int* gear, float* rpm, float* throttl
     return 0;
 }
 
+KING_VAR(float, speedRatioCutoff, 64c264)
+KING_VAR(float, speedRatioScale, 64dac8)
+
 // Car_BestGear expressed through the type's m_12 and m_16. The gear is
 // returned one lower (counted from the first forward gear).
+// [FUN_507980]
 double Car_TopSpeedRatio(int type, float load, int* gear, float* rpm, float* speed,
-                         float* inverse)                                // [FUN_507980]
+                         float* inverse)
 {
     double v = Car_BestGear(type, load, gear, rpm);
     *speed = (float)v;
-    if (!(v > 0.0f))
-        return 0.0f;
+    if (!(v > speedRatioCutoff))
+        return speedRatioCutoff;
     const CarType& c = g_carTypes[type];
-    double q = c.m_12 / (v * c.m_16 * 0.001f / (*rpm / (double)c.torqueRpm));
+    double q = c.m_12 / (v * c.m_16 * speedRatioScale / (*rpm / (double)c.torqueRpm));
     (*gear)--;
     *inverse = (float)(c.m_12 / q);
     return q;
 }
 
 // The same for Car_CruiseGear, scaled by the throttle.
+// [FUN_507a10]
 double Car_CruiseRatio(int type, float load, int* gear, float* rpm, float* speed, float* inverse,
-                       float* throttle)                                 // [FUN_507a10]
+                       float* throttle)
 {
     double v = Car_CruiseGear(type, load, gear, rpm, throttle);
     *speed = (float)v;
-    if (!(v > 0.0f))
-        return 0.0f;
+    if (!(v > speedRatioCutoff))
+        return speedRatioCutoff;
     const CarType& c = g_carTypes[type];
     double scaled = (double)*throttle * c.m_12;
-    double q = scaled / (v * c.m_16 * 0.001f / (*rpm / (double)c.torqueRpm));
+    double q = scaled / (v * c.m_16 * speedRatioScale / (*rpm / (double)c.torqueRpm));
     *inverse = (float)(c.m_12 / q);
     (*gear)--;
     return q;

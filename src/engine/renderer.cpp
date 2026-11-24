@@ -464,7 +464,7 @@ void __fastcall Window_FreeBuffers(BYTE* self, void*)
 }
 
 // [FUN_5b6b00]
-int __fastcall Window_Set80(BYTE* self, void*, int v)
+int __fastcall Surface_SetDrawMode(BYTE* self, void*, int v)
 {
     int old = F(int, self, 80);
     F(int, self, 80) = v;
@@ -1163,7 +1163,7 @@ void __fastcall Surface_Clear(BYTE* self, void*, int color, int argb)
 }
 
 // [FUN_5bbf00] converts the 8-bit run-length image to 16 bits through the palette
-void __fastcall Image_RleTo16(BYTE* self, void*, int unused)
+void __fastcall Image_RleTo16(BYTE* self, void*, const BYTE* palette)
 {
     if (!F(BYTE*, self, 16) || (F(BYTE, self, 28) & 0xA0) || F(WORD, self, 8) != 1)
         return;
@@ -1181,7 +1181,7 @@ void __fastcall Image_RleTo16(BYTE* self, void*, int unused)
             int n = h & 127;
             if (!(h & 128)) {
                 for (int k = n; k > 0; k--) {
-                    const BYTE* pe = self + 24 + *src++ * 3;
+                    const BYTE* pe = palette + 24 + *src++ * 3;
                     *(WORD*)dst = (WORD)Pixel_Pack(pe[0], pe[1], pe[2]);
                     dst += 2;
                 }
@@ -1542,7 +1542,7 @@ extern "C" long __fastcall Rn_DrawIndexedStrided(BYTE* self, void*, BYTE* mat, i
 // ---------------------------------------------------------------------------
 extern "C" int __fastcall Clip_ByPlane(BYTE* s, void*, int flags, int n, int* which, const float* p);
 extern "C" void FUN_5af000(); KING_ALIAS("_FUN_5af000", "@Clip_ByPlane@24")
-extern "C" void* __cdecl Data_Read5e9690(void* a, const char* name);
+extern "C" void* __cdecl Mask_ReadPixelsFromFile(void* a, const char* name);
 extern "C" int __cdecl Mask_ReadPixels(BYTE* m, FILE* f, long off);
 extern "C" void __fastcall TexSets_Free(BYTE* s);
 extern "C" void FUN_5b9520(); KING_ALIAS("_FUN_5b9520", "@TexSets_Free@4")
@@ -1572,7 +1572,7 @@ extern "C" int __fastcall Texture_LoadData(BYTE* self, void*)
         return 0;
     if (F(void*, self, 0))
     {
-        Data_Read5e9690(self, (const char*)(F(void*, self, 0)));
+        Mask_ReadPixelsFromFile(self, (const char*)(F(void*, self, 0)));
         F(DWORD, self, 28) |= 1;
         return 0;
     }
@@ -1984,7 +1984,7 @@ KING_VAR(int, g_q148_702e94, 702e94)
 extern "C" BYTE* __fastcall SubSurface_Construct(BYTE* s, void*, BYTE* p, int* r, int flags)
 {
     memcpy(s + 100, r, 16);
-    F(DWORD, s, 12) = (F(DWORD, p, 12) & 0xffffb5fe) | flags | 32;
+    F(DWORD, s, 12) = (F(DWORD, p, 12) & 0xffffb4fe) | flags | 32;
     int right = r[2] < (int)F(WORD, p, 0) ? r[2] : F(WORD, p, 0) - 1;
     r[2] = right;
     int bottom = r[3] < (int)F(WORD, p, 2) ? r[3] : F(WORD, p, 2) - 1;
@@ -2534,12 +2534,13 @@ KING_VAR(float, g_q161_64c250, 64c250)
 // 16: x <= y; others always)
 extern "C" int __stdcall Clip_Inside(const float* v, int k)
 {
+    const unsigned short belowOrEqual = X87_C0 | X87_C3;
     switch (k) {
-    case 1: return v[1] >= g_q161_64c250 ? 1 : 0;
-    case 2: return -v[1] > v[0] ? 0 : 1;
-    case 4: return v[2] > v[1] ? 0 : 1;
-    case 8: return -v[1] > v[2] ? 0 : 1;
-    case 16: return v[0] > v[1] ? 0 : 1;
+    case 1: return !(x87_compare_status(v[1], g_q161_64c250) & X87_C0);
+    case 2: return (x87_compare_status(-v[1], v[0]) & belowOrEqual) != 0;
+    case 4: return (x87_compare_status(v[2], v[1]) & belowOrEqual) != 0;
+    case 8: return (x87_compare_status(-v[1], v[2]) & belowOrEqual) != 0;
+    case 16: return (x87_compare_status(v[0], v[1]) & belowOrEqual) != 0;
     }
     return 1;
 }
@@ -4102,7 +4103,7 @@ void __fastcall Render_Line3D(BYTE* s, void*, float ax, float ay, float az, floa
 // === the path constructor (FUN_5bcc60)
 
 extern "C" void __stdcall Array_ForEach(BYTE* p, int size, int count, void (*fn)());
-extern "C" void __fastcall Poly_GetRecord(BYTE* self, void*, int i, DWORD* out);
+extern "C" void __fastcall Poly_SetRecord(BYTE* self, void*, int i, const DWORD* transform);
 extern "C" void __fastcall Poly_SetWeight(BYTE* self, void*, int i, double v);
 extern "C" void FUN_5ab4d0(); KING_ALIAS("_FUN_5ab4d0", "_Vec3_Length")
 extern "C" void FUN_5abc40(); KING_ALIAS("_FUN_5abc40", "_Matrix_Translation")
@@ -4142,7 +4143,7 @@ BYTE* __fastcall Path_Construct(BYTE* s, void*, int n, const Pa_V3* pts, int a, 
     F(int, s, 36) = 0;
     for (int i = 0; i < F(int, s, 4); i++) {
         BYTE t[48];
-        Poly_GetRecord(s, 0, i, (DWORD*)(CallC<BYTE*>(FUN_5abc40, t, pts[i])));
+        Poly_SetRecord(s, 0, i, (const DWORD*)CallC<BYTE*>(FUN_5abc40, t, pts[i]));
         Poly_SetWeight(s, 0, i, (double)i);
         if (i) {
             BYTE* m = F(BYTE*, s, 8);
@@ -5410,7 +5411,7 @@ int __fastcall View_SphereClip(BYTE* s, void*, const float* sp)
         g_fr702a90 |= 1;
         g_fr702990 = x87_sqrt(g_fr64b660) * g_fr64b6e0;
     }
-    if (sp[3] == g_fr64b678)
+    if (x87_eq(sp[3], g_fr64b678))
     {
         F(int, s, 8272) = 31;
         return 31;

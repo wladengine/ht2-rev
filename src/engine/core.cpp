@@ -323,11 +323,27 @@ void __cdecl Time_NowMs(double* out)
 // [FUN_5d2fc0] *last becomes the time since *last (not negative), added to *acc
 void __cdecl Time_Delta(double* last, double* acc)
 {
-    double t = Tsc_Now() * 1000.0 - *last;
-    if (!(t >= 0.0f))
-        t = 0.0f;
-    *acc = t + *acc;
-    *last = t;
+    // Compare the elapsed time against zero with the elapsed value in ST(0).
+    // Scene queries propagate the resulting x87 condition bits to their caller.
+    static const double milliseconds = 1000.0;
+    __asm {
+        call Tsc_Now
+        fmul milliseconds
+        mov ecx, last
+        fsub qword ptr [ecx]
+        ftst
+        fnstsw ax
+        test ah, 1
+        jz addElapsed
+        fstp st(0)
+        fldz
+    addElapsed:
+        fld st(0)
+        mov eax, acc
+        fadd qword ptr [eax]
+        fstp qword ptr [eax]
+        fstp qword ptr [ecx]
+    }
 }
 
 // [FUN_5d3010]

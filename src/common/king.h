@@ -506,7 +506,7 @@ extern "C" void FUN_5e4300(); KING_ALIAS("_FUN_5e4300", "_DataPath_Set")    // P
 
 // Splits the next word (separated by blanks and tabs) off *p, terminating it
 // in place, and advances *p; NULL when there is none.
-extern "C" char* __cdecl NextToken(char** p);         // engine.cpp
+extern "C" char* __cdecl NextToken(char** p);         // weather.cpp
 // The directory part of path, in a static buffer; "." if it has none.
 inline char* PathDir(const char* path) { return CallC<char*>(FUN_5e4300, path); }
 
@@ -568,7 +568,7 @@ extern "C" void FUN_5bd710(); KING_ALIAS("_FUN_5bd710", "_Ctl_DrawFrame")    // 
 extern "C" void FUN_530050(); KING_ALIAS("_FUN_530050", "@Words295_ClearEmpty@8")    // Controls::Update
 extern "C" void FUN_578fe0(); KING_ALIAS("_FUN_578fe0", "_Joy_ReadState")    // Joy_Read
 extern "C" void FUN_5c3990(); KING_ALIAS("_FUN_5c3990", "@Med5c3990_Destroy@4")    // destructor of CKingApp's base class
-extern "C" void __cdecl Loading_Update();       // carat.cpp
+extern "C" void __cdecl LoadingScreen_UpdateBackdrop();       // carat.cpp
 extern "C" void FUN_56ce40(); KING_ALIAS("_FUN_56ce40", "_Hud_Frame")
 extern "C" void FUN_53b4c0(); KING_ALIAS("_FUN_53b4c0", "@Player_Controls@8")
 
@@ -646,7 +646,7 @@ KING_VAR(JoyTimes, g_joyTime, 696910)        // when they were last down (Timer_
 inline int Joy_Read(JoyState* state, int a2) { return CallC<int>(FUN_578fe0, state, a2); }
 extern "C" int __cdecl Joy_Shutdown();            // mmt.cpp
 extern "C" double __cdecl Game_Time();            // world.cpp: the game time
-extern "C" double __cdecl Game_FrameTime();       // world.cpp: the last frame's time, at most 0.25 s
+extern "C" double __cdecl Game_FrameTime();       // world.cpp: seconds per frame, capped at 0.25 without an override
 
 KING_VAR(float, g_6974bc, 6974bc)
 KING_VAR(short, g_6974c2, 6974c2)

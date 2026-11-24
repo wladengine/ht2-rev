@@ -32,7 +32,8 @@ KING_VAR(AsmLabel, g_marineNeighbor44, 685b44)
 KING_VAR(AsmLabel, g_marineNeighbor52, 685b18)
 KING_VAR(AsmLabel, g_marineNeighbor48, 685aec)
 
-extern "C" int __fastcall MarineGreed_Allocate(BYTE* self, void*, unsigned vertices, unsigned indices)
+// [FUN_60d320]
+extern "C" int __fastcall MarineMesh_AllocateBuffers(BYTE* self, void*, unsigned vertices, unsigned indices)
 {
     F(void*, self, 12) = malloc(vertices * 12);
     F(void*, self, 8) = malloc(indices * 4);
@@ -44,7 +45,8 @@ extern "C" int __fastcall MarineGreed_Allocate(BYTE* self, void*, unsigned verti
     return 0;
 }
 
-extern "C" void __fastcall MarineGreed_Init(BYTE* self, void*)
+// [FUN_60d3a0]
+extern "C" void __fastcall MarineMesh_InitPriorityQueues(BYTE* self, void*)
 {
     F(DWORD, F(void*, self, 12), 0) = 0;
     F(DWORD, F(void*, self, 8), 0) = 0;
@@ -82,7 +84,8 @@ static BYTE* MarineGreed_NextEdge(BYTE* list, BYTE* edge)
     return F(BYTE*, edge, 0);
 }
 
-extern "C" void __fastcall MarineGreed_Update(BYTE* self, void*)
+// [FUN_60d440]
+extern "C" void __fastcall MarineMesh_ScoreAndRefineNodes(BYTE* self, void*)
 {
     BYTE* list = F(BYTE*, self, 32);
     F(BYTE*, self, 40) = F(BYTE*, list, 0) ? F(BYTE*, list, 0) : F(BYTE*, list, 4);
@@ -125,6 +128,7 @@ static void MarineGreed_UnlinkNeighbor(BYTE* node, unsigned slot, unsigned first
     F(BYTE*, neighbor, finalSlot) = 0;
 }
 
+// [FUN_60d540]
 extern "C" void __fastcall MarineGreed_RemoveNode(BYTE* self, void*, BYTE* node)
 {
     BYTE* group = F(BYTE*, node, 32);
@@ -169,7 +173,8 @@ extern "C" void __fastcall MarineGreed_RemoveNode(BYTE* self, void*, BYTE* node)
 
 // Refresh a small slice of node and edge priorities each frame. The edge
 // budget starts at the last node timestamp, as in the original scheduler.
-extern "C" int __fastcall MarineGreed_RefreshPriorities(BYTE* self, void*)
+// [FUN_60cfa0]
+extern "C" int __fastcall MarineMesh_RefreshTriangleAndEdgePriorities(BYTE* self, void*)
 {
     DWORD start = timeGetTime(), lastNodeTime = start;
     BYTE* list = F(BYTE*, self, 32);
@@ -216,7 +221,8 @@ extern "C" int __fastcall MarineGreed_RefreshPriorities(BYTE* self, void*)
     return 1;
 }
 
-extern "C" int __fastcall MarineGreed_Refine(BYTE* self, void*)
+// [FUN_60d180]
+extern "C" int __fastcall MarineMesh_CoarsenAndRefine(BYTE* self, void*)
 {
     if (!g_marineRefinementEnabled || MarineQueue_Empty(F(BYTE*,self,28),0))
         return 0;
@@ -239,12 +245,13 @@ extern "C" int __fastcall MarineGreed_Refine(BYTE* self, void*)
     return 1;
 }
 
-extern "C" int __fastcall MarineGreed_Emit(BYTE* self, void*)
+// [FUN_60d250]
+extern "C" int __fastcall MarineMesh_SubmitGeometry(BYTE* self, void*)
 {
     if (F(DWORD, self, 24))
-        F(DWORD, self, 24) = MarineGreed_RefreshPriorities(self, 0);
+        F(DWORD, self, 24) = MarineMesh_RefreshTriangleAndEdgePriorities(self, 0);
     if (F(DWORD, self, 20))
-        F(DWORD, self, 20) = MarineGreed_Refine(self, 0);
+        F(DWORD, self, 20) = MarineMesh_CoarsenAndRefine(self, 0);
     BYTE* sink = F(BYTE*, self, 4);
     CallVirt(sink, 28);
     for (unsigned i = 0; i < (unsigned)F(WORD, self, 36); ++i)
@@ -269,6 +276,7 @@ extern "C" DWORD __fastcall MarineQueue_SetNodePriority(BYTE* self, void*, BYTE*
     MarineQueue_InsertNode(self, 0, node);
     return ++F(DWORD, self, 8);
 }
+// [FUN_60f8d0]
 extern "C" DWORD __fastcall MarineQueue_SetEdgePriority(BYTE* self, void*, BYTE* edge, DWORD priorityBits)
 {
     MarineQueue_RemoveLink(self,0,edge);
@@ -276,6 +284,7 @@ extern "C" DWORD __fastcall MarineQueue_SetEdgePriority(BYTE* self, void*, BYTE*
     MarineQueue_InsertEdge(self, 0, edge);
     return ++F(DWORD, self, 8);
 }
+// [FUN_60f7b0]
 extern "C" BYTE* __fastcall MarineQueue_TopNode(BYTE* self, void*)
 {
     BYTE* first = F(BYTE*, self, 0);
@@ -285,6 +294,7 @@ extern "C" BYTE* __fastcall MarineQueue_TopNode(BYTE* self, void*)
     // Unordered scores follow the same branch as a strictly smaller last.
     return !(F(float, last, 28) >= F(float, first, 28)) ? first : last;
 }
+// [FUN_60f9d0] Pick the lower edge score at +72, preferring the second head on ties.
 extern "C" BYTE* __fastcall MarineQueue_TopEdge(BYTE* self, void*)
 {
     BYTE* first = F(BYTE*, self, 0);
@@ -331,6 +341,7 @@ extern "C" BYTE* __fastcall MarineQueue_RemoveNode(BYTE* self, void*, BYTE* node
     F(BYTE*, node, 8) = F(BYTE*, node, 4) = link;
     return node;
 }
+// [FUN_60f520] Insert by node priority, rebuilding the rings at the counter threshold.
 extern "C" DWORD __fastcall MarineQueue_InsertNode(BYTE* self, void*, BYTE* node)
 {
     BYTE* last = F(BYTE*, self, 4);
@@ -407,6 +418,7 @@ static void MarineQueue_SpliceRun(BYTE* firstLink, BYTE* endLink, BYTE* targetLi
     F(BYTE*, targetTail, 0) = firstLink;
     F(BYTE*, targetLink, 4) = runTail;
 }
+// [FUN_60f390] Merge the two priority-sorted node rings into the first ring.
 extern "C" DWORD __fastcall MarineQueue_RebuildNodes(BYTE* self, void*)
 {
     BYTE* second = F(BYTE*, self, 4);
@@ -454,16 +466,20 @@ finish:
     F(BYTE*, self, 4) = 0;
     return (DWORD)targetLink;
 }
+// [FUN_60f7f0]
 extern "C" DWORD __fastcall MarineQueue_RebuildEdges(BYTE* self, void*)
 {
     BYTE* second = F(BYTE*, self, 4);
+    // Both original callers carry the incremented queue count in EAX.
+    // With either ring empty the merge returns that count unchanged.
+    DWORD insertionCount = F(DWORD, self, 8);
     F(DWORD, self, 8) = 0;
-    if (!second) return 0;
+    if (!second) return insertionCount;
     BYTE* first = F(BYTE*, self, 0);
     if (!first) {
         F(BYTE*, self, 0) = second;
         F(BYTE*, self, 4) = 0;
-        return (DWORD)second;
+        return insertionCount;
     }
     BYTE* firstTail = F(BYTE*, first, 4);
     BYTE* secondTail = F(BYTE*, second, 4);
@@ -503,16 +519,19 @@ finish:
 
 // Marine task state and registration helpers.
 KING_VAR(DWORD, g_marineStartDelay, 653008)
+// [FUN_60e0d0]
 extern "C" BYTE* __fastcall MarineTask_SetMaterial(BYTE* self, void*, DWORD material)
 {
     BYTE* mesh = F(BYTE*, self, 0);
     F(DWORD, F(void*, mesh, 4), 116) = material;
     return mesh;
 }
+// [FUN_60e0e0]
 extern "C" DWORD __fastcall MarineTask_GetMaterial(BYTE* self, void*)
 {
     return F(DWORD, self, 116);
 }
+// [FUN_60e560]
 extern "C" DWORD __fastcall MarineTask_Activate(BYTE* self, void*, DWORD immediate)
 {
     if (F(int, F(void*, self, 112), 2992) > 5) {
@@ -528,6 +547,7 @@ extern "C" DWORD __fastcall MarineTask_Activate(BYTE* self, void*, DWORD immedia
     F(DWORD, self, 132) = 0;
     return 1;
 }
+// [FUN_60e5e0]
 extern "C" DWORD __fastcall MarineTask_Deactivate(BYTE* self, void*, DWORD immediate)
 {
     F(DWORD, self, 156) = (F(DWORD, self, 116) == 1 && !immediate) ? g_marineStartDelay : 0;
@@ -561,12 +581,14 @@ extern "C" DWORD __fastcall MarineTask_SetSecondBounds(BYTE* self, void*, DWORD 
 
 // Marine task setup and callbacks.
 extern "C" DWORD __fastcall MarineMesh_PruneVertices(BYTE*,void*);
+// [FUN_605770]
 extern "C" BYTE* __fastcall MarineTask_InitPoints(BYTE* self, void*, unsigned count, const DWORD* points)
 {
     for (unsigned i = 0; i < count; ++i) F(DWORD, self, 16 + i * 4) = points[i];
     F(DWORD, self, 0) = count;
     return self;
 }
+// [FUN_60e070]
 extern "C" BYTE* __fastcall MarineTask_AllocatePoints(BYTE* self, void*, unsigned count, const DWORD* points)
 {
     BYTE* value = (BYTE*)operator new(56);
@@ -574,14 +596,16 @@ extern "C" BYTE* __fastcall MarineTask_AllocatePoints(BYTE* self, void*, unsigne
     F(BYTE*, self, 200) = value;
     return value;
 }
-extern "C" BYTE* __fastcall MarineTask_SetPoints(BYTE* self, void*, unsigned count, const DWORD* points)
+// [FUN_60e050]
+extern "C" BYTE* __fastcall MarineTask_SetMeshPoints(BYTE* self, void*, unsigned count, const DWORD* points)
 {
     return MarineTask_AllocatePoints(F(BYTE*, F(void*, self, 0), 4), 0, count, points);
 }
+// [FUN_60ea50]
 extern "C" BYTE* __fastcall MarineTask_RequestPoints(BYTE* self, void*, unsigned count, const DWORD* points)
 {
     F(DWORD, self, 124) = 1;
-    return MarineTask_SetPoints(F(BYTE*, self, 108), 0, count, points);
+    return MarineTask_SetMeshPoints(F(BYTE*, self, 108), 0, count, points);
 }
 static BYTE* MarineTask_CopyBounds(BYTE* self, const DWORD* first, const DWORD* second)
 {
@@ -592,6 +616,7 @@ static BYTE* MarineTask_CopyBounds(BYTE* self, const DWORD* first, const DWORD* 
     F(DWORD, mesh, 24) = F(DWORD, mesh, 20) = 1;
     return mesh;
 }
+// [FUN_60dd80]
 extern "C" int __fastcall MarineTask_SetBounds(BYTE* self, void*, const DWORD* first, const DWORD* second)
 {
     MarineTask_CopyBounds(self, first, second);
@@ -599,12 +624,14 @@ extern "C" int __fastcall MarineTask_SetBounds(BYTE* self, void*, const DWORD* f
     F(DWORD, F(void*, self, 0), 24) = 1;
     return 1;
 }
-extern "C" DWORD __fastcall MarineTask_RebuildBounds(BYTE* self, void*, const DWORD* first, const DWORD* second)
+// [FUN_60dde0]
+extern "C" DWORD __fastcall MarineTask_RebuildMeshForBounds(BYTE* self, void*, const DWORD* first, const DWORD* second)
 {
     MarineTask_CopyBounds(self, first, second);
-    MarineGreed_Update(F(BYTE*, self, 0), 0);
+    MarineMesh_ScoreAndRefineNodes(F(BYTE*, self, 0), 0);
     return MarineMesh_PruneVertices(F(BYTE*, self, 0), 0);
 }
+// [FUN_60df70]
 extern "C" DWORD __fastcall MarineTask_ApplyPoint(BYTE* self, void*, const void* point)
 {
     return CallVirt<DWORD>(F(void*, F(void*, self, 0), 4), 40, point);
@@ -617,12 +644,14 @@ __declspec(noinline) static float MarineTask_LoadCoordinate(const float* value)
 {
     return *value;
 }
+// [FUN_60f010]
 extern "C" DWORD __fastcall MarineTask_ForwardPointCopy(BYTE* self, void*, const float* point)
 {
     float copy[3];
     for (unsigned i = 0; i < 3; ++i) copy[i] = MarineTask_LoadCoordinate(point + i);
     return MarineTask_ApplyPoint(F(BYTE*, self, 108), 0, copy);
 }
+// [FUN_60dd60]
 extern "C" void __fastcall MarineTask_ReleaseMesh(BYTE* self, void*)
 {
     BYTE* mesh = F(BYTE*, self, 0);
@@ -635,6 +664,7 @@ extern "C" void __fastcall MarineTask_ReleaseMesh(BYTE* self, void*)
 // Marine mesh cleanup.
 KING_VAR(BYTE*, g_marineUnusedVertices, 725d50)
 KING_VAR(DWORD, g_marineUnusedVertexCount, 725d54)
+// [FUN_60d780]
 extern "C" DWORD __fastcall MarineMesh_PruneVertices(BYTE* self, void*)
 {
     DWORD* used = (DWORD*)malloc((unsigned)F(WORD, self, 36) * 4);
@@ -681,6 +711,7 @@ extern "C" DWORD __fastcall MarineMesh_PruneVertices(BYTE* self, void*)
     // The original retains its scratch allocation; keep allocator behavior.
     return 0;
 }
+// [FUN_60d750]
 extern "C" DWORD __fastcall MarineMesh_DrainEdges(BYTE* self, void*)
 {
     BYTE* edge;
@@ -690,18 +721,19 @@ extern "C" DWORD __fastcall MarineMesh_DrainEdges(BYTE* self, void*)
 }
 
 // Marine object lifetime and geometry transitions.
-extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE*,void*,const DWORD*,float,float,DWORD);
+extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE*,void*,const DWORD*,DWORD,DWORD,DWORD);
 extern "C" void __fastcall MarineMesh_CreateMotionResponse(BYTE*,void*,DWORD,DWORD,DWORD);
 extern "C" void __fastcall MarineGreed_Destruct(BYTE*, void*);
 extern "C" int __fastcall Node_Remove(BYTE* self, void*);
 extern "C" void __fastcall Object_Destroy(BYTE* s);
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
 extern "C" DWORD* __cdecl MarineGeometry_Interpolate(DWORD*, const DWORD*, const DWORD*, float);
 KING_VAR(AsmLabel, g_marineMeshVtable, 652ff8)
 KING_VAR(AsmLabel, g_marineTaskVtable, 653040)
 KING_VAR(AsmLabel, g_marineTaskSecondaryVtable, 653020)
-extern "C" BYTE* __fastcall MarineMesh_Create(BYTE* self, void*, DWORD x, DWORD y, DWORD z,
-                                            DWORD first, DWORD second, DWORD unused, DWORD fourth)
+// [FUN_60db70]
+extern "C" BYTE* __fastcall MarineTask_CreateMesh(BYTE* self, void*, DWORD x, DWORD y, DWORD z,
+                                            DWORD widthBits, DWORD heightBits, DWORD unused, DWORD trim)
 {
     BYTE* mesh = (BYTE*)operator new(88);
     if (mesh) {
@@ -717,10 +749,11 @@ extern "C" BYTE* __fastcall MarineMesh_Create(BYTE* self, void*, DWORD x, DWORD 
     F(DWORD,mesh,68)=F(DWORD,mesh,72)=0x3f800000;
     F(DWORD,mesh,76)=0;
     DWORD position[3]={x,y,z};
-    MarineMesh_ConstructGrid(mesh,0,position,F(float,&first,0),F(float,&second,0),fourth);
+    MarineMesh_ConstructGrid(mesh,0,position,widthBits,heightBits,trim);
     MarineMesh_CreateMotionResponse(F(BYTE*,self,0),0,0x41000000u,0u,0u);
     return self;
 }
+// [FUN_60dce0]
 extern "C" void __fastcall MarineMesh_Destruct(BYTE* self, void*)
 {
     F(void*,self,0)=g_marineMeshVtable;
@@ -736,6 +769,7 @@ extern "C" BYTE* __fastcall MarineMesh_Delete(BYTE* self, void*, DWORD flags)
     if(flags&1) operator delete(self);
     return self;
 }
+// [FUN_60e4a0]
 extern "C" void __fastcall MarineTask_Destruct(BYTE* self, void*)
 {
     F(void*,self,0)=g_marineTaskVtable;
@@ -747,7 +781,7 @@ extern "C" void __fastcall MarineTask_Destruct(BYTE* self, void*)
     Object_Destroy(self?self+76:0);
     void* data=F(void*,self,72);
     if(data) operator delete(data);
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 extern "C" BYTE* __fastcall MarineTask_Delete(BYTE* self, void*, DWORD flags)
 {
@@ -759,12 +793,14 @@ extern "C" BYTE* __fastcall MarineTask_DeleteSecondary(BYTE* self, void*, DWORD 
 {
     return MarineTask_Delete(self-76,0,flags);
 }
+// [FUN_608ef0]
 extern "C" DWORD* __fastcall MarineGeometry_Snapshot(BYTE* self, void*, DWORD* out, BYTE* registration)
 {
     DWORD* source=(DWORD*)(F(BYTE*,self,16)+(unsigned)F(WORD,registration,0)*40);
     for(unsigned i=0;i<10;++i) out[i]=source[i];
     return out;
 }
+// [FUN_60f0d0]
 extern "C" BYTE* __fastcall MarineTransition_Create(BYTE* self, void*, DWORD time, BYTE* registration,
                               const DWORD* source, const DWORD* target, unsigned type, BYTE* geometry)
 {
@@ -813,6 +849,7 @@ static void MarineTree_Detach(BYTE* node)
     else if(F(BYTE*,owner,4)==node) F(BYTE*,owner,4)=0;
     else CallC(FUN_60aad0,0x88762712u,g_marineErrorFormat,g_marineTreeFile,35,g_marineDate);
 }
+// [FUN_60cf00]
 extern "C" BYTE* __fastcall MarineTree_Delete(BYTE* self, void*, DWORD flags)
 {
     MarineTree_Detach(self);
@@ -823,6 +860,7 @@ extern "C" BYTE* __fastcall MarineTree_Delete(BYTE* self, void*, DWORD flags)
     if(flags&1) operator delete(self);
     return self;
 }
+// [FUN_60cdd0]
 extern "C" void __fastcall MarineGreed_Destruct(BYTE* self, void*)
 {
     F(void*,self,0)=g_marineBaseVtable;
@@ -863,6 +901,7 @@ extern "C" BYTE* __fastcall MarineGreed_Delete(BYTE* self, void*, DWORD flags)
     if(flags&1) operator delete(self);
     return self;
 }
+// [FUN_60cd90]
 extern "C" BYTE* __fastcall MarineVertex_Delete(BYTE* self, void*, DWORD flags)
 {
     if(flags&1) operator delete(self);
@@ -918,6 +957,7 @@ KING_VAR(float, g_mf_64c338, 64c338)
 KING_VAR(float, g_mf_64c350, 64c350)
 KING_VAR(float, g_mf_64d7b8, 64d7b8)
 KING_VAR(float, g_mf_64c250, 64c250)
+// [FUN_6132e0] Store the transition activation word and return it.
 extern "C" DWORD __fastcall MarineTransition_SetActive(BYTE* self, void*, DWORD active)
 {
     F(DWORD,self,4)=active;
@@ -929,6 +969,7 @@ static void MarineMotion_SetRange(BYTE* owner,double value)
     BYTE* transition=F(BYTE*,owner,112);
     if(transition) MarineTransition_SetActive(transition,0,active?1:0);
 }
+// [FUN_60de50]
 extern "C" void __fastcall MarineTask_UpdateMotion(BYTE* self, void*, const float* position)
 {
     BYTE* response=F(BYTE*,F(void*,self,0),84);
@@ -954,7 +995,8 @@ extern "C" void __fastcall MarineTask_UpdateMotion(BYTE* self, void*, const floa
     F(float,owner,72)=(float)previous;
     MarineMotion_SetRange(owner,previous);
 }
-extern "C" void __fastcall MarineTask_Frame(BYTE* self, void*, DWORD first, DWORD second)
+// [FUN_60df90]
+extern "C" void __fastcall MarineTask_UpdateAndSubmitMesh(BYTE* self, void*, DWORD first, DWORD second)
 {
     DWORD time;
     if(F(DWORD,g_marineApplicationState,1300)==2)
@@ -968,7 +1010,7 @@ extern "C" void __fastcall MarineTask_Frame(BYTE* self, void*, DWORD first, DWOR
     F(float,owner,72)=(float)value;
     MarineMotion_SetRange(owner,value);
     CallVirt(F(void*,F(void*,self,0),4),24,time);
-    MarineGreed_Emit(F(BYTE*,self,0),0);
+    MarineMesh_SubmitGeometry(F(BYTE*,self,0),0);
     CallVirt(F(void*,F(void*,self,0),4),60,first,second);
 }
 
@@ -1024,7 +1066,7 @@ extern "C" DWORD __fastcall MarineTask_DispatchUpdate(BYTE* self, void*, DWORD u
     double speed=F(float,g_mt_motionState,532);
     float motion[3]={(float)(speed*g_mt_axisX),(float)(speed*g_mt_axisY),(float)(speed*g_mt_axisZ)};
     MarineTask_UpdateMotion(F(BYTE*,self,108),0,motion);
-    if(F(DWORD,self,124)) MarineTask_Frame(F(BYTE*,self,108),0,g_mt_frameValue,(DWORD)event);
+    if(F(DWORD,self,124)) MarineTask_UpdateAndSubmitMesh(F(BYTE*,self,108),0,g_mt_frameValue,(DWORD)event);
     return 1;
 }
 
@@ -1062,7 +1104,7 @@ extern "C" BYTE* __fastcall MarineTask_Construct(BYTE* self, void*, BYTE* world)
     Queue_PostEvent2(secondary, 0, 1);
     F(DWORD,self,120)=F(DWORD,self,116)=F(DWORD,self,132)=0;
     BYTE* meshOwner=(BYTE*)operator new(4);
-    if(meshOwner) meshOwner=MarineMesh_Create(meshOwner,0,3284664320u,1163575296u,0,
+    if(meshOwner) meshOwner=MarineTask_CreateMesh(meshOwner,0,3284664320u,1163575296u,0,
                                             1166843904u,1157234688u,g_mt_frameValue,0);
     F(BYTE*,self,108)=meshOwner;
     float scratch[12],matrix[12]={0},direction[3],position[3];
@@ -1070,7 +1112,7 @@ extern "C" BYTE* __fastcall MarineTask_Construct(BYTE* self, void*, BYTE* world)
     for(unsigned i=0;i<12;++i) F(DWORD,matrix,i*4)=result[i];
     MarineTask_TransformAxis(matrix,direction);
     for(unsigned i=0;i<3;++i) position[i]=MarineTask_QuietCoordinate(matrix+9+i);
-    MarineTask_RebuildBounds(F(BYTE*,self,108),0,(DWORD*)position,(DWORD*)direction);
+    MarineTask_RebuildMeshForBounds(F(BYTE*,self,108),0,(DWORD*)position,(DWORD*)direction);
     if(F(DWORD,F(void*,self,112),524)) {
         BYTE* library=Scenes_Find((BYTE*)(F(void*,self,112)), 0, g_marineCommonLibrary);
         BYTE* node=Room_FindObject(library, 0, g_marineRainNodeName);
@@ -1109,16 +1151,19 @@ extern "C" Vec3* __cdecl Vec3_Sum(Vec3*,const Vec3*,const Vec3*);
 extern "C" Vec3* __cdecl Vec3_Diff(Vec3*,const Vec3*,const Vec3*);
 extern "C" Vec3* __cdecl Vec3_Times(Vec3*,const Vec3*,float);
 extern "C" BYTE* __fastcall Fx_Set2Vec(BYTE*,void*,const Vec3*,const Vec3*,int,int);
+// [FUN_5eb490] Return twice the arc tangent of half the horizontal camera extent.
 extern "C" double __fastcall MarineCamera_HorizontalAngle(BYTE* self,void*)
 {
     double angle=x87_atan2((double)F(float,self,88)*g_mq_half,1.0);
     return angle+angle;
 }
+// [FUN_5eb4a0]
 extern "C" double __fastcall MarineCamera_VerticalAngle(BYTE* self,void*)
 {
     double angle=x87_atan2((double)F(float,self,84)*g_mq_half,1.0);
     return angle+angle;
 }
+// [FUN_60ea90]
 extern "C" void __fastcall MarineTask_DrawPending(BYTE* self,void*,const float* position,const float* direction,BYTE* event)
 {
     double elapsed=F(double,F(void*,self,112),2960);
@@ -1174,6 +1219,7 @@ KING_VAR(float, g_mp_scale, 725f78)
 KING_VAR(float, g_mp_randomUnit, 64c254)
 KING_VAR(float, g_mp_angularFactor, 64c304)
 KING_VAR(float, g_mp_seconds, 64c948)
+// [FUN_612cf0]
 extern "C" void __fastcall MarineParticle_Start(BYTE* self,void*,const DWORD* position,const DWORD* velocity)
 {
     DWORD now=timeGetTime();
@@ -1189,10 +1235,12 @@ extern "C" void __fastcall MarineParticle_Start(BYTE* self,void*,const DWORD* po
     double randomValue=(double)second*g_mp_randomUnit;
     F(float,self,56)=(float)(((double)g_mp_scale*randomValue)*g_mp_angularFactor);
 }
+// [FUN_612da0]
 extern "C" void __fastcall MarineParticle_SetLifetime(BYTE* self,void*,DWORD lifetime)
 {
     F(DWORD,self,44)=lifetime;
 }
+// [FUN_612db0]
 extern "C" void __fastcall MarineParticle_Update(BYTE* self,void*,DWORD now)
 {
     // Keep FILD of an unsigned tick difference via a zero-extended qword.
@@ -1219,35 +1267,40 @@ X87 double MarineGrid_Index(DWORD value)
     volatile __int64 index=value;
     return (double)index;
 }
+// [FUN_612010]
 extern "C" double __fastcall MarineGrid_MapX(BYTE* self,void*,const DWORD* point)
 {
     return MarineGrid_Index(point[0])*F(float,self,192)+F(float,self,176);
 }
+// [FUN_612040] Convert the unsigned grid Y index to a world coordinate.
 extern "C" double __fastcall MarineGrid_MapY(BYTE* self,void*,const DWORD* point)
 {
     return MarineGrid_Index(point[1])*F(float,self,196)+F(float,self,188);
 }
-extern "C" void __fastcall MarineGrid_Unmap(BYTE* self,void*,const DWORD* point,float* x,float* y)
+// [FUN_612070]
+extern "C" void __fastcall MarineGrid_ComputeGridUV(BYTE* self,void*,const DWORD* point,float* x,float* y)
 {
     *x=(float)((MarineGrid_Index(point[0])-F(float,self,152))/F(float,self,100));
     *y=(float)((MarineGrid_Index(point[1])-F(float,self,156))/F(float,self,104));
 }
-extern "C" DWORD __fastcall MarineGrid_Outside(BYTE* self,void*,const DWORD* point)
+// [FUN_612760]
+extern "C" DWORD __fastcall MarineGrid_ExceedsWorldLimits(BYTE* self,void*,const DWORD* point)
 {
     BYTE* grid=F(BYTE*,self,4);
     if(MarineGrid_MapX(grid,0,point)>g_mg_xLimit) return 1;
     return MarineGrid_MapY(grid,0,point)>g_mg_yLimit;
 }
-extern "C" DWORD __fastcall MarineGrid_ClassifyTriangle(BYTE* self,void*,BYTE* triangle)
+// [FUN_6127e0]
+extern "C" DWORD __fastcall MarineGrid_ClassifyTriangleAgainstLimits(BYTE* self,void*,BYTE* triangle)
 {
     DWORD points[3][2];
     for(unsigned i=0;i<3;++i) {
         const DWORD* vertex=F(DWORD*,triangle,16+i*4);
         points[i][0]=vertex[0];points[i][1]=vertex[1];
     }
-    DWORD first=MarineGrid_Outside(self,0,points[0]);
-    DWORD second=MarineGrid_Outside(self,0,points[1]);
-    DWORD third=MarineGrid_Outside(self,0,points[2]);
+    DWORD first=MarineGrid_ExceedsWorldLimits(self,0,points[0]);
+    DWORD second=MarineGrid_ExceedsWorldLimits(self,0,points[1]);
+    DWORD third=MarineGrid_ExceedsWorldLimits(self,0,points[2]);
     if(first && second && third) return 4;
     if(!first && !second && !third) return 1;
     return 2;
@@ -1262,6 +1315,7 @@ KING_VAR(DWORD, g_mpool_enabled, 725e30)
 KING_VAR(float, g_mpool_angle, 64c334)
 KING_VAR(float, g_mpool_colorScale, 64c48c)
 KING_VAR(float, g_mpool_half, 64c258)
+// [FUN_612f60]
 extern "C" void __fastcall MarineParticlePool_BuildGeometry(BYTE* self,void*,DWORD count,DWORD color)
 {
     F(void*,self,8)=malloc(count*16u);
@@ -1288,6 +1342,7 @@ extern "C" void __fastcall MarineParticlePool_BuildGeometry(BYTE* self,void*,DWO
         offset+=16;
     } while(--count);
 }
+// [FUN_612e30]
 extern "C" BYTE* __fastcall MarineParticlePool_Construct(BYTE* self,void*,DWORD capacity,DWORD vertices,DWORD color,DWORD owner)
 {
     F(DWORD,self,0)=owner;F(DWORD,self,20)=capacity;F(DWORD,self,24)=vertices;
@@ -1308,6 +1363,7 @@ extern "C" DWORD __fastcall MarineParticlePool_Add(BYTE* self,void*,const DWORD*
     ++F(DWORD,self,16);
     return 1;
 }
+// [FUN_612f20]
 extern "C" DWORD __fastcall MarineParticlePool_Remove(BYTE* self,void*,DWORD index)
 {
     DWORD count=F(DWORD,self,16);
@@ -1321,20 +1377,25 @@ extern "C" DWORD __fastcall MarineParticlePool_Remove(BYTE* self,void*,DWORD ind
     }
     return 1;
 }
+// [FUN_613280]
 extern "C" DWORD __fastcall MarineParticlePool_CanAdd(BYTE* self,void*)
 {
     return F(DWORD,g_marineApplicationState,1300)!=2 && F(DWORD,self,4) && g_mpool_enabled && F(DWORD,self,16)<F(DWORD,self,20);
 }
+// [FUN_6132c0]
 extern "C" void __fastcall MarineParticlePool_SetFloor(BYTE* self,void*,DWORD height) { F(DWORD,self,28)=height; }
+// [FUN_6132d0]
 extern "C" void __fastcall MarineParticlePool_SetLifetime(BYTE* self,void*,DWORD lifetime) { F(DWORD,self,32)=lifetime; }
 
 // Marine 4x4 matrix construction and composition.
 extern "C" DWORD* __cdecl MarineInit_Identity(DWORD*);
+// [FUN_60a880]
 extern "C" DWORD* __cdecl MarineMatrix_Zero(DWORD* out)
 {
     for(unsigned i=0;i<16;++i) out[i]=0;
     return out;
 }
+// [FUN_60a900]
 extern "C" DWORD* __cdecl MarineMatrix_RotateZ(DWORD* out,float angle)
 {
     float cosine=(float)x87_cos(angle),sine=(float)x87_sin(angle);
@@ -1344,6 +1405,7 @@ extern "C" DWORD* __cdecl MarineMatrix_RotateZ(DWORD* out,float angle)
     for(unsigned i=0;i<16;++i) out[i]=matrix[i];
     return out;
 }
+// [FUN_60a960]
 extern "C" DWORD* __cdecl MarineMatrix_Translate(DWORD* out,DWORD x,DWORD y,DWORD z)
 {
     DWORD matrix[16];MarineInit_Identity(matrix);
@@ -1358,6 +1420,7 @@ static __forceinline double MarineMatrix_Product(const float* right,const float*
     product=product*(*left);
     return product;
 }
+// [FUN_60a9b0]
 extern "C" DWORD* __cdecl MarineMatrix_Multiply(DWORD* out,const float* right,const float* left)
 {
     DWORD matrix[16];MarineMatrix_Zero(matrix);
@@ -1373,6 +1436,7 @@ extern "C" DWORD* __cdecl MarineMatrix_Multiply(DWORD* out,const float* right,co
 // Marine particle rendering, retirement and per-frame updates.
 struct MarineParticleMatrix { DWORD v[16]; };
 KING_VAR(MarineParticleMatrix, g_mpool_restoreMatrix, 725f38)
+// [FUN_613120]
 extern "C" void __fastcall MarineParticlePool_Render(BYTE* self,void*,BYTE* device,BYTE* event,DWORD material)
 {
     if(!g_mpool_enabled) return;
@@ -1419,20 +1483,25 @@ extern "C" BYTE* __fastcall MarineQueue_RemoveLink(BYTE* self,void*,BYTE* node)
     F(BYTE*,node,4)=node;F(BYTE*,node,0)=node;
     return node;
 }
+// [FUN_6137d0] Both queue heads must be null.
 extern "C" DWORD __fastcall MarineQueue_Empty(BYTE* self,void*)
 {
     return !F(DWORD,self,0) && !F(DWORD,self,4);
 }
+// [FUN_613510]
 extern "C" DWORD __fastcall MarineQueue_RebuildWorkItems(BYTE* self, void*)
 {
     BYTE* second = F(BYTE*, self, 4);
+    // Both original callers carry the incremented queue count in EAX.
+    // With either ring empty the merge returns that count unchanged.
+    DWORD insertionCount = F(DWORD, self, 8);
     F(DWORD, self, 8) = 0;
-    if (!second) return 0;
+    if (!second) return insertionCount;
     BYTE* first = F(BYTE*, self, 0);
     if (!first) {
         F(BYTE*, self, 0) = second;
         F(BYTE*, self, 4) = 0;
-        return (DWORD)second;
+        return insertionCount;
     }
     BYTE* firstTail = F(BYTE*, first, 4);
     BYTE* secondTail = F(BYTE*, second, 4);
@@ -1469,6 +1538,7 @@ finish:
     F(BYTE*, self, 4) = 0;
     return (DWORD)(firstExhausted ? target : previous);
 }
+// [FUN_613620]
 extern "C" DWORD __fastcall MarineQueue_InsertWorkItem(BYTE* self, void*, BYTE* edge)
 {
     BYTE* last = F(BYTE*, self, 4);
@@ -1490,10 +1560,7 @@ extern "C" DWORD __fastcall MarineQueue_InsertWorkItem(BYTE* self, void*, BYTE* 
         }
     }
     DWORD count = ++F(DWORD, self, 8);
-    if(count<200) return count;
-    bool hasFirst=F(DWORD,self,0)!=0;
-    DWORD result=MarineQueue_RebuildWorkItems(self,0);
-    return hasFirst?result:count;
+    return count >= 200 ? MarineQueue_RebuildWorkItems(self, 0) : count;
 }
 extern "C" DWORD __fastcall MarineQueue_SetWorkPriority(BYTE* self,void*,BYTE* node,DWORD priority)
 {
@@ -1511,6 +1578,7 @@ extern "C" BYTE* __fastcall MarineQueue_TopWorkItem(BYTE* self,void*)
 }
 
 // Marine deferred node insertion, reprioritization and selection.
+// [FUN_613340]
 extern "C" DWORD __fastcall MarineQueue_InsertDeferredNode(BYTE* self, void*, BYTE* node)
 {
     BYTE* last = F(BYTE*, self, 4);
@@ -1550,6 +1618,7 @@ extern "C" DWORD __fastcall MarineQueue_SetDeferredPriority(BYTE* self,void*,BYT
     MarineQueue_InsertDeferredNode(self,0,node);
     return ++F(DWORD,self,8);
 }
+// [FUN_6134c0] Pick the higher node score at +28, preferring the first head on ties.
 extern "C" BYTE* __fastcall MarineQueue_TopDeferredNode(BYTE* self,void*)
 {
     BYTE* first=F(BYTE*,self,0),*last=F(BYTE*,self,4);
@@ -1591,7 +1660,8 @@ extern "C" void __fastcall MarineScratch_ReleasePoints(BYTE* self,void*)
 }
 
 // Marine mesh motion-response construction and degree-table trigonometry.
-struct MarineAngleTable { float v[360]; };
+constexpr int kMarineAngleSamples = 360;
+struct MarineAngleTable { float v[kMarineAngleSamples]; };
 KING_VAR(float, g_mc_724960, 724960)
 KING_VAR(float, g_mc_64c264, 64c264)
 KING_VAR(float, g_mc_6530d0, 6530d0)
@@ -1610,22 +1680,24 @@ KING_VAR(float, g_mc_650804, 650804)
 KING_VAR(float, g_mc_725ed0, 725ed0)
 KING_VAR(float, g_mc_725ed4, 725ed4)
 KING_VAR(float, g_mc_725ed8, 725ed8)
-KING_VAR(MarineAngleTable, g_mc_sine, 7243bc)
-KING_VAR(MarineAngleTable, g_mc_cosine, 724964)
-extern "C" double __cdecl MarineAngle_Sine(float angle)
+KING_VAR(MarineAngleTable, g_mc_cosineSamples, 7243bc)
+KING_VAR(MarineAngleTable, g_mc_sineSamples, 724964)
+// [FUN_60ba60]
+extern "C" double __cdecl MarineAngle_SignedCosine(float angle)
 {
     bool negative=!(angle>=g_mc_64c264);
     int index=(int)(DWORD)(__int64)((double)g_mc_724960*angle);
     if(negative) index=(int)(0u-(DWORD)index);
-    double value=g_mc_sine.v[index%360];
+    double value=g_mc_cosineSamples.v[index%kMarineAngleSamples];
     return negative?-value:value;
 }
-extern "C" double __cdecl MarineAngle_Cosine(float angle)
+// [FUN_60b9e0]
+extern "C" double __cdecl MarineAngle_SineOfMagnitude(float angle)
 {
     double value=angle;
     if(!(value>=g_mc_64c264)) value=-value;
     int index=(int)(DWORD)(__int64)((double)g_mc_724960*value);
-    return g_mc_cosine.v[index%360];
+    return g_mc_sineSamples.v[index%kMarineAngleSamples];
 }
 static void MarineMesh_ResponseValues(BYTE* response,double length)
 {
@@ -1647,6 +1719,7 @@ static void MarineMesh_ResponseRange(BYTE* owner,double value)
     BYTE* transition=F(BYTE*,owner,112);
     if(transition) MarineTransition_SetActive(transition,0,active?1:0);
 }
+// [FUN_60fc10]
 extern "C" void __fastcall MarineMesh_CreateMotionResponse(BYTE* self,void*,DWORD xBits,DWORD yBits,DWORD zBits)
 {
     BYTE* response=(BYTE*)operator new(36);
@@ -1658,8 +1731,8 @@ extern "C" void __fastcall MarineMesh_CreateMotionResponse(BYTE* self,void*,DWOR
         MarineMesh_ResponseValues(response,length);
         BYTE* owner=F(BYTE*,response,0);
         F(DWORD,owner,76)=0;
-        F(float,owner,84)=(float)MarineAngle_Sine(0.0f);
-        F(float,owner,80)=(float)MarineAngle_Cosine(F(float,owner,76));
+        F(float,owner,84)=(float)MarineAngle_SignedCosine(0.0f);
+        F(float,owner,80)=(float)MarineAngle_SineOfMagnitude(F(float,owner,76));
         double value=F(float,response,28);
         F(float,F(void*,response,0),72)=(float)value;
         MarineMesh_ResponseRange(F(BYTE*,response,0),value);

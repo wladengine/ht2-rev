@@ -395,7 +395,7 @@ void __fastcall Grid_Reset(BYTE* self, void*, int n, int m)
 }
 
 // [FUN_606a80] joins the triangle t with its neighbour when they share a ring
-void __stdcall Grid_TryJoin(BYTE* t)
+void __fastcall Grid_TryJoin(BYTE* mesh, void*, BYTE* t)
 {
     if (F(int, t, 56))
         return;
@@ -456,18 +456,18 @@ join_check:
             return;
     }
 join:
-    CallStd(FUN_6064c0, ebx, eax);
+    GridMesh_CreateEdge(mesh, 0, ebx, eax);
 }
 
 }
 
-extern "C" void FUN_608fa0(); KING_ALIAS("_FUN_608fa0", "@Grid_NewSplit@16")    // links two branches (stdcall)
+extern "C" void FUN_608fa0(); KING_ALIAS("_FUN_608fa0", "@Grid_NewSplit@16")    // links two branches (thiscall)
 
 extern "C" {
 
 // [FUN_60a0b0] joins a cell with its neighbour branch when both sides
 // belong to the same parent
-void __stdcall Grd_JoinBranches(BYTE* a)
+void __fastcall Grd_JoinBranches(BYTE* g, void*, BYTE* a)
 {
     if (F(BYTE*, a, 72))
         return;
@@ -493,7 +493,7 @@ void __stdcall Grd_JoinBranches(BYTE* a)
         BYTE* e = F(BYTE*, a, 68);
         if (!e) {
             if (!F(BYTE*, p64, 64))
-                CallStd(FUN_608fa0, b, 0);
+                CallThis(FUN_608fa0, g, b, 0);
             return;
         }
         BYTE* f = F(BYTE*, e, 68);
@@ -501,12 +501,12 @@ void __stdcall Grd_JoinBranches(BYTE* a)
             return;
         BYTE* k = F(BYTE*, F(BYTE*, e, 40), 8);
         if (k == F(BYTE*, F(BYTE*, f, 40), 8))
-            CallStd(FUN_608fa0, b, k);
+            CallThis(FUN_608fa0, g, b, k);
         return;
     }
     if (!p64) {
         if (!F(BYTE*, F(BYTE*, a, 68), 68))
-            CallStd(FUN_608fa0, b, 0);
+            CallThis(FUN_608fa0, g, b, 0);
         return;
     }
     BYTE* f = F(BYTE*, p64, 64);
@@ -514,7 +514,7 @@ void __stdcall Grd_JoinBranches(BYTE* a)
         return;
     BYTE* k = F(BYTE*, F(BYTE*, p64, 40), 8);
     if (k == F(BYTE*, F(BYTE*, f, 40), 8))
-        CallStd(FUN_608fa0, b, k);
+        CallThis(FUN_608fa0, g, b, k);
 }
 
 }
@@ -1713,7 +1713,7 @@ void __cdecl GridMesh_RemoveEdge(BYTE* e, BYTE* m)
         }
     }
     if (r1)
-        Grid_TryJoin(r1);
+        Grid_TryJoin(m, 0, r1);
 }
 
 } // extern "C"
@@ -1800,11 +1800,11 @@ void __cdecl GridTree_RemoveEdge(BYTE* e, BYTE* g)
                 CallC(FUN_60aad0, 0x88760112, (const char*)s_fileLine, (const char*)s_gt684a44, 372,
                       (const char*)s_buildDate);
             if (link)
-                CallStd(FUN_608fa0, (BYTE*)p, x);
+                CallThis(FUN_608fa0, g, (BYTE*)p, x);
         }
     }
     if (r1)
-        Grd_JoinBranches(r1);
+        Grd_JoinBranches(g, 0, r1);
 }
 
 } // extern "C"

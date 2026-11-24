@@ -24,7 +24,7 @@ extern "C" BYTE* __cdecl Players_Append(int kind);
 extern "C" void __fastcall Player_Load(BYTE* self, void*, BYTE** cur);
 extern "C" void __cdecl Save_RebaseTime(double* t);
 extern "C" DWORD* __cdecl Player_Register(DWORD* out, BYTE* p);
-extern "C" void __cdecl Rec_4015a0Both(int id);
+extern "C" void __cdecl Ai_ActivateVehicleAndRoute(int id);
 extern "C" int* __fastcall Int_Set(int* s, void*, int a);
 extern "C" void FUN_490c90(); KING_ALIAS("_FUN_490c90", "_Save_BeginBlock")
 extern "C" void FUN_490ce0(); KING_ALIAS("_FUN_490ce0", "_Save_EndBlock")
@@ -55,8 +55,8 @@ KING_VAR(AsmLabel, g_tagOBSS, 66feb8)
 KING_VAR(BYTE*, g_68cf6c, 68cf6c)
 KING_VAR(BYTE**, g_68cf38, 68cf38)
 KING_VAR(BYTE**, g_68cf3c, 68cf3c)
-KING_VAR(BYTE**, g_68a970, 68a970)
-KING_VAR(BYTE**, g_68a974, 68a974)
+KING_VAR(BYTE**, g_ambushSites, 68a970)
+KING_VAR(BYTE**, g_ambushSitesEnd, 68a974)
 KING_VAR(BYTE**, g_68cc18, 68cc18)
 KING_VAR(BYTE**, g_68cc1c, 68cc1c)
 
@@ -121,8 +121,8 @@ extern "C" void __fastcall PtrVec_Reserve(BYTE** self, void*, unsigned n)
     self[2] = p + n * 4;
 }
 
-// the first of the strings (vector<char>*) equal to name
-extern "C" char*** __cdecl Strings_Find(char*** first, char*** last, const char* name)
+// [FUN_483860] Find the first town with a matching, nonempty name vector.
+extern "C" char*** __cdecl Towns_FindIteratorByName(char*** first, char*** last, const char* name)
 {
     for (; first != last; first++) {
         char* s = (*first)[0];
@@ -279,7 +279,7 @@ void __cdecl Save_Roads(BYTE* s)
 // [FUN_482680] saves the ambushes (AMBS)
 void __cdecl Save_Ambushes(BYTE* s)
 {
-    Save_EachPtr(s, (const DWORD*)g_tagAMBS, g_68a970, &g_68a974, FUN_482320);
+    Save_EachPtr(s, (const DWORD*)g_tagAMBS, g_ambushSites, &g_ambushSitesEnd, FUN_482320);
 }
 
 // [FUN_482710] saves an obstacle (OBST): name and the byte at +28
@@ -338,7 +338,7 @@ void __cdecl Load_FixPlayers()
         if (!F(BYTE, p, 792)) {
             int id;
             Int_Set(&id, 0, (int)it);
-            Rec_4015a0Both(id);
+            Ai_ActivateVehicleAndRoute(id);
         } else {
             AiError(0, 100, (const char*)s_svldFile, (const char*)s_svldId, 741, "Internal error 08457",
                     &g_ordrEmpty, &g_ordrEmpty);
@@ -455,11 +455,11 @@ void __cdecl Load_Ambush(BYTE** cur)
         BYTE* v[3] = {0, 0, 0};
         Load_NameInto(cur, v);
         BYTE* name = v[0];
-        BYTE** it = g_68a970;
-        for (; it != g_68a974; it++)
+        BYTE** it = g_ambushSites;
+        for (; it != g_ambushSitesEnd; it++)
             if (CallThis<bool>(FUN_407320, &name, *it))
                 break;
-        if (it == g_68a974)
+        if (it == g_ambushSitesEnd)
             AiError(0, 256, (const char*)s_svldFile, (const char*)s_svldId, 464, "Can not find ambush", (const char*)v[1],
                     &g_ordrEmpty);
         BYTE* a = *it;
@@ -928,7 +928,7 @@ void __cdecl Load_Town(BYTE** cur)
             (*cur)++;
             CallThis(FUN_47ab20, v, &ch);
         }
-        char*** it = Strings_Find((char***)g_ordrTowns[0], (char***)g_ordrTowns[1], (const char*)v[0]);
+        char*** it = Towns_FindIteratorByName((char***)g_ordrTowns[0], (char***)g_ordrTowns[1], (const char*)v[0]);
         if (it == (char***)g_ordrTowns[1])
             AiError(0, 256, (const char*)s_svldFile, (const char*)s_svldId, 244, s_svld66fe14, (const char*)v[0],
                     &g_ordrEmpty);
@@ -947,8 +947,10 @@ void __cdecl Load_Town(BYTE** cur)
                 node[5] = F(DWORD, *cur, 16);
                 node[6] = F(DWORD, *cur, 20);
                 node[7] = F(DWORD, *cur, 24);
-                node[2] = F(DWORD, *cur, 40);
-                *cur += 44;
+                // After the entry index: 28 bytes of fields, 8 skipped bytes,
+                // then the alternate cargo ID. Original 481501..481512.
+                node[2] = F(DWORD, *cur, 36);
+                *cur += 40;
                 if (node[0] == 0xFFFFFFFF) {
                     AiError(0, 200, (const char*)s_svldFile, (const char*)s_svldId, 256, s_svld66fdfc, &g_ordrEmpty,
                             &g_ordrEmpty);

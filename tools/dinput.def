@@ -1,0 +1,4 @@
+; Import metadata only. No game or DirectX implementation is embedded.
+LIBRARY DINPUT.dll
+EXPORTS
+    DirectInputCreateA

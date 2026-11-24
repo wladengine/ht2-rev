@@ -1,0 +1,46 @@
+stock_va	symbol	source	operation	cc	arguments	return	field	object_argument	offset_or_va	value_argument	constant	basis
+401000	_Ai_Clock	src/ai/ai_world.cpp	read-global	cdecl		f64	f64	-1	6858784	-1		registry
+5d3080	@Node_Next@8	src/engine/core.cpp	read	fastcall	ptr,ptr	ptr	ptr	0	8	-1		registry
+4eb690	@Ramp_Position@8	src/truck/vehicle_physics.cpp	read	fastcall	ptr,ptr	f32	f32	0	36	-1		registry
+4b0e90	@SchNumber_Value@8	src/script/values.cpp	read	fastcall	ptr,ptr	f64	f64	0	16	-1		registry
+4cf5e0	@Fx_Get12@8	src/truck/effects.cpp	read	fastcall	ptr,ptr	i32	i32	0	12	-1		registry
+5d8350	_Dd_BitDepth	src/engine/directdraw.cpp	read-global	cdecl		i32	i32	-1	7473300	-1		registry
+5d3af0	_Video_Get720898	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	7473304	-1		registry
+5d3f70	_Video_GetHorizontalScale	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	6814960	-1		registry
+5d3f80	_Video_GetVerticalScale	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	6814964	-1		registry
+4fc920	@Body_SetMode@12	src/truck/vehicle_physics.cpp	store-argument	fastcall	ptr,ptr,i32	void	i32	0	9784	2		historical alias
+617100	@Decals_Reset16@8	src/terrain/terrain.cpp	store-constant	fastcall	ptr,ptr	void	i32	0	16	-1	0	registry
+619840	@Terrain_Reset8@8	src/terrain/terrain.cpp	store-constant	fastcall	ptr,ptr	void	i32	0	8	-1	0	registry
+4cf5f0	@Fx_Get9544@8	src/truck/effects.cpp	read	fastcall	ptr,ptr	i32	i32	0	9544	-1		registry
+4cf600	@Fx_Get10420@8	src/truck/effects.cpp	read	fastcall	ptr,ptr	i32	i32	0	10420	-1		registry
+598da0	@Wasm_Get108@8	src/truck/world_objects.cpp	read	fastcall	ptr,ptr	i32	i32	0	108	-1		historical alias
+5cdc00	_Get70ebf8	src/engine/media.cpp	read-global	cdecl		i32	i32	-1	7400440	-1		registry
+4f8120	@Body_Get9508@8	src/truck/vehicle_physics.cpp	read	fastcall	ptr,ptr	f32	f32	0	9508	-1		unique fixture candidate
+5adc70	@Render_Set8460@12	src/engine/renderer.cpp	store-argument	fastcall	ptr,ptr,i32	void	i32	0	8460	2		registry
+4eb190	@Obj_Get128@8	src/truck/vehicle_physics.cpp	read	fastcall	ptr,ptr	i32	i32	0	128	-1		registry
+528fb0	@Screen_Set2304@12	src/truck/game_shell.cpp	store-constant	fastcall	ptr,ptr,i32	void	i32	0	2304	-1	7	registry
+52e540	@Obj52e540_Set3576@12	src/truck/scenery.cpp	store-argument	fastcall	ptr,ptr,i32	void	i32	0	3576	2		registry
+5bbef0	@Bitmap_Bytes@8	src/engine/renderer.cpp	read	fastcall	ptr,ptr	i32	i32	0	12	-1		registry
+5d3b00	_Video_Get7208a4	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	7473316	-1		registry
+5d3b10	_Video_BitDepth	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	7473296	-1		registry
+5d3b20	_Video_Width	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	7473308	-1		registry
+5d3b30	_Video_Height	src/engine/video_mode.cpp	read-global	cdecl		i32	i32	-1	7473312	-1		registry
+61c140	@TGrid_Get16@8	src/terrain/terrain_grid.cpp	read	fastcall	ptr,ptr	f32	f32	0	16	-1		registry
+61c150	@TGrid_Get20@8	src/terrain/terrain_grid.cpp	read	fastcall	ptr,ptr	f32	f32	0	20	-1		registry
+4410f0	_Rec_Field12	src/ai/ai_world.cpp	read	cdecl	ptr	i32	i32	0	12	-1		unique fixture candidate
+4fc910	@Body_ClearPhysicsMode@8	src/truck/vehicle_physics.cpp	store-constant	fastcall	ptr,ptr	void	i32	0	9784	-1	0	unique fixture candidate
+532320	@CabView_GetFreeLookPitch@8	src/truck/vehicle.cpp	read	fastcall	ptr,ptr	f32	f32	0	200	-1		unique fixture candidate
+5480e0	@Car_5480e0@8	src/truck/vehicle.cpp	read	fastcall	ptr,ptr	i32	i32	0	9616	-1		address in linker name
+5480f0	@Obj5480f0_Get72@8	src/truck/vehicle.cpp	read	fastcall	ptr,ptr	i32	i32	0	72	-1		historical alias
+560f10	@RouteStack_ConstructEmpty@8	src/truck/helicopter.cpp	store-constant	fastcall	ptr,ptr	ptr	i32	0	3000	-1	-1	unique fixture candidate
+597560	@Wasm_Set92@12	src/truck/world_objects.cpp	store-argument	fastcall	ptr,ptr,i32	void	i32	0	92	2		historical alias
+5cbc50	@Branch_Value@8	src/engine/media.cpp	read	fastcall	ptr,ptr	f32	f32	0	32	-1		registry
+5d2030	_Get71e7e4	src/engine/core.cpp	read-global	cdecl		i32	i32	-1	7464932	-1		registry
+5fd150	_Sound_IsOn	src/engine/scene.cpp	read-global	cdecl		i32	i32	-1	7486248	-1		registry
+61c170	@TGrid_Get36@8	src/terrain/terrain_grid.cpp	read	fastcall	ptr,ptr	i32	i32	0	36	-1		registry
+52b6c0	@Scy_Set1204@12	src/truck/scenery.cpp	store-argument	fastcall	ptr,ptr,i32	void	i32	0	1204	2		registry
+5565c0	@Car_Set9596@12	src/truck/vehicle.cpp	store-argument	fastcall	ptr,ptr,u32	void	u32	0	9596	2		registry
+5cda30	@Media_Get4@8	src/engine/media.cpp	read	fastcall	ptr,ptr	i32	i32	0	4	-1		registry
+612540	_MarineGrid_Width	src/marine/marine_core.cpp	read-global	cdecl		u32	u32	-1	7495248	-1		registry
+612550	_MarineGrid_Height	src/marine/marine_core.cpp	read-global	cdecl		u32	u32	-1	7495252	-1		registry
+61bfe0	@Tgr_Set92@12	src/terrain/terrain_grid.cpp	store-argument	fastcall	ptr,ptr,i32	void	i32	0	92	2		registry

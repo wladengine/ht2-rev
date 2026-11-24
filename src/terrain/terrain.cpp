@@ -4,6 +4,8 @@
 // gradient noise lookup, the decal vertex list and the room's objects.
 
 #include "king.h"
+#include "terrain_view.h"
+#include "x87.h"
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
 
@@ -177,14 +179,15 @@ void __fastcall Terrain_Reset8(BYTE* self, void*)
     F(int, self, 8) = 0;
 }
 
-// The room objects: +0, +4, 10 objects at +8, +48.
+// The room holds this many solid tree objects starting at +8, followed by the active count.
+static constexpr int kSolidTreeSlots = 10;
 
 // [FUN_619970]
 BYTE* __fastcall RoomObjects_Construct(BYTE* self, void*, int a, int b)
 {
     F(int, self, 0) = b;
     F(int, self, 4) = a;
-    for (int k = 0; k < 10; k++)
+    for (int k = 0; k < kSolidTreeSlots; k++)
         F(int, self, 8 + k * 4) = 0;
     return self;
 }
@@ -197,7 +200,7 @@ void __fastcall RoomObjects_Attach(BYTE* self, void*)
     if (!room)
         CallC(FUN_60aad0, 0x88760115, (const char*)s_fileLine, (const char*)s_terrainFile, 810,
               (const char*)s_buildDate);
-    for (int k = 0; k < 10; k++)
+    for (int k = 0; k < kSolidTreeSlots; k++)
         if (F(BYTE*, self, 8 + k * 4))
             CallVirt(room, 20, 0, F(BYTE*, self, 8 + k * 4));
 }
@@ -207,7 +210,7 @@ void __fastcall RoomObjects_Clear(BYTE* self, void*)
 {
     F(int, self, 0) = 0;
     F(int, self, 4) = 0;
-    for (int k = 0; k < 10; k++) {
+    for (int k = 0; k < kSolidTreeSlots; k++) {
         BYTE*& o = F(BYTE*, self, 8 + k * 4);
         if (o) {
             CallVirt(o, 36);
@@ -223,7 +226,7 @@ void __fastcall RoomObjects_Clear(BYTE* self, void*)
 
 extern "C" void __fastcall Mesh_Clear(BYTE* s);
 extern "C" void __fastcall Value_Free(int* s);
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
 KING_VAR(char, g_vtbl6532ec, 6532ec)
 KING_VAR(char, g_vtbl653308, 653308)
 
@@ -250,7 +253,7 @@ void __fastcall Terrain619ae0_Destroy(BYTE* self, void*)
     Value_Free((int*)(self + 64));
     if (F(void*, self, 60))
         operator delete(F(void*, self, 60));
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
 }
@@ -368,7 +371,7 @@ void __fastcall TerrainPart_Draw(BYTE* self, void*, BYTE* view)
 void __fastcall Terrain6199a0_CreateTrees(BYTE* self, void*)
 {
     BYTE** slot = (BYTE**)(self + 8);
-    for (int k = 0; k < 10; k++, slot++) {
+    for (int k = 0; k < kSolidTreeSlots; k++, slot++) {
         if (*slot)
             continue;
         BYTE* o = (BYTE*)operator new(80);
@@ -421,29 +424,27 @@ extern "C" int __fastcall Tile_ReadHeights(BYTE* self,void*,FILE* f)
 
 struct Vec3T { float x,y,z; };
 extern "C" void FUN_614960(); KING_ALIAS("_FUN_614960", "@TerrainView_Move@20")
-extern "C" void FUN_614f70(); KING_ALIAS("_FUN_614f70", "@TerrainView_Place@20")
-extern "C" void FUN_617180(); KING_ALIAS("_FUN_617180", "@Patch_AddPlant@28")
+// Keep the original callable endpoint (also observed independently by the ABI fixture).
+extern "C" __declspec(noinline) void __fastcall TerrainView_Place(BYTE*,void*,const float*,const float*,const float*);
 
 // [FUN_614f00] FUN_614960 on copies of three vectors
-extern "C" int __stdcall Terrain_Call614960(const Vec3T* a,const Vec3T* b,const Vec3T* c)
+extern "C" float* __fastcall Terrain_Call614960(BYTE* self,void*,const Vec3T* a,const Vec3T* b,const Vec3T* c)
 {
     Vec3T ca=*a,cb=*b,cc=*c;
-    return CallStd<int>(FUN_614960,&ca,&cb,&cc);
+    return CallThis<float*>(FUN_614960,self,&ca,&cb,&cc);
 }
 
-// [FUN_615230] FUN_614f70 on copies of three vectors
-extern "C" int __stdcall Terrain_Call614f70(const Vec3T* a,const Vec3T* b,const Vec3T* c)
+// [FUN_615230] Place the view using independent copies, even if the inputs alias.
+extern "C" void __fastcall Terrain_PlaceCameraView(BYTE* terrain, void*, const float* position,
+    const float* direction, const float* up)
 {
-    Vec3T ca=*a,cb=*b,cc=*c;
-    return CallStd<int>(FUN_614f70,&ca,&cb,&cc);
+    float p[3], d[3], u[3];
+    memcpy(p, position, sizeof p);
+    memcpy(d, direction, sizeof d);
+    memcpy(u, up, sizeof u);
+    TerrainView_Place(terrain, 0, p, d, u);
 }
 
-// [FUN_6197e0] FUN_617180 on copies of two vectors
-extern "C" int __stdcall Terrain_Call617180(const Vec3T* a,const Vec3T* b,int c,int d,int e)
-{
-    Vec3T cb=*b,ca=*a;
-    return CallStd<int>(FUN_617180,&ca,&cb,c,d,e);
-}
 
 #include <mmsystem.h>
 typedef char TerrainLabel[1];
@@ -994,7 +995,7 @@ int __fastcall Ground_SweepSphere(BYTE* s, void*, const float* a, const float* b
     double d = -((double)M.y * nn.y + (double)M.x * nn.x + (double)nn.z * M.z);
     float da = (float)((double)nn.x * A.x + (double)nn.y * A.y + (double)nn.z * A.z + d);
     float db = (float)((double)B.z * nn.z + (double)B.y * nn.y + (double)B.x * nn.x + d);
-    if (da < g_tg653300)
+    if (!(da >= g_tg653300))
         return 0;
     double re = r + g_tg64b930;
     Vec3 t1, t2;
@@ -1125,20 +1126,42 @@ static float Th_Sample(BYTE* t, int x, int y) { return Terrain_Sample((BYTE**)t,
 
 extern "C" {
 
+// The 8.1 floor and ceil routines also set the x87 precision exception on a
+// fractional grid coordinate. The current CRT only returns the rounded value.
+static double RoundTerrainGridCoordinate(double coordinate, bool upper)
+{
+    unsigned short savedControl, gridControl;
+    double result;
+    __asm fnstcw savedControl
+    gridControl = (savedControl & ~0x0c00) | (upper ? 0x0800 : 0x0400);
+    __asm {
+        fldcw gridControl
+        fld coordinate
+        frndint
+        fldcw savedControl
+        fstp result
+    }
+    return result;
+}
+
 // [FUN_616850] the terrain height at (x, y) of view s's grid (+0 +4: bounds +40136.., cell +40152.., tiles
 // +40192): the triangle of the grid cell holding it (split along one diagonal or the other by the cell's
 // parity) interpolated; 6532f8 outside
 double __fastcall Terrain_HeightAt(BYTE** s, void*, float x, float y)
 {
     BYTE* g = F(BYTE*, *s, 4);
-    if (!(x < F(float, g, 40140) && x > F(float, g, 40136) && y < F(float, g, 40144) && y > F(float, g, 40148)))
+    const unsigned short belowOrEqual = X87_C0 | X87_C3;
+    if (!(x87_compare_status(x, F(float, g, 40140)) & X87_C0) ||
+        (x87_compare_status(x, F(float, g, 40136)) & belowOrEqual) ||
+        !(x87_compare_status(y, F(float, g, 40144)) & X87_C0) ||
+        (x87_compare_status(y, F(float, g, 40148)) & belowOrEqual))
         return g_th6532f8;
     float u = (float)(((double)x - F(float, g, 40136)) / F(float, g, 40152));
     float v = (float)(((double)y - F(float, g, 40148)) / F(float, g, 40156));
-    int x0 = (int)(floor((double)(u / (double)g_tn653240)) * g_tn653240);
-    int y0 = (int)(floor((double)(v / (double)g_tn653244)) * g_tn653244);
-    int x1 = (int)(CallC<double>(Tn_ceil, (double)(u / (double)g_tn653240)) * g_tn653240);
-    int y1 = (int)(CallC<double>(Tn_ceil, (double)(v / (double)g_tn653244)) * g_tn653244);
+    int x0 = (int)(RoundTerrainGridCoordinate(u / (double)g_tn653240, false) * g_tn653240);
+    int y0 = (int)(RoundTerrainGridCoordinate(v / (double)g_tn653244, false) * g_tn653244);
+    int x1 = (int)(RoundTerrainGridCoordinate(u / (double)g_tn653240, true) * g_tn653240);
+    int y1 = (int)(RoundTerrainGridCoordinate(v / (double)g_tn653244, true) * g_tn653244);
     double fud = (u - (double)(__int64)x0) / g_tn653240;
     float fu = (float)fud;
     float fv = (float)((v - (double)(__int64)y0) / g_tn653244);
@@ -1154,12 +1177,12 @@ double __fastcall Terrain_HeightAt(BYTE** s, void*, float x, float y)
         tri = fud < fv ? 3 : 2;
     }
     BYTE* t = F(BYTE*, g, 40192);
-    if (fv == 0)
+    if (x87_compare_status(fv, 0.0f) & X87_C3)
     {
         float h0 = (float)(double)Tile_Height(Tiles_Table((BYTE**)t, 0, x0, y0), 0, x0, y0);
         return ((double)Th_Sample(t, x1, y0) - h0) * fu + h0;
     }
-    if (fv == g_tn64c250)
+    if (x87_compare_status(fv, g_tn64c250) & X87_C3)
     {
         float h0 = Th_Sample(t, x0, y1);
         return ((double)Th_Sample(t, x1, y1) - h0) * fu + h0;
@@ -1265,15 +1288,15 @@ static bool Tg_Point(BYTE* s, int ix, int iy, int ox, float kx, float ky, float*
     return true;
 }
 
-// a plant of type t and size k into the patch list l (FUN_617180 on copies of the point and the side)
-static void Tg_Plant(BYTE* l, const float* pos, const float* side, float k, int t)
+extern "C" void __fastcall Patch_AddPlant(BYTE*, void*, const Vec3*, const Vec3*, float, float, int);
+
+// [FUN_6197e0] Copy the two vectors into the patch's coordinate arguments.
+extern "C" void __fastcall Patch_AddPlantFromVectors(BYTE* patch, void*, const float* pos,
+    const float* side, float size, float brightness, int type)
 {
-    float a[3] = {pos[0], pos[1], pos[2]}, b[3] = {side[0], side[1], side[2]};
-    float one = 1.0f;
-    DWORD kb, ob;
-    memcpy(&kb, &k, 4);
-    memcpy(&ob, &one, 4);
-    CallThis(FUN_617180, l, a, b, kb, ob, t);
+    Vec3 axis = {side[0], side[1], side[2]};
+    Vec3 point = {pos[0], pos[1], pos[2]};
+    Patch_AddPlant(patch, 0, &point, &axis, size, brightness, type);
 }
 
 extern "C" {
@@ -1323,7 +1346,7 @@ void __fastcall Terrain_PlacePlants(BYTE* s, void*, BYTE** l)
             pos[0] = (float)(pos[0] - kx);
             pos[1] = (float)((double)pos[1] - ky);
             pos[2] = (float)((double)h - kz);
-            Tg_Plant(l[0], pos, side, (float)((double)Tg_Size(0) * scale), kind & 1);
+            Patch_AddPlantFromVectors(l[0], 0, pos, side, (float)((double)Tg_Size(0) * scale), 1.0f, kind & 1);
         }
     CallThis(Tg_Nop, l[0]);
     for (int k = 1; k < 5; k++)
@@ -1392,12 +1415,12 @@ void __fastcall Terrain_PlacePlants(BYTE* s, void*, BYTE** l)
                 size = (float)((double)Tg_Size(2) * scale);
                 type = 3;
             }
-            Tg_Plant(list, pos, side, size, type);
+            Patch_AddPlantFromVectors(list, 0, pos, side, size, 1.0f, type);
             // a tree close to the camera becomes solid
             if (!(x87_fabs((double)cx - pos[0]) < g_tg64b938) || !(x87_fabs((double)cy - pos[1]) < g_tg64b938))
                 continue;
             int t = F(int, s, 48);
-            if (t == 10 || !F(BYTE*, s, 8 + 4 * t))
+            if (t == kSolidTreeSlots || !F(BYTE*, s, 8 + 4 * t))
                 continue;
             if (!F(int, F(BYTE*, s, 8 + 4 * t), 44))
                 RoomObjects_Attach(s, 0);
@@ -1559,8 +1582,11 @@ void __fastcall Patch_AddPlant(BYTE* s, void*, const Vec3* pos, const Vec3* side
     case 4:
     case 5:
     {
-        // two triangles on a quad standing on the point (5: half height texture)
-        float h = t == 5 ? 0.5f : 1.0f;
+        // Type 5 uses a double-height billboard and the left half of the atlas.
+        constexpr int kDoubleHeightPlant = 5;
+        if (t == kDoubleHeightPlant)
+            c.up.z = 2.0f;
+        const float h = t == kDoubleHeightPlant ? 0.5f : 1.0f;
         Vec3 D = Pp_Scale(c.side, c.k);
         if (odd)
         {
@@ -1654,10 +1680,10 @@ double __fastcall Grid_HeightAt(BYTE* s, void*, const float* p)
         return g_gh6532f8;
     float gx = (float)(((double)p[0] - F(float, s, 40136)) / F(float, s, 40152));
     float gy = (float)(((double)p[1] - F(float, s, 40148)) / F(float, s, 40156));
-    DWORD X0 = (DWORD)(int)(floor(gx / (double)g_gh653240) * g_gh653240);
-    DWORD Y0 = (DWORD)(int)(floor(gy / (double)g_gh653244) * g_gh653244);
-    DWORD X1 = (DWORD)(int)(ceil(gx / (double)g_gh653240) * g_gh653240);
-    DWORD Y1 = (DWORD)(int)(ceil(gy / (double)g_gh653244) * g_gh653244);
+    DWORD X0 = (DWORD)(int)(RoundTerrainGridCoordinate(gx / (double)g_gh653240, false) * g_gh653240);
+    DWORD Y0 = (DWORD)(int)(RoundTerrainGridCoordinate(gy / (double)g_gh653244, false) * g_gh653244);
+    DWORD X1 = (DWORD)(int)(RoundTerrainGridCoordinate(gx / (double)g_gh653240, true) * g_gh653240);
+    DWORD Y1 = (DWORD)(int)(RoundTerrainGridCoordinate(gy / (double)g_gh653244, true) * g_gh653244);
     double fu0 = (gx - (double)X0) / g_gh653240;
     float fu = (float)fu0;
     float fv = (float)((gy - (double)Y0) / g_gh653244);

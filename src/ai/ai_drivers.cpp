@@ -37,9 +37,12 @@ typedef double* TypeValues[1];
 KING_VAR(CargoPrice*, g_cargoPrices, 68cc08)
 KING_VAR(TypeValues*, g_cargoTypes, 68cfd8)   // per type, the base value at +48
 
-extern "C" double __cdecl Cargo_ItemsValue(const Cargo* c)
+KING_VAR(double, g_zero64b678, 64b678)
+
+// [FUN_476980]
+extern "C" double __cdecl VehicleItems_TotalValue(const Cargo* c)
 {
-    double sum = 0;
+    double sum = g_zero64b678;
     const CargoItem* item = c->items;
     const CargoPrice* price = g_cargoPrices;
     for (int i = 0; i < 19; i++, item++, price++)
@@ -47,21 +50,26 @@ extern "C" double __cdecl Cargo_ItemsValue(const Cargo* c)
     return sum;
 }
 
-// the value of a player's cargo, 0 without one
-extern "C" double __cdecl Player_CargoValue(BYTE* player)
+KING_VAR(double, g_vehicleValueFlag1Factor, 66c720)
+KING_VAR(double, g_vehicleValueFlag2Factor, 66c728)
+
+// [FUN_473600] Value the vehicle model and its nineteen item slots.
+extern "C" double __cdecl Player_VehicleRecordValue(BYTE* player)
 {
     Cargo* c = *(Cargo**)(player + 508);
     if (!c || c->type == -1)
-        return 0;
+        return g_zero64b678;
     double base = *(double*)((BYTE*)(*g_cargoTypes)[c->type] + 48);
-    double v = base;
+    // Stock stores the adjusted value as binary64 before adding the item sum.
+    // When both flags are set, the second factor uses the live x87 product.
+    volatile double v = base;
     if (c->flags & 1) {
-        base = base * 0.65;
+        base = base * g_vehicleValueFlag1Factor;
         v = base;
     }
     if (c->flags & 2)
-        v = 0.45 * base;
-    return Cargo_ItemsValue(c) + v;
+        v = g_vehicleValueFlag2Factor * base;
+    return VehicleItems_TotalValue(c) + v;
 }
 
 extern "C" void FUN_4cd730(); KING_ALIAS("_FUN_4cd730", "_Vehicle_Value4cd730")    // the value of a vrId's vehicle
@@ -70,16 +78,13 @@ extern "C" void FUN_4754d0(); KING_ALIAS("_FUN_4754d0", "@Player_SaveRecord@12")
 extern "C" int* __cdecl Player_FromId(int* io);
 extern "C" void FUN_477b60(); KING_ALIAS("_FUN_477b60", "_Player_FromId")
 KING_VAR(DWORD, g_tagPLYX, 66fa60)
-KING_VAR(double, g_zero64b678, 64b678)
 KING_VAR(double, g_one64b670, 64b670)
-KING_VAR(double, g_66c720, 66c720)
 KING_VAR(double, g_64bc20, 64bc20)
 KING_VAR(double, g_four64b7c0, 64b7c0)
 KING_VAR(double, g_64bc28, 64bc28)
 KING_VAR(double, g_m1_64bc30, 64bc30)
 extern "C" void* __cdecl Player_FirstGoods(BYTE* p);
 extern "C" void FUN_477350(); KING_ALIAS("_FUN_477350", "_Driver_Load")
-extern "C" void FUN_477bd0(); KING_ALIAS("_FUN_477bd0", "_Player_SetDeadline")
 extern "C" void FUN_477c30(); KING_ALIAS("_FUN_477c30", "_Player_ClearDeadline")
 extern "C" void FUN_477c60(); KING_ALIAS("_FUN_477c60", "_Driver_SetDeadline")
 extern "C" BYTE* __cdecl AI_ListData(BYTE* node);
@@ -95,8 +100,8 @@ extern "C" void FUN_490ce0(); KING_ALIAS("_FUN_490ce0", "_Save_EndBlock")
 extern "C" int __cdecl Save_BlockEnd(BYTE** out, BYTE* data, int size);
 extern "C" void FUN_490c70(); KING_ALIAS("_FUN_490c70", "_Save_BlockEnd")
 extern "C" void __cdecl NamedRecs_Load(BYTE** cur, BYTE** v);
-extern "C" int __cdecl Player_Driver(BYTE* p);
-extern "C" void FUN_477880(); KING_ALIAS("_FUN_477880", "_Player_Driver")
+extern "C" BYTE* __cdecl Player_FirstActiveCargo(BYTE* p);
+extern "C" void FUN_477880(); KING_ALIAS("_FUN_477880", "_Player_FirstActiveCargo")
 extern "C" void __cdecl Drivers_ListCarrying(BYTE** v, int p);
 extern "C" void FUN_471ec0(); KING_ALIAS("_FUN_471ec0", "_Drivers_ListCarrying")
 extern "C" void __cdecl KeyedList_Refill(BYTE** v);
@@ -113,10 +118,10 @@ extern "C" double __cdecl Player_Profit(BYTE* player)
 {
     int vrId = *(int*)(player + 76);
     double vehicle = vrId == -1 ? 0.0 : ((double (__cdecl*)(int))FUN_4cd730)(vrId);
-    return Player_CargoValue(player) - vehicle * 5000.0;
+    return Player_VehicleRecordValue(player) - vehicle * 5000.0;
 }
 
-extern "C" double __cdecl Player_CargoValueOf(BYTE* p) { return Player_CargoValue(p + 8); }
+extern "C" double __cdecl Player_CargoValueOf(BYTE* p) { return Player_VehicleRecordValue(p + 8); }
 extern "C" double __cdecl Player_ProfitOf(BYTE* p) { return Player_Profit(p + 8); }
 
 // copies the 304 bytes of a player's state block; -1 without one
@@ -250,7 +255,7 @@ extern "C" void __cdecl Player_UpdateFlags(BYTE* p)
     SetFlag(p, 0x2000000, FIELD(int, p, 92) == 1 && (FIELD(BYTE, FIELD(BYTE*, p, 516), 40) & 1));
 }
 
-// drops the licences whose time is over; tells the player how many
+// [FUN_477420] Drops expired licences and tells the player how many.
 extern "C" void __cdecl Player_ExpireLicences(BYTE* p)
 {
     char text[128];
@@ -275,7 +280,7 @@ extern "C" void __cdecl Player_ExpireLicences(BYTE* p)
     }
 }
 
-// the time left on the longest licence; -1 without licences
+// [FUN_477580] Time left until the next licence expires; -1 without licences.
 extern "C" int __cdecl Player_LicenceTimeLeft(BYTE* p, double* left)
 {
     *left = 0;
@@ -314,7 +319,7 @@ extern "C" void __cdecl Player_ClearDeadline(BYTE* p)
     FIELD(DWORD, p, 88) |= 4;
 }
 
-// ends the player's deal; a dealer (kind 9) can't be released
+// [FUN_477cd0] Release the active deal, its counter and its deadline.
 extern "C" void __cdecl Player_EndDeal(BYTE* p)
 {
     if (FIELD(int, p, 84) == 9) {
@@ -468,7 +473,8 @@ void PlayerBase::SetPosition(const PositionId* p)
 {
     PositionId copy = *p;
     if (!((RoadId_Valid(&copy.road, 0) || NodeId_Valid(&copy.node, 0))
-          && !!(copy.t >= -0.0002) && !(copy.t > 1.0002) && copy.segment >= 0 && copy.object >= 0))
+          && !(x87_compare_status(copy.t, -0.0002) & X87_C0)
+          && (x87_compare_status(copy.t, 1.0002) & (X87_C0 | X87_C3)) && copy.segment >= 0 && copy.object >= 0))
         InvalidPosition(633, p);
     CheckSegment(633, p);
     DVec3 pt;
@@ -482,7 +488,7 @@ void PlayerBase::SetPosition(const PositionId* p)
         double dx = at->x - point.x;
         double dy = at->y - point.y;
         double dz = at->z - point.z;
-        if (!(x87_sqrt((dx * dx + dy * dy) + dz * dz) >= 0.001)) {
+        if (x87_compare_status(x87_sqrt((dx * dx + dy * dy) + dz * dz), 0.001) & X87_C0) {
             pos = *p;
             pos.node = node;        // still at the node
             pos.m_28 = -1;
@@ -493,7 +499,7 @@ void PlayerBase::SetPosition(const PositionId* p)
     pos.m_28 = -1;
 }
 
-// puts a player at a position: releases its vehicle, drops its orders and
+// [FUN_4786a0] Places a player at a position, releases its vehicle and drops its orders and
 // waypoints
 extern "C" void __cdecl Player_Place(BYTE* p, PositionId pos)
 {
@@ -823,7 +829,7 @@ void __fastcall Rec471e90_Load(BYTE* self, void*, BYTE** cur)
 // [FUN_472270]
 void __cdecl Player_Call471ec0(int player)
 {
-    BYTE* p = (BYTE*)Player_Driver((BYTE*)player);
+    BYTE* p = Player_FirstActiveCargo((BYTE*)player);
     if (p)
         Drivers_ListCarrying((BYTE**)(p + 120), player);
 }
@@ -831,7 +837,7 @@ void __cdecl Player_Call471ec0(int player)
 // [FUN_4722a0]
 void __cdecl Player_Call472110(int player)
 {
-    BYTE* p = (BYTE*)Player_Driver((BYTE*)player);
+    BYTE* p = Player_FirstActiveCargo((BYTE*)player);
     if (p)
         KeyedList_Refill((BYTE**)(p + 120));
 }
@@ -1053,16 +1059,16 @@ int __cdecl Player_Call477350(BYTE* p)
     return CallC<int>(FUN_477350, p + 8);
 }
 
-// [FUN_477880] the player's driver record
-int __cdecl Player_Driver(BYTE* p)
+// [FUN_477880] first order carried by the selected vehicle
+BYTE* __cdecl Player_FirstActiveCargo(BYTE* p)
 {
-    return (int)Player_FirstGoods(p + 8);
+    return static_cast<BYTE*>(Player_FirstGoods(p + 8));
 }
 
 // [FUN_477c10]
-int __cdecl Player_Call477bd0(BYTE* p, int a, int b)
+__declspec(noinline) void __cdecl Ai_SetPlayerDeadline(BYTE* player, double delay)
 {
-    return CallC<int>(FUN_477bd0, p + 8, a, b);
+    Player_SetDeadline(player + 8, delay);
 }
 
 // [FUN_477c50]
@@ -1181,7 +1187,7 @@ double __cdecl Driver_CargoFactor(BYTE* x)
     if (!o || !(F(BYTE, o, 40) & 1))
         return g_zero64b678;
     BYTE* t = ((BYTE**)g_cargoTypes)[F(int, o, 4)];
-    return (g_one64b670 - g_66c720) * F(double, t, 48) * g_64bc20;
+    return (g_one64b670 - g_vehicleValueFlag1Factor) * F(double, t, 48) * g_64bc20;
 }
 
 // [FUN_477350] the load the driver carries (scaled by the current race's factor)
@@ -1247,7 +1253,7 @@ BYTE* __cdecl Players_Append(int kind)
 
 extern "C" void FUN_4872f0(); KING_ALIAS("_FUN_4872f0", "_Player_Replan")    // re-plans a player's route to a position (player, position by value)
 extern "C" void __cdecl Sys_Log(const char* text, int value);
-extern "C" const char* __cdecl Rec_Name8(BYTE* p);
+extern "C" const char* __cdecl Player_NameFromListNode(BYTE* p);
 
 static void PrintPosition(const PositionId* p)
 {
@@ -1280,7 +1286,7 @@ void __cdecl Player_UpdateOrders(BYTE* p)
         Replan(p, (const DWORD*)(F(BYTE*, p, 76) - 40));
     if (F(BYTE*, p, 24) != F(BYTE*, p, 28))
         return;
-    Sys_Log(Rec_Name8(p), 0);
+    Sys_Log(Player_NameFromListNode(p), 0);
     PrintPosition((const PositionId*)(F(BYTE*, p, 76) - 40));
     PositionId here = *(const PositionId*)(p + 40);
     PrintPosition(&here);
@@ -2341,8 +2347,8 @@ static void Hd_Say(const AsmLabel& id)
 extern "C" {
 
 // [FUN_476bc0] player a hires driver b: both must be free (+176), not in each other's lists (+160) and a must
-// have hired before (+144); a pays b's fee (+864 from 477350, times 64b780) and cargo value, b gets them and
-// joins a's list, b's boss becomes a. 0, or -1..-6 / -12 for the failures (messages for the human player)
+// hold a licence (+144). A successful hire consumes one, including the first hire, and transfers the fee and vehicle value.
+// The new employer receives a logo on the first hire. Zero indicates success.
 int __cdecl Player_Hire(BYTE* a, BYTE* b)
 {
     if (a == b)
@@ -2630,7 +2636,7 @@ void __cdecl Drivers_ListCarrying(BYTE** v, int p)
         Int_Set(&slot, 0, copy);
         CallC(Ld_Leave, slot);
     }
-    BYTE* d = (BYTE*)Player_Driver((BYTE*)p);
+    BYTE* d = Player_FirstActiveCargo((BYTE*)p);
     if (!d)
         return;
     BYTE ord[144];

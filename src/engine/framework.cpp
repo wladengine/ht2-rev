@@ -5,6 +5,7 @@
 // file streams, the font metrics and text drawing.
 
 #include "king.h"
+#include "outline_sphere.h"
 #include <mmsystem.h>
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
@@ -1513,7 +1514,7 @@ static bool Font_PixelSet(int type, BYTE* p)
 }
 
 // [FUN_5e8e20..$L_5e92dc] loads a font from an image of 16x16 cells: per character the first and end columns of its top row (+16, +12) and 1-bit masks of the other rows (+28); the image itself becomes a surface (+36)
-extern "C" BYTE* __cdecl Font_LoadImage(const char* name)
+extern "C" BYTE* __cdecl Font_ReadGlyphAtlas(FILE* stream)
 {
     BYTE* f = (BYTE*)operator new(40);
     if (f)
@@ -1531,7 +1532,7 @@ extern "C" BYTE* __cdecl Font_LoadImage(const char* name)
         f = 0;
     F(int, f, 4) = 0;
     F(int, f, 8) = 255;
-    BYTE* img = Image_FromFile((FILE*)name, 0, 0);
+    BYTE* img = Image_FromFile(stream, 0, 0);
     F(int, f, 24) = F(WORD, img, 20) >> 4;
     F(int, f, 32) = -1;
     F(int, f, 20) = (F(WORD, img, 22) >> 4) - 1;
@@ -1702,8 +1703,8 @@ extern "C" void* __cdecl Data_Read5e7930(void* a, const char* name)
     return r;
 }
 
-// [FUN_5e9480] reads a data file into a through 5e9690
-extern "C" void* __cdecl Data_Read5e9690(void* a, const char* name)
+// [FUN_5e9480] Mask_ReadPixelsFromFile: fill an existing mask's pixel buffer.
+extern "C" void* __cdecl Mask_ReadPixelsFromFile(void* a, const char* name)
 {
     FILE* f = Fw_OpenData(name);
     if (!f)
@@ -1713,8 +1714,8 @@ extern "C" void* __cdecl Data_Read5e9690(void* a, const char* name)
     return r;
 }
 
-// [FUN_5e98c0] reads a data file into a through 5e99c0
-extern "C" void* __cdecl Data_Read5e99c0(void* a, const char* name)
+// [FUN_5e98c0] Sound_ReadBytesFromFile: fill the buffer, skipping the 44-byte header unless raw.
+extern "C" void* __cdecl Sound_ReadBytesFromFile(void* a, const char* name)
 {
     FILE* f = Fw_OpenData(name);
     if (!f)
@@ -1724,8 +1725,8 @@ extern "C" void* __cdecl Data_Read5e99c0(void* a, const char* name)
     return r;
 }
 
-// [FUN_5e9300] reads a whole data file through 5e9360 (file, size)
-extern "C" void* __cdecl Data_Read5e9360(const char* name)
+// [FUN_5e9300] Mask_LoadFile: open the named resource and construct its mask and pixel buffer.
+extern "C" void* __cdecl Mask_LoadFile(const char* name)
 {
     FILE* f = Fw_OpenData(name);
     if (!f)
@@ -1735,8 +1736,8 @@ extern "C" void* __cdecl Data_Read5e9360(const char* name)
     return r;
 }
 
-// [FUN_5e9800] reads a whole data file through 5e9910 (file, size)
-extern "C" void* __cdecl Data_Read5e9910(const char* name)
+// [FUN_5e9800] Sound_LoadFile: open the named resource and construct a sound with its byte buffer.
+extern "C" void* __cdecl Sound_LoadFile(const char* name)
 {
     FILE* f = Fw_OpenData(name);
     if (!f)
@@ -1746,13 +1747,13 @@ extern "C" void* __cdecl Data_Read5e9910(const char* name)
     return r;
 }
 
-// [FUN_5e9860] reads a whole data file into a through 5e99a0 (a, file, size)
-extern "C" void* __cdecl Data_Read5e99a0(void* a, const char* name)
+// [FUN_5e9860] Sound_SetRawFileSize: record the file size and set the raw-data flag.
+extern "C" int __cdecl Sound_SetRawFileSize(void* a, const char* name)
 {
     FILE* f = Fw_OpenData(name);
     if (!f)
         return 0;
-    void* r = (void*)Image_SetData((BYTE*)a, (int)f, Fw_DataSize());
+    int r = Image_SetData((BYTE*)a, (int)f, Fw_DataSize());
     fclose(f);
     return r;
 }
@@ -1770,8 +1771,8 @@ extern "C" void FUN_5e94d0(); KING_ALIAS("_FUN_5e94d0", "_Mask_ReadHeader")
 extern "C" int __cdecl Tga_Read(BYTE* img, FILE* f, long off);
 extern "C" void FUN_5e8160(); KING_ALIAS("_FUN_5e8160", "_Tga_Read")
 
-// [FUN_5e9420] reads a whole data file into a through 5e94d0 (a, file, size, 0)
-extern "C" void* __cdecl Data_Read5e94d0(void* a, const char* name)
+// [FUN_5e9420] Mask_ReadHeaderFromFile: read dimensions, storage size and mask flags.
+extern "C" void* __cdecl Mask_ReadHeaderFromFile(void* a, const char* name)
 {
     FILE* f = Fw_OpenData(name);
     if (!f)
@@ -2048,8 +2049,8 @@ extern "C" void __fastcall Resources_FreeTables(BYTE* self, void*)
 
 
 // ---------------------------------------------------------------------------
-extern "C" BYTE* __cdecl Font_LoadImage(const char* name);
-extern "C" void FUN_5e8e20(); KING_ALIAS("_FUN_5e8e20", "_Font_LoadImage")
+extern "C" BYTE* __cdecl Font_ReadGlyphAtlas(FILE* stream);
+extern "C" void FUN_5e8e20(); KING_ALIAS("_FUN_5e8e20", "_Font_ReadGlyphAtlas")
 extern "C" BYTE* __cdecl Font_ReadFile(FILE* f);
 extern "C" void FUN_5e8d10(); KING_ALIAS("_FUN_5e8d10", "_Font_ReadFile")
 KING_VAR(AsmLabel, s_6834ac, 6834ac)
@@ -2070,7 +2071,7 @@ extern "C" BYTE* __cdecl Font_LoadFile(const char* name)
             ;
     if (!n)
         return 0;
-    BYTE* r = !strcmp(name + n, s_6834ac) ? Font_LoadImage((const char*)f) : Font_ReadFile(f);
+    BYTE* r = !strcmp(name + n, s_6834ac) ? Font_ReadGlyphAtlas(f) : Font_ReadFile(f);
     fclose(f);
     return r;
 }
@@ -2324,10 +2325,10 @@ extern "C" int __fastcall Rn_Chain5af000(BYTE* self, void*, int a, int v, int c)
 extern "C" void FUN_5b39a0(); KING_ALIAS("_FUN_5b39a0", "@Rn_Chain5af000@20")
 extern "C" BYTE* __fastcall Windows_SetActive(BYTE* self, void*, BYTE* w);
 extern "C" void FUN_5e4250(); KING_ALIAS("_FUN_5e4250", "@Windows_SetActive@12")
-extern "C" int __cdecl Video_Get67fcf0();
-extern "C" void FUN_5d3f70(); KING_ALIAS("_FUN_5d3f70", "_Video_Get67fcf0")
-extern "C" int __cdecl Video_Get67fcf4();
-extern "C" void FUN_5d3f80(); KING_ALIAS("_FUN_5d3f80", "_Video_Get67fcf4")
+extern "C" int __cdecl Video_GetHorizontalScale();
+extern "C" void FUN_5d3f70(); KING_ALIAS("_FUN_5d3f70", "_Video_GetHorizontalScale")
+extern "C" int __cdecl Video_GetVerticalScale();
+extern "C" void FUN_5d3f80(); KING_ALIAS("_FUN_5d3f80", "_Video_GetVerticalScale")
 KING_VAR(AsmLabel, g_fra7025f0, 7025f0)
 
 typedef void (*AsmFn)();
@@ -2390,8 +2391,8 @@ extern "C" void __fastcall Fw_OnSize(BYTE*, void*, int type, int cx, int cy)
         return;
     if (type != 0 && type != 2)
         return;
-    int w = cx / Video_Get67fcf0();
-    int h = cy / Video_Get67fcf4();
+    int w = cx / Video_GetHorizontalScale();
+    int h = cy / Video_GetVerticalScale();
     w = (w + 1) & ~3;
     app = g_fw721750;
     if (F(BYTE, app, 292) & 16)
@@ -2615,12 +2616,13 @@ extern "C" void FUN_5b9520(); KING_ALIAS("_FUN_5b9520", "@TexSets_Free@4")
 KING_VAR(AsmLabel, g_fra68d1c0, 68d1c0)
 KING_VAR(AsmLabel, g_fra652310, 652310)
 
-// [FUN_5d8900] constructor (a1, rect a2..a5, a6, a7, a8): a window with its control group (+64, vtable 6521b0)
-extern "C" BYTE* __fastcall ControlWindow_Construct(BYTE* s, void*, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8)
+// [FUN_5d8900] Construct the window and its embedded panel using the supplied fonts.
+extern "C" BYTE* __fastcall ControlWindow_Construct(BYTE* s, void*, int parent, int left, int top, int right,
+                                                    int bottom, int id, int font, int alternateFont)
 {
-    FrameWindow_Construct(s, 0, a1, a2, a3, a4, a5);
+    FrameWindow_Construct(s, 0, parent, left, top, right, bottom);
     BYTE* g = s + 64;
-    Panel_ConstructRect(g, 0, (int)((BYTE*)g_fra68d1c0), a6, a7, 4, a2, a3, a4, a5, a8);
+    Panel_ConstructRect(g, 0, (int)((BYTE*)g_fra68d1c0), id, font, 4, left, top, right, bottom, alternateFont);
     F(void*, s, 0) = g_fra6521f0;
     F(void*, g, 0) = g_fra6521b0;
     F(BYTE*, s, 56) = s ? g : 0;
@@ -2995,8 +2997,8 @@ extern "C" int __cdecl Node_ClearLinkByName(BYTE* n, BYTE** ctx)
 // ---------------------------------------------------------------------------
 // The window size limits.
 
-extern "C" void FUN_5d3f70(); KING_ALIAS("_FUN_5d3f70", "_Video_Get67fcf0")
-extern "C" void FUN_5d3f80(); KING_ALIAS("_FUN_5d3f80", "_Video_Get67fcf4")
+extern "C" void FUN_5d3f70(); KING_ALIAS("_FUN_5d3f70", "_Video_GetHorizontalScale")
+extern "C" void FUN_5d3f80(); KING_ALIAS("_FUN_5d3f80", "_Video_GetVerticalScale")
 extern "C" int __cdecl Wnd_FrameExtra(int edge);    // directdraw.cpp
 // [$L_5dd650] the size limits (MINMAXINFO) of the 721750 frame with flag 1: the video size by the scale (+256,
 // +260) plus the frame, as the maximized, minimum and maximum track sizes; else the default
@@ -3009,11 +3011,11 @@ extern "C" void __fastcall Frame5dd650_OnGetMinMaxInfo(BYTE* s, void*, MINMAXINF
     mm->ptMaxPosition.x = 0;
     mm->ptMaxPosition.y = 0;
     int sx = F(int, g_q51_721750, 256);
-    int w = Video_Get67fcf0() * sx;
+    int w = Video_GetHorizontalScale() * sx;
     w += Wnd_FrameExtra(2);
     w += Wnd_FrameExtra(1);
     int sy = F(int, g_q51_721750, 260);
-    int h = Video_Get67fcf4() * sy;
+    int h = Video_GetVerticalScale() * sy;
     h += Wnd_FrameExtra(4);
     h += Wnd_FrameExtra(3);
     mm->ptMaxSize.x = w;
@@ -3975,7 +3977,7 @@ extern "C" void __fastcall View_BeginFrame(BYTE* s)
 
 // [FUN_5e6800] the sphere around outline s's points (+4 count; x at +16, z at +20) placed at v: their centre and
 // the largest distance from it, into v
-extern "C" void __fastcall Outline_BoundingSphere(BYTE* s, void*, float* v)
+extern "C" void __fastcall Outline_BoundingSphere(BYTE* s, void*, OutlineSphere& v)
 {
     float c[3] = {0, 0, 0}, tmp[3];
     int n = F(WORD, s, 4);
@@ -5068,16 +5070,10 @@ void __cdecl Matrix_ToAngles(Pg_V3 r0, Pg_V3 r1, Pg_V3 r2, Pg_V3 t, double* x, d
     Pg_V3 t2;
     Fw_Move(&t2, rx, w);
     CallThis(Fw_SetThis, &v, t2.x, t2.y, t2.z);
-    if (v.z < g_fw64b6e0) {
-        double r = x87_acos(v.z);
-        *roll = r;
-        if (v.x < g_fw64c264)
-            *roll = -r;
+    if (x87_compare_status(static_cast<double>(v.z), g_fw64b6e0) & X87_C0) {
+        x87_store_pose_roll(roll, v.z, v.x, true, g_fw64d900);
     } else {
-        double r = x87_asin(v.x);
-        *roll = r;
-        if (v.z < g_fw64c264)
-            *roll = g_fw64d900 - r;
+        x87_store_pose_roll(roll, v.x, v.z, false, g_fw64d900);
     }
 }
 
@@ -5109,8 +5105,8 @@ BYTE* __fastcall MainFrame_Construct(BYTE* s)
     BYTE* app = g_fw721750;
     if (F(DWORD, app, 268) & 0x400) {
         FrameWnd_Create(s, 0, (const char*)0, (const char*)0, 0x90000000u, (const RECT*)((BYTE*)g_mfRectDefault), 0, 0, 0, 0);
-        int h = Video_Get67fcf4() * F(int, g_fw721750, 260);
-        int w = Video_Get67fcf0() * F(int, g_fw721750, 256);
+        int h = Video_GetVerticalScale() * F(int, g_fw721750, 260);
+        int w = Video_GetHorizontalScale() * F(int, g_fw721750, 256);
         Wnd_SetWindowPos(s, 0, (BYTE*)g_mfWndTop, 0, 0, w, h, 64);
         SetCursor(0);
         return s;
@@ -5120,8 +5116,8 @@ BYTE* __fastcall MainFrame_Construct(BYTE* s)
     FrameWnd_Create(s, 0, (const char*)0, title, 0xCF0000u, (const RECT*)((BYTE*)g_mfRectDefault), 0, 0, 0, 0);
     BYTE* ms = Afx_GetModuleState();
     SetClassLongA(F(HWND, s, 28), -14, (LONG)LoadIconA(F(HINSTANCE, ms, 12), MAKEINTRESOURCEA(130)));
-    int w = Video_Get67fcf0() * F(int, g_fw721750, 256);
-    int h = Video_Get67fcf4() * F(int, g_fw721750, 260);
+    int w = Video_GetHorizontalScale() * F(int, g_fw721750, 256);
+    int h = Video_GetVerticalScale() * F(int, g_fw721750, 260);
     if (!(F(BYTE, g_fw721750, 292) & 2)) {
         int e2 = Wnd_FrameExtra(2);
         w = Wnd_FrameExtra(1) + w + e2;
@@ -6481,8 +6477,8 @@ extern "C" BYTE* __fastcall Bitmap_ConstructData(BYTE* self, void*, int a, int b
 extern "C" BYTE* __fastcall Bitmap_Construct(BYTE* self, void*, const char* name);
 extern "C" void __cdecl Rm_MaskHeader(void* o, void* f, int size, void* map); KING_ALIAS("_Rm_MaskHeader", "_Mask_ReadHeader")
 extern "C" void* __cdecl Rm_MaskFromFile(void* f, int size); KING_ALIAS("_Rm_MaskFromFile", "_Texture_ReadFile")
-extern "C" void __cdecl Rm_MaskRead(void* o, const char* name); KING_ALIAS("_Rm_MaskRead", "_Data_Read5e94d0")
-extern "C" void* __cdecl Rm_MaskLoad(const char* name); KING_ALIAS("_Rm_MaskLoad", "_Data_Read5e9360")
+extern "C" void __cdecl Rm_MaskRead(void* o, const char* name); KING_ALIAS("_Rm_MaskRead", "_Mask_ReadHeaderFromFile")
+extern "C" void* __cdecl Rm_MaskLoad(const char* name); KING_ALIAS("_Rm_MaskLoad", "_Mask_LoadFile")
 extern "C" BYTE* __fastcall Texture_ConstructNamed(BYTE* self, void*, const char* name, int a, int b);
 extern "C" void Rm_TexCtor(); KING_ALIAS("_Rm_TexCtor", "@Texture_Construct@12")
 extern "C" void __cdecl Rm_TgaHeader(void* o, void* f, void* map); KING_ALIAS("_Rm_TgaHeader", "_Tga_ReadHeader")
@@ -7256,7 +7252,7 @@ extern "C" void __fastcall Ow_BoxInit(void* b, void*); KING_ALIAS("@Ow_BoxInit@8
 extern "C" BYTE* __cdecl Ow_FontLoad(const char* name); KING_ALIAS("_Ow_FontLoad", "_Font_LoadFile")
 extern "C" void __cdecl Ow_Exit(const char* msg); KING_ALIAS("_Ow_Exit", "_Sys_Exit")
 extern "C" DWORD __fastcall Ow_StyleAssign(void* self, void*, const void* s); KING_ALIAS("@Ow_StyleAssign@12", "@Style_Assign@12")
-extern "C" BYTE* __cdecl Ow_NewObjRef(); KING_ALIAS("_Ow_NewObjRef", "_Shell_NewObjRef")
+extern "C" BYTE* __cdecl Ow_NewObjRef(); KING_ALIAS("_Ow_NewObjRef", "_Shell_CreateCursorReference")
 extern "C" int __cdecl Ow_Mode(); KING_ALIAS("_Ow_Mode", "_Game_568fd0")
 extern "C" BYTE* __cdecl Ow_Find(const char* name); KING_ALIAS("_Ow_Find", "_Objects_Find")
 extern "C" BYTE* __fastcall Ow_ScreenCtor(BYTE* s, void*, const char* name, int id); KING_ALIAS("@Ow_ScreenCtor@16", "@Screen_Construct@16")
@@ -7643,8 +7639,8 @@ extern "C" int __cdecl Dm_EffectZero(int); KING_ALIAS("_Dm_EffectZero", "_Effect
 extern "C" int __cdecl Dm_TimerCalibrate(int a); KING_ALIAS("_Dm_TimerCalibrate", "_Timer_Calibrate")
 extern "C" void __fastcall Dm_SetMousePos(BYTE* self, void*, int x, int y); KING_ALIAS("@Dm_SetMousePos@16", "@CGameApp_SetMousePos@16")
 extern "C" int __cdecl Dm_SoundOpen(); KING_ALIAS("_Dm_SoundOpen", "_Sound_Open")
-extern "C" int __cdecl Dm_ScaleX(); KING_ALIAS("_Dm_ScaleX", "_Video_Get67fcf0")
-extern "C" int __cdecl Dm_ScaleY(); KING_ALIAS("_Dm_ScaleY", "_Video_Get67fcf4")
+extern "C" int __cdecl Dm_ScaleX(); KING_ALIAS("_Dm_ScaleX", "_Video_GetHorizontalScale")
+extern "C" int __cdecl Dm_ScaleY(); KING_ALIAS("_Dm_ScaleY", "_Video_GetVerticalScale")
 extern "C" int __cdecl Dm_FrameExtra(int edge); KING_ALIAS("_Dm_FrameExtra", "_Wnd_FrameExtra")
 extern "C" BYTE* __fastcall Dm_WindowCtor(BYTE* self, void*, int a, int b, int c, int d); KING_ALIAS("@Dm_WindowCtor@24", "@Fw5d8650_Construct@24")
 extern "C" BYTE* __fastcall Dm_RootSurface(BYTE* self, void*); KING_ALIAS("@Dm_RootSurface@8", "@Window_RootSurface@8")
@@ -7776,8 +7772,8 @@ extern "C" void __cdecl Ia_MemoryTouch(int n); KING_ALIAS("_Ia_MemoryTouch", "_M
 extern "C" const char* __cdecl Ia_DataPath(const char* path); KING_ALIAS("_Ia_DataPath", "_DataPath_Set")
 extern "C" char* __cdecl Ia_Token(char** cur); KING_ALIAS("_Ia_Token", "_NextToken")
 extern "C" void __fastcall Ia_SetupVideo(BYTE* s, void*); KING_ALIAS("@Ia_SetupVideo@8", "@App_SetupVideo@8")
-extern "C" int __cdecl Ia_ScaleX(); KING_ALIAS("_Ia_ScaleX", "_Video_Get67fcf0")
-extern "C" int __cdecl Ia_ScaleY(); KING_ALIAS("_Ia_ScaleY", "_Video_Get67fcf4")
+extern "C" int __cdecl Ia_ScaleX(); KING_ALIAS("_Ia_ScaleX", "_Video_GetHorizontalScale")
+extern "C" int __cdecl Ia_ScaleY(); KING_ALIAS("_Ia_ScaleY", "_Video_GetVerticalScale")
 extern "C" int __cdecl Ia_FrameExtra(int edge); KING_ALIAS("_Ia_FrameExtra", "_Wnd_FrameExtra")
 extern "C" BYTE* __cdecl Ia_FontLoad(const char* name); KING_ALIAS("_Ia_FontLoad", "_Font_LoadFile")
 KING_VAR(BYTE, g_iaSplashVt652570, 652570)
@@ -8031,7 +8027,7 @@ static double Cm_Zoom(BYTE* s)
 static double Cm_Radius(BYTE* s)
 {
     double a = SD(2904), b = SD(2912), c = SD(2920);
-    return x87_sqrt((a * a + b * b) + c * c);
+    return x87_length3(a, b, c);
 }
 
 extern "C" {
@@ -8093,10 +8089,30 @@ void __fastcall App_UpdateCamera(BYTE* s, void*)
         DWORD now = F(DWORD, s, 2988);
         if (now & 2)
             r = Cm_Zoom(s) * g_cm682a28;
-        double a = SD(2928);
-        SD(2904) = x87_cos(SD(2936)) * x87_sin(a) * r;
-        SD(2912) = -(x87_cos(SD(2936)) * x87_cos(a) * r);
-        SD(2920) = x87_sin(SD(2936)) * r;
+        // The orbit transform multiplies the x87 trigonometric results before storing
+        // any component as binary64. Rounding the cosines first changes the next radius.
+        __asm {
+            mov eax, s
+            fld qword ptr [eax + 2936]
+            fcos
+            fld qword ptr [eax + 2928]
+            fsin
+            fmulp st(1), st(0)
+            fmul r
+            fstp qword ptr [eax + 2904]
+            fld qword ptr [eax + 2936]
+            fcos
+            fld qword ptr [eax + 2928]
+            fcos
+            fmulp st(1), st(0)
+            fmul r
+            fchs
+            fstp qword ptr [eax + 2912]
+            fld qword ptr [eax + 2936]
+            fsin
+            fmul r
+            fstp qword ptr [eax + 2920]
+        }
         g_cmPrev721780 = now;
         return;
     }
@@ -8368,8 +8384,8 @@ extern "C" BOOL __fastcall MainWnd_SetVideoMode(BYTE* self, void*, int w, int h,
     }
     CGameApp_SetVideoMode(self, 0, w, h, bits, flags);
     if (!(F(DWORD, self, 268) & 1024)) {
-        int sx = Video_Get67fcf0() * w;
-        int sy = Video_Get67fcf4() * h;
+        int sx = Video_GetHorizontalScale() * w;
+        int sy = Video_GetVerticalScale() * h;
         int fw = Wnd_FrameExtra(2);
         int W = fw + (Wnd_FrameExtra(1) + sx);
         int fh = Wnd_FrameExtra(4);

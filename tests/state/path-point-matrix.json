@@ -1,0 +1,25 @@
+{
+  "description": "Store the second of three path point matrices. The source contains a translation by (3, 4, 12); all destination words and neighboring records start with a distinct fill.",
+  "entry": "0x5bc320",
+  "result": "void",
+  "ecx": "0x1000100",
+  "args": [
+    1,
+    "0x1000600"
+  ],
+  "objects": [
+    {
+      "offset": "0x100",
+      "hex": "000000000300000000030001"
+    },
+    {
+      "offset": "0x300",
+      "hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b"
+    },
+    {
+      "offset": "0x600",
+      "hex": "0000803f0000000000000000000000000000803f0000000000000000000000000000803f000040400000804000004041"
+    }
+  ],
+  "symbol": "@Poly_SetRecord@16"
+}

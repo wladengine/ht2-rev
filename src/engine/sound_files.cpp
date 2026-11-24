@@ -118,7 +118,7 @@ static __forceinline BYTE* Table_Bucket(BYTE* self, int key)
 extern "C" {
 
 // [FUN_5ffb20]
-int __cdecl Obj723d44_Delete()
+int __cdecl Music_StopPlaybackThread()
 {
     if (g_723d44)
         CallVirt(g_723d44, 0, 1);
@@ -212,7 +212,7 @@ BYTE* __cdecl Music_CopyBackward(BYTE* first, BYTE* last, BYTE* d)
 // [FUN_5ffb40] stops the music and clears the list
 int __cdecl Music_Clear()
 {
-    Obj723d44_Delete();
+    Music_StopPlaybackThread();
     for (BYTE* e = g_musicBegin; e != g_musicEnd; e += 56)
         Obj600540_Delete(e, 0, 0);
     g_musicEnd = g_musicBegin;

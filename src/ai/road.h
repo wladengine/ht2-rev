@@ -20,7 +20,7 @@ extern "C" int __cdecl sprintf(char* buf, const char* format, ...);
 struct DVec3 {
     double x, y, z;
 };
-
+extern "C" DVec3* __fastcall DVec3_SetXYZ(DVec3* out, void*, double x, double y, double z);
 
 // ---------------------------------------------------------------------------
 // The road graph (ai_road.cpp): nodes, edges, and a route as a sequence of
@@ -39,7 +39,7 @@ struct RoadNode {
 
 struct RoadCost {                   // 16 bytes
     double cost;
-    bool   done;
+    BYTE   cached;
     int    from;
 };
 
@@ -57,7 +57,7 @@ struct RoadEdge {
     int          id;                // +12, its index in the edge vector
     DWORD        flags;             // +16, 0x400: on the route being checked
     BYTE         m_20[28];
-    RoadCost     cost[2][2];        // +48, [0][side] and [1][side]
+    RoadCost     cost[2][2];        // +48, indexed by routing side, then travel direction
     RoadNode*    from;              // +112
     RoadNode*    to;                // +116
     RoadObject** objects;           // +120, a vector
@@ -97,7 +97,7 @@ KING_VAR(char, g_aiEmpty, 68d1c0)
 typedef void* FreeLists[17];
 KING_VAR(FreeLists, g_stlFreeLists, 68d1c0)  // the STL node allocator, by 8 bytes
 KING_VAR(volatile LONG, g_stlLock, 68d204)
-extern "C" void __fastcall Stl_Lock(volatile LONG* l, void*);   // aimain.cpp: the allocator lock
+extern "C" void __fastcall StlAllocator_AcquireLock(volatile LONG* l, void*);   // aimain.cpp: the allocator lock
 
 extern "C" PositionId* __cdecl Road_EdgeStart(PositionId* out, RoadEdge* e);
 KING_ALIAS("_Road_EdgeStart", "FUN_47fcf0")
@@ -139,7 +139,7 @@ inline void StlDeallocate(void* p, unsigned bytes)
         return;
     }
     void** list = &g_stlFreeLists[(bytes + 7) >> 3];
-    Stl_Lock(&g_stlLock, 0);
+    StlAllocator_AcquireLock(&g_stlLock, 0);
     *(void**)p = *list;
     *list = p;
     g_stlLock = 0;

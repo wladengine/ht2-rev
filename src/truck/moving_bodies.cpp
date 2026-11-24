@@ -3,6 +3,7 @@
 // record lists of a body, flags, the ListItem lists, and a free list.
 
 #include "vecmath.h"
+#include "x87.h"
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
 
@@ -24,7 +25,8 @@ struct Record28 { DWORD m[7]; };
 // A progress: +4 the step reached, +8 the number of steps, +12 the part done
 // (0..1), +16 the part per second
 
-extern "C" void __fastcall Progress_SetStep(BYTE* self, void*, int step)
+// [FUN_5893e0]
+extern "C" void __fastcall Progress_SetStepAndFraction(BYTE* self, void*, int step)
 {
     if (step < 0)
         return;
@@ -35,34 +37,41 @@ extern "C" void __fastcall Progress_SetStep(BYTE* self, void*, int step)
     F(float, self, 12) = (float)((double)step / n);
 }
 
-extern "C" void __fastcall Progress_SetPart(BYTE* self, void*, float part)
+KING_VAR(float, progressMinimumFraction, 64c264)
+KING_VAR(float, progressMaximumFraction, 64c250)
+
+// [FUN_589410]
+extern "C" void __fastcall Progress_SetFractionAndStep(BYTE* self, void*, float part)
 {
-    if (!(part >= 0.0f))
+    if (!(part >= progressMinimumFraction))
         return;
-    if (part > 1.0f)
+    if (part > progressMaximumFraction)
         return;
     F(float, self, 12) = part;
-    F(int, self, 4) = (int)(F(int, self, 8) * (double)part);
+    F(int, self, 4) = static_cast<int>(static_cast<__int64>(F(int, self, 8) * (double)part));
 }
 
-extern "C" void __fastcall Progress_Advance(BYTE* self, void*, float dt)
+// [FUN_589450]
+extern "C" void __fastcall Progress_AdvanceTime(BYTE* self, void*, float dt)
 {
     double part = (double)dt * F(float, self, 16) + F(float, self, 12);
     F(float, self, 12) = (float)part;
-    if (part > 1.0f)
+    if (part > progressMaximumFraction)
         F(float, self, 12) = 1.0f;
-    F(int, self, 4) = (int)(F(int, self, 8) * (double)F(float, self, 12));
+    F(int, self, 4) = static_cast<int>(static_cast<__int64>(F(int, self, 8) * (double)F(float, self, 12)));
 }
 
-// [FUN_589640] without flag 0x200, and with it and the identity matrix
-extern "C" int __cdecl Movingb_589e70(int a, int b, int c, unsigned flags)
+// Sweep using the supplied end transform, or from the body origin to its primary points.
+// [FUN_589e70]
+extern "C" int __cdecl Body_SweepPointsToTransform(BYTE* body, const Matrix* endTransform, BYTE* contacts, unsigned flags)
 {
-    return Item_SweepPoints((BYTE*)a, (const Matrix*)b, (BYTE*)c, flags & ~0x200u);
+    return Item_SweepPoints(body, endTransform, contacts, flags & ~0x200u);
 }
 
-extern "C" int __cdecl Movingb_589e90(int a, int b, unsigned flags)
+// [FUN_589e90]
+extern "C" int __cdecl Body_SweepPrimaryPointsFromOrigin(BYTE* body, BYTE* contacts, unsigned flags)
 {
-    return Item_SweepPoints((BYTE*)a, &g_identity, (BYTE*)b, flags | 0x200);
+    return Item_SweepPoints(body, &g_identity, contacts, flags | 0x200);
 }
 
 extern "C" BYTE* __fastcall TwoVec_Construct(BYTE* self, void*)
@@ -115,6 +124,7 @@ extern "C" int __fastcall Points_Add(BYTE* self, void*, int second, const Vec3Bi
     return ++F(int, self, 3576);
 }
 
+// [FUN_58cf30]
 extern "C" void __fastcall Points_ActivateAll(BYTE* self, void*)
 {
     for (int i = 0; i < F(int, self, 3576); i++)
@@ -132,7 +142,8 @@ extern "C" int __fastcall Points_NextFirst(BYTE* self, void*, Vec3Bits* out)
     return ++F(int, self, 3580);
 }
 
-extern "C" int __fastcall Points_NextActive(BYTE* self, void*, Vec3Bits* out)
+// [FUN_58d170]
+extern "C" int __fastcall Body_NextActiveSecondaryPoint(BYTE* self, void*, Vec3Bits* out)
 {
     int n = F(int, self, 3576);
     if (F(int, self, 3584) < n) {
@@ -156,12 +167,13 @@ extern "C" int __fastcall Points_Next(BYTE* self, void*, Vec3Bits* out)
     if (F(int, self, 3588) == 0)
         return Points_NextFirst(self, 0, out);
     if (F(int, self, 3588) == 1)
-        return Points_NextActive(self, 0, out);
+        return Body_NextActiveSecondaryPoint(self, 0, out);
     return 0;
 }
 
 // records of 28 bytes at +3988, their count at +5132, read position +5136
-extern "C" int __fastcall Records_Next(BYTE* self, void*, Record28* out)
+// [FUN_58d1f0] Copy the next collision plane in world coordinates, rewinding on exhaustion.
+extern "C" int __fastcall Body_NextWorldPlane(BYTE* self, void*, Record28* out)
 {
     int i = F(int, self, 5136);
     if (i >= F(int, self, 5132)) {
@@ -174,7 +186,8 @@ extern "C" int __fastcall Records_Next(BYTE* self, void*, Record28* out)
     return next;
 }
 
-extern "C" int __fastcall Records_Get(BYTE* self, void*, Record28* out, int i)
+// [FUN_58d250]
+extern "C" int __fastcall Body_GetWorldPlaneByIndex(BYTE* self, void*, Record28* out, int i)
 {
     if (i >= F(int, self, 5132) || i < 0)
         return 0;
@@ -187,7 +200,8 @@ extern "C" void __fastcall Records_58d290(BYTE* self, void*)
 {
 }
 
-extern "C" void __fastcall Flags1196_Set(BYTE* self, void*, int bit)
+// [FUN_58f1e0]
+extern "C" void __fastcall Body_SetMotionFlag(BYTE* self, void*, int bit)
 {
     if (bit == 1)
         F(DWORD, self, 1196) |= 1;
@@ -197,7 +211,8 @@ extern "C" void __fastcall Flags1196_Set(BYTE* self, void*, int bit)
         F(DWORD, self, 1196) |= 8;
 }
 
-extern "C" void __fastcall Flags1196_Clear(BYTE* self, void*, int bit)
+// [FUN_58f230]
+extern "C" void __fastcall Body_ClearMotionFlag(BYTE* self, void*, int bit)
 {
     if (bit == 1)
         F(DWORD, self, 1196) &= ~1u;
@@ -209,25 +224,27 @@ extern "C" void __fastcall Flags1196_Clear(BYTE* self, void*, int bit)
         F(DWORD, self, 1196) &= ~8u;
 }
 
-extern "C" void __fastcall Mode3976_Set(BYTE* self, void*, int mode)
+// [FUN_58f2d0]
+extern "C" void __fastcall Body_SetMotionMode(BYTE* self, void*, int mode)
 {
     if (mode == 0 || mode == 1 || mode == 2)
         F(int, self, 3976) = mode;
     else if (mode == 3 && F(int, self, 3976) != 3)
-        F(int, self, 3980) = 3;         // overwritten below, as in the original
-    F(int, self, 3980) = 0;
+        F(volatile int, self, 3980) = 3; // The original publishes this value before clearing it.
+    F(volatile int, self, 3980) = 0;
 }
 
 // advances progress i of the array at +9520 (20 bytes each, the count at
 // +9516); counts it in *changed when its step changed and in *finished
 // when it reached the last
+// [FUN_591660]
 extern "C" int __fastcall Progresses_Advance(BYTE* self, void*, int i, float dt, int* changed, int* finished)
 {
     BYTE* all = F(BYTE*, self, 9520);
     if (!all || !F(int, self, 9516) || i < 0 || i >= F(int, self, 9516))
         return 0;
     int step = F(int, all + i * 20, 4);
-    Progress_Advance(all + i * 20, 0, dt);
+    Progress_AdvanceTime(all + i * 20, 0, dt);
     if (F(int, F(BYTE*, self, 9520) + i * 20, 4) == step)
         return 0;
     (*changed)++;
@@ -257,7 +274,8 @@ extern "C" void __fastcall ListNode_Unlink(BYTE* self, void*)
     F(BYTE*, self, 4) = 0;
 }
 
-extern "C" void __fastcall ListItem_Attach(BYTE* self, void*, BYTE** list)
+// [FUN_592d20]
+extern "C" void __fastcall ListItem_AttachToAnchor(BYTE* self, void*, BYTE** list)
 {
     if (!self || !list)
         return;
@@ -279,7 +297,7 @@ extern "C" BYTE* __fastcall ListItem592bf0_Construct(BYTE* self, void*, BYTE** l
 {
     ListNode_Construct(self + 4, 0);
     F(void*, self, 0) = g_vtbl65089c;
-    ListItem_Attach(self, 0, list);
+    ListItem_AttachToAnchor(self, 0, list);
     return self;
 }
 
@@ -309,6 +327,7 @@ extern "C" BYTE* __fastcall ListItem_PutOnTail(BYTE* self, void*, BYTE* item)
     return self;
 }
 
+// [FUN_592e20]
 extern "C" void __fastcall ListNode_InsertBefore(BYTE* self, void*, BYTE* node)
 {
     if (!self)
@@ -321,11 +340,15 @@ extern "C" void __fastcall ListNode_InsertBefore(BYTE* self, void*, BYTE* node)
     F(BYTE*, self, 4) = node;
 }
 
-extern "C" void __fastcall ListNode_CutNext(BYTE* self, void*)
+// [$L_592e70] Detach this node from its predecessor and return the predecessor.
+extern "C" __declspec(noinline) BYTE* __fastcall ListNode_CutNext(BYTE* self, void*)
 {
-    if (F(BYTE*, self, 0))
-        F(BYTE*, F(BYTE*, self, 0), 4) = 0;
-    F(BYTE*, self, 0) = 0;
+    BYTE* previous = F(BYTE*, self, 0);
+    if (previous) {
+        F(BYTE*, previous, 4) = 0;
+        F(BYTE*, self, 0) = 0;
+    }
+    return previous;
 }
 
 extern "C" BYTE* __fastcall ListNode_592e90(BYTE* self, void*, BYTE* node)
@@ -344,6 +367,7 @@ extern "C" BYTE* __fastcall ListNode_592e90(BYTE* self, void*, BYTE* node)
 }
 
 // deletes the chain at +4 (linked through +4 of each)
+// [FUN_592ee0]
 extern "C" void __fastcall Chain_DeleteAll(BYTE* self, void*)
 {
     BYTE* p = F(BYTE*, self, 4);
@@ -366,7 +390,8 @@ extern "C" void __cdecl Vec3_TransformByObject(Vec3* v, const BYTE* obj)
 // ---------------------------------------------------------------------------
 // A free list at +104 (linked through +0 of the items); +108 the last taken
 
-extern "C" void __fastcall FreeList_Put(BYTE* self, void*, BYTE** item, BYTE** prevNext)
+// [FUN_594090]
+extern "C" void __fastcall FreeList_RecycleActiveItem(BYTE* self, void*, BYTE** item, BYTE** prevNext)
 {
     if (!prevNext)
         F(BYTE*, self, 108) = *item;
@@ -389,8 +414,8 @@ extern "C" BYTE** __fastcall FreeList_Take(BYTE* self, void*)
 
 extern "C" BYTE* __fastcall NodeN_Construct(BYTE* self, void*, const char* name, int kind, int n);
 extern "C" void FUN_5f19b0(); KING_ALIAS("_FUN_5f19b0", "@NodeN_Construct@20")
-extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s);
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void __fastcall SceneSlotNode_Destroy(BYTE* s);
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 KING_VAR(char, g_vtbl6508a8, 6508a8)
 
 extern "C" {
@@ -410,7 +435,7 @@ void __fastcall Body593040_Destroy(BYTE* self, void*)
     F(void*, self, 0) = &g_vtbl6508a8;
     if (F(void*, self, 56))
         operator delete(F(void*, self, 56));
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 }
@@ -507,7 +532,7 @@ extern "C" int __cdecl Body_DeepestContact(BYTE* obj, BYTE* out, float* depth)
     SceneObj_Matrix1(obj, 0, (Matrix*)m);
     static BYTE c[6404];
     Track587c80_Construct(c);
-    if (!Movingb_589e90((int)obj, (int)c, 512))
+    if (!Body_SweepPrimaryPointsFromOrigin(obj, c, 512))
         return 0;
     float best = 0.0f;
     int idx = 0;
@@ -702,62 +727,72 @@ extern "C" void __fastcall Body_ProbeGround(BYTE* s, void*, int a)
 // [FUN_589490] moves a body's level (+12, -1..1) by *amount at rate towards a notch of +8; 1 when the amount was used up
 extern "C" int __fastcall BodyLevel_Step(BYTE* s, void*, float* amount, float rate)
 {
-    if (!(*amount < 0 || *amount > 0))
+    const unsigned short belowOrEqual = X87_C0 | X87_C3;
+    if (x87_compare_status(*amount, 0.0f) & X87_C3)
         return 0;
-    if (!(rate < 0 || rate > 0)) {
+    if (x87_compare_status(rate, 0.0f) & X87_C3) {
         F(int, s, 12) = 0;
         F(int, s, 4) = 0;
         return 1;
     }
     double q = (double)rate * F(float, s, 12);
     float qf = (float)q;
-    if (*amount > 0.0f) {
-        double aq = q < 0 ? -q : q;
-        if (aq > *amount) {
+    if (!(x87_compare_status(*amount, 0.0f) & belowOrEqual)) {
+        double aq = x87_fabs(q);
+        if (!(x87_compare_status(aq, double(*amount)) & belowOrEqual)) {
             double t = (double)*amount / rate;
-            if (qf > 0.0f) {
+            if (!(x87_compare_status(qf, 0.0f) & belowOrEqual)) {
                 double v = F(float, s, 12) - t;
                 F(float, s, 12) = (float)v;
-                if (!(v >= 0.0f))
+                if (x87_compare_status(v, 0.0) & X87_C0)
                     F(int, s, 12) = 0;
             } else {
                 double v = t + F(float, s, 12);
                 F(float, s, 12) = (float)v;
-                if (v > 0.0f)
+                if (!(x87_compare_status(v, 0.0) & belowOrEqual))
                     F(int, s, 12) = 0;
             }
             F(int, s, 4) = (int)((double)F(int, s, 8) * F(float, s, 12));
             *(int*)amount = 0;
             return 1;
         }
-        *amount = (float)((double)*amount - aq);
+        // The magnitude remains live until after the binary32 store. The
+        // final pop affects C1 when the remaining amount is subnormal.
+        __asm {
+            mov eax, amount
+            fld qword ptr aq
+            fld dword ptr [eax]
+            fsub st(0), st(1)
+            fstp dword ptr [eax]
+            fstp st(0)
+        }
         F(int, s, 12) = 0;
         F(int, s, 4) = 0;
         return 0;
     }
     double l = F(float, s, 12);
-    double u = (1.0 - (l < 0 ? -l : l)) * rate;
-    double am = *amount < 0 ? -(double)*amount : (double)*amount;
-    if (!(am >= u)) {
+    double u = (1.0 - x87_fabs(l)) * rate;
+    double am = x87_fabs(*amount);
+    if (x87_compare_status(am, u) & X87_C0) {
         double t = (double)*amount / rate;
-        if (q > 0.0f) {
+        if (!(x87_compare_status(q, 0.0) & belowOrEqual)) {
             double v = F(float, s, 12) - t;
             F(float, s, 12) = (float)v;
-            if (v > 1.0f)
+            if (!(x87_compare_status(v, 1.0) & belowOrEqual))
                 F(float, s, 12) = 1.0f;
         } else {
             double v = t + F(float, s, 12);
             F(float, s, 12) = (float)v;
-            if (!(v >= -1.0f))
+            if (x87_compare_status(v, -1.0) & X87_C0)
                 F(float, s, 12) = -1.0f;
         }
         F(int, s, 4) = (int)((double)F(int, s, 8) * F(float, s, 12));
         *(int*)amount = 0;
         return 1;
     }
-    *amount = (float)((u < 0 ? -u : u) + *amount);
+    *amount = (float)(x87_fabs(u) + *amount);
     F(int, s, 4) = F(int, s, 8);
-    F(float, s, 12) = q > 0.0f ? 1.0f : -1.0f;
+    F(float, s, 12) = (x87_compare_status(q, 0.0) & belowOrEqual) ? -1.0f : 1.0f;
     return 0;
 }
 
@@ -871,7 +906,7 @@ extern "C" int __fastcall Node_Remove(BYTE* self, void*);
 extern "C" void FUN_5ef780(); KING_ALIAS("_FUN_5ef780", "@Node_Remove@8")
 extern "C" void __fastcall Handle_Release(BYTE* self, void*);
 extern "C" void __cdecl Faders_DeleteAll();
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 extern "C" void __fastcall Object_Destroy(BYTE* s);
 
 // [FUN_593670] destructor of a fading body (vtables 65094c, 650900 at +32)
@@ -888,7 +923,7 @@ extern "C" void __fastcall FadeBody_Destroy(BYTE* self, int)
     Node_Remove(sub, 0);
     Handle_Release(self, 0);
     Faders_DeleteAll();
-    Node5f1a70_Destroy(self ? sub : 0);
+    SceneSlotNode_Destroy(self ? sub : 0);
     Object_Destroy(self);
 }
 
@@ -1023,7 +1058,6 @@ extern "C" int __fastcall Buckets_Push(BYTE* self, void*, int i, BYTE* n);
 extern "C" int __fastcall Item_Apply84(BYTE* self, void*, int a, int b);
 extern "C" Vec3* __fastcall Item_GroundNormal(BYTE* s, void*, Vec3* out);
 extern "C" void FUN_585da0(); KING_ALIAS("_FUN_585da0", "@Item_SendContact@20")
-extern "C" void FUN_592e70(); KING_ALIAS("_FUN_592e70", "@ListNode_CutNext@8")
 extern "C" BYTE* __fastcall ListNode_592e90(BYTE* self, void*, BYTE* node);
 KING_VAR(float, g_movbod650890, 650890)
 KING_VAR(float, g_movbod650894, 650894)
@@ -1044,7 +1078,7 @@ extern "C" BYTE* __fastcall Movbod_58fb80(BYTE* s, void*, BYTE* p)
     return p;
 }
 
-// [$L_592f20] removes node p (next at +0) from the front of the list (+4 head, +8 tail)
+// [$L_592f20] Remove the suffix starting at p. The descriptor holds the head and tail.
 extern "C" int __fastcall Movbod_ListPop(BYTE* s, void*, BYTE* p)
 {
     if (F(BYTE*, s, 4) == p) {
@@ -1053,7 +1087,7 @@ extern "C" int __fastcall Movbod_ListPop(BYTE* s, void*, BYTE* p)
         return (int)s;
     }
     F(int, s, 8) = F(int, p, 0);
-    return CallThis<int>(FUN_592e70, s);
+    return (int)ListNode_CutNext(p, 0);
 }
 
 // [$L_592f50] appends the chain n (linked through +4) to the list; the tail goes to +8
@@ -1382,7 +1416,7 @@ int __cdecl Body_NeighbourContacts(BYTE* b, BYTE* m, BYTE* c)
 // === placing a body by its position and direction ($L_58fbc0)
 
 extern "C" void FUN_4e3132(); KING_ALIAS("_FUN_4e3132", "_Vec3_DivComponents")
-extern "C" int __cdecl Obj_Lookup4e5b22(int a, int b, int c, char* out);
+extern "C" int __cdecl World_ResolveSegmentDestination(int a, int b, int c, char* out);
 extern "C" int __fastcall Vehicle_MakeOut(BYTE* self, void*);
 extern "C" int __fastcall Item_ResetFlags(BYTE* self, void*, int, int);
 extern "C" Matrix* __cdecl Matrix_Translation(Matrix* out, Vec3 t);
@@ -1421,7 +1455,7 @@ int __fastcall Body_Place(BYTE* s, void*, int a, DWORD* flags)
     w[2] = (float)((double)q[5] * vy + (double)q[8] * vz + (double)q[2] * vx);
     float r[3];
     memcpy(s + 428, CallC<BYTE*>(FUN_4e3132, r, w, s + 404), 12);
-    F(int, s, 800) = Obj_Lookup4e5b22(F(int, s, 804), (int)(s + 584), (int)(s + 536), (char*)(s + 1132));
+    F(int, s, 800) = World_ResolveSegmentDestination(F(int, s, 804), (int)(s + 584), (int)(s + 536), (char*)(s + 1132));
     if (!F(int, s, 800)) {
         F(int, s, 800) = F(int, s, 804);
         CallVirt(s, 28, 1);
@@ -1561,7 +1595,7 @@ int __fastcall Body_Collide(BYTE* s, void*, int a, int b, int c, BYTE* k, unsign
 // === a body's nearest contact (FUN_58b120)
 
 extern "C" int __cdecl Item_PointContacts(BYTE* s, const float* m, BYTE* w);
-extern "C" int __cdecl Movingb_589e70(int a, int b, int c, unsigned flags);
+extern "C" int __cdecl Body_SweepPointsToTransform(BYTE* body, const Matrix* endTransform, BYTE* contacts, unsigned flags);
 extern "C" int __cdecl Body_NeighbourContacts(BYTE* b, BYTE* m, BYTE* c);
 extern "C" void Nc_DivAssign(); KING_ALIAS("_Nc_DivAssign", "@Vec3_DivAssign@16")
 KING_VAR(float, g_nc64c2f8, 64c2f8)
@@ -1580,7 +1614,7 @@ int __cdecl Body_NearestContact(BYTE* b, BYTE* m, float* scale, float* value, BY
     BYTE t[6404];
     Track587c80_Construct(t);
     F(int, t, 2816) = 0;
-    int ground = Movingb_589e70((int)b, (int)m, (int)t, a6);
+    int ground = Body_SweepPointsToTransform(b, (const Matrix*)m, t, a6);
     int nb = Body_NeighbourContacts(b, m, t);
     int other = Item_PointContacts(b, (const float*)m, t);
     if (!ground && !nb && !other)
@@ -1705,7 +1739,7 @@ extern "C" Vec3* __cdecl Vec3_MulMatrix(Vec3* out, const Vec3* p, const Matrix* 
 extern "C" Vec3* __cdecl Vec3_Sub(Vec3* out, const Vec3* a, const Vec3* b);
 extern "C" double __cdecl Vec3_Dot(const Vec3* a, const Vec3* b);
 extern "C" int __fastcall Points_NextFirst(BYTE* self, void*, Vec3Bits* out);
-extern "C" int __fastcall Records_Next(BYTE* self, void*, Record28* out);
+extern "C" int __fastcall Body_NextWorldPlane(BYTE* self, void*, Record28* out);
 
 extern "C" {
 
@@ -1757,7 +1791,7 @@ int __cdecl Bodies_TouchTest(BYTE* a, const float* ma, const float* pa, BYTE* b,
     TwoVec_Construct(rec, 0);
     Vec3 w2 = *Vec3_MulMatrix(&t, &q, (const Matrix*)pa);
     int all = 1;
-    while (Records_Next(a, 0, (Record28*)rec)) {
+    while (Body_NextWorldPlane(a, 0, (Record28*)rec)) {
         Vec3 df;
         Vec3_Sub(&df, &w2, (const Vec3*)(rec + 16));
         if (rr < Vec3_Dot(&df, (const Vec3*)rec))
@@ -1895,7 +1929,7 @@ KING_VAR(float, g_bd64c264, 64c264)
 // distance less radius r
 static void Bd_Planes(BYTE* o, BYTE* rec, const Vec3* q, int points, float r, float* out, float* best, int* inside)
 {
-    while (Records_Next(o, 0, (Record28*)rec)) {
+    while (Body_NextWorldPlane(o, 0, (Record28*)rec)) {
         Vec3 df;
         Vec3_Sub(&df, q, (const Vec3*)(rec + 16));
         float d = (float)Vec3_Dot(&df, (const Vec3*)rec);
@@ -2709,7 +2743,9 @@ extern "C" {
 // [$L_58d770] body s's frame f set down on the plane through p with normal n (axis turned by r) into out: lifted
 // clear of the plane by its planes' depths (+3988.., lowest +5140); nearly flat it is just raised to its lowest
 // point (Points_Next), else tilted up to four times about its lowest point towards the plane
-void __fastcall Body_SettleOnPlane(BYTE* s, void*, float* out, const float* f, const Matrix* r, const Vec3* n, const Vec3* p)
+// Original 58dfcd returns the caller's output buffer in EAX. Vtable +72 callers
+// copy from that pointer; a void return leaves an unrelated intermediate in EAX.
+float* __fastcall Body_SettleOnPlane(BYTE* s, void*, float* out, const float* f, const Matrix* r, const Vec3* n, const Vec3* p)
 {
     g_bp6f6568++;
     float M[6][12];
@@ -2777,7 +2813,7 @@ void __fastcall Body_SettleOnPlane(BYTE* s, void*, float* out, const float* f, c
             Vec3_AddAssign((Vec3*)&M[0][9], 0, &tmp, &up);
         }
         memcpy(out, M[0], 48);
-        return;
+        return out;
     }
     int k = 0;
     Vec3 nn = *n;
@@ -2846,6 +2882,7 @@ void __fastcall Body_SettleOnPlane(BYTE* s, void*, float* out, const float* f, c
     }
     else
         memcpy(out, M[k], 48);
+    return out;
 }
 
 } // extern "C"
@@ -3173,7 +3210,7 @@ void __fastcall Body_OntoPlane(BYTE* b, void*, const Vec3* p, const Vec3* n, int
     Matrix_Inverse(&I, &M);
     BYTE out[48];
     CallVirt(b, 72, out, &M, &I, n, &q);
-    BYTE* o = (BYTE*)Obj_Lookup4e5b22((int)(F(BYTE*, b, 800)), (int)(b + 536), (int)(out + 36), (char*)(b + 1132));
+    BYTE* o = (BYTE*)World_ResolveSegmentDestination((int)(F(BYTE*, b, 800)), (int)(b + 536), (int)(out + 36), (char*)(b + 1132));
     if (!o)
     {
         o = F(BYTE*, b, 800);
@@ -3187,7 +3224,7 @@ void __fastcall Body_OntoPlane(BYTE* b, void*, const Vec3* p, const Vec3* n, int
 // === the sparks' frame (a method at $L_594400)
 
 extern "C" void __fastcall Sparks_Spawn(BYTE* s, void*, const BYTE* src, unsigned n);
-extern "C" void __fastcall FreeList_Put(BYTE* self, void*, BYTE** item, BYTE** prevNext);
+extern "C" void __fastcall FreeList_RecycleActiveItem(BYTE* self, void*, BYTE** item, BYTE** prevNext);
 extern "C" void Sk_Faders(); KING_ALIAS("_Sk_Faders", "_Faders_Step")
 extern "C" int __fastcall Queue_PostEvent(BYTE* self, void*, int arg);
 KING_VAR(Vec3, g_skGravity, 6f6638)
@@ -3219,7 +3256,7 @@ void __fastcall Sparks_Frame(BYTE* s, void*)
             p = F(BYTE*, p, 0);
             if (!F(int, q, 120) && rand() * (double)g_sk65096c > g_sk64f338)
                 Sparks_Spawn(s, 0, q, (int)(rand() * (double)g_sk64c624));
-            FreeList_Put(s, 0, (BYTE**)q, (BYTE**)prev);
+            FreeList_RecycleActiveItem(s, 0, (BYTE**)q, (BYTE**)prev);
         }
         else
         {
@@ -3284,26 +3321,27 @@ int __cdecl Body_PointContact(const float* p, BYTE* b, BYTE* contact, float r)
     float best = -F(float, b, 3280);
     int idx = 0;
     const float* n = (const float*)rec.m;
-    int k = Records_Next(b, 0, &rec);
+    int k = Body_NextWorldPlane(b, 0, &rec);
     if (k)
     {
+        bool outside = false;
         do
         {
             double d = ((double)q[2] - n[6]) * n[2] + ((double)q[1] - n[5]) * n[1] + ((double)q[0] - n[4]) * n[0];
             if (d > r)
-                best = 0;
+                outside = true;
             else if (best < d)
             {
                 idx = k - 1;
                 best = (float)d;
                 memcpy(best_pt, q, 12);
             }
-            k = Records_Next(b, 0, &rec);
+            k = Body_NextWorldPlane(b, 0, &rec);
         } while (k);
-        if (*(DWORD*)&best == 0)
+        if (outside)
             return 0;
     }
-    if (!Records_Get(b, 0, &rec, idx))
+    if (!Body_GetWorldPlaneByIndex(b, 0, &rec, idx))
         World_Fatal("checkPMBintersection:: mb->get_col_plane(num) == 0");
     float ty = (float)((double)n[1] * r), tz = (float)((double)n[2] * r);
     float S[3];

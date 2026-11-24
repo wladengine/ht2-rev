@@ -21,7 +21,7 @@ static double SumSquares(double x0, double y0, double z0)
 
 double Vec3_Length(const Vec3* v)
 {
-    return x87_sqrt(SumSquares(v->x, v->y, v->z));
+    return x87_vector_length(&v->x);
 }
 
 Vec3* Vec3_Normalized(Vec3* out, const Vec3* v)
@@ -110,7 +110,8 @@ void Vec3::TransformDir(const Matrix* by)
 }
 
 // p * M with translation; the same as TransformPoint, summed in another order
-Vec3* Vec3_MulMatrix(Vec3* out, const Vec3* p, const Matrix* m)
+// Matrix_Multiply returns with the rounding status of this transform's final component.
+__declspec(noinline) Vec3* Vec3_MulMatrix(Vec3* out, const Vec3* p, const Matrix* m)
 {
     const float* a = m->m;
     double ny = (((double)a[7] * p->z + (double)a[4] * p->y) + (double)a[1] * p->x) + a[10];
@@ -152,11 +153,7 @@ Matrix* Matrix_Multiply(Matrix* out, const Matrix* ma, const Matrix* mb)
     r.m[6] = (float)(((double)a[8] * b[6] + (double)a[6] * b[0]) + (double)a[7] * b[3]);
     r.m[7] = (float)(((double)a[8] * b[7] + (double)a[7] * b[4]) + (double)a[6] * b[1]);
     r.m[8] = (float)(((double)a[8] * b[8] + (double)a[7] * b[5]) + (double)b[2] * a[6]);
-    Vec3 t;
-    Vec3_MulMatrix(&t, (const Vec3*)&a[9], mb);
-    r.m[9] = t.x;
-    r.m[10] = t.y;
-    r.m[11] = t.z;
+    Vec3_MulMatrix(reinterpret_cast<Vec3*>(&r.m[9]), reinterpret_cast<const Vec3*>(&a[9]), mb);
     *out = r;
     return out;
 }
@@ -469,6 +466,7 @@ Matrix* Matrix::Identity()
     return this;
 }
 
+// [FUN_4bdd60] Scale all three components before writing the result, including when out aliases v.
 Vec3* Vec3_Scaled(Vec3* out, const Vec3* v, float s)
 {
     Vec3 r;
@@ -479,6 +477,7 @@ Vec3* Vec3_Scaled(Vec3* out, const Vec3* v, float s)
     return out;
 }
 
+// [FUN_4bddb0] Component-wise vector sum. Both inputs may overlap the output.
 Vec3* Vec3_Add(Vec3* out, const Vec3* a, const Vec3* b)
 {
     Vec3 r;
@@ -489,6 +488,7 @@ Vec3* Vec3_Add(Vec3* out, const Vec3* a, const Vec3* b)
     return out;
 }
 
+// [FUN_4bde00] Component-wise a minus b. Both inputs may overlap the output.
 Vec3* Vec3_Sub(Vec3* out, const Vec3* a, const Vec3* b)
 {
     Vec3 r;
@@ -499,6 +499,7 @@ Vec3* Vec3_Sub(Vec3* out, const Vec3* a, const Vec3* b)
     return out;
 }
 
+// [FUN_4bde50] Right-handed cross product a x b, allowing output to overlap an input.
 Vec3* Vec3_Cross(Vec3* out, const Vec3* a, const Vec3* b)
 {
     Vec3 r;
@@ -532,6 +533,7 @@ Vec3* Vec3_DivComponents(Vec3* out, const Vec3* a, const Vec3* b)
     return out;
 }
 
+// [FUN_4cb2b0] Transform a direction by the three basis rows, ignoring translation.
 Vec3* Vec3_RotateBy(Vec3* out, const Vec3* v, const Matrix* m)
 {
     const float* a = m->m;
@@ -545,6 +547,7 @@ Vec3* Vec3_RotateBy(Vec3* out, const Vec3* v, const Matrix* m)
 }
 
 // each row multiplied component-wise by s: M diag(s)
+// [FUN_4e3170] Scale the three basis columns and clear translation.
 Matrix* Matrix_ScaleColumns(Matrix* out, const Matrix* m, const Vec3* s)
 {
     Matrix r = *m;
@@ -557,6 +560,7 @@ Matrix* Matrix_ScaleColumns(Matrix* out, const Matrix* m, const Vec3* s)
     return out;
 }
 
+// [FUN_4e32e5] Subtract the three basis rows and clear translation.
 Matrix* Matrix_SubRows(Matrix* out, const Matrix* a, const Matrix* b)
 {
     Matrix r;
@@ -569,6 +573,7 @@ Matrix* Matrix_SubRows(Matrix* out, const Matrix* a, const Matrix* b)
     return out;
 }
 
+// [FUN_4e33a0] Scale the three basis rows and clear translation.
 Matrix* Matrix_ScaleRows(Matrix* out, const Matrix* m, float s)
 {
     Matrix r;
@@ -596,7 +601,8 @@ void __fastcall Vec3_TransformPoint(Vec3* self, void*, const Matrix* m) { self->
 void __fastcall Vec3_TransformDir(Vec3* self, void*, const Matrix* m) { self->TransformDir(m); }     // [FUN_5ab9b0]
 void __fastcall Vec3_Read(Vec3* self, void*, FILE* file) { self->Read(file); }                      // [FUN_5ab790]
 
-Vec3* __fastcall Vec3_MulAssign(Vec3* self, void*, Vec3* ret, float s)                          // [FUN_5ab620]
+// [FUN_5ab620] Scale this vector in place and copy the new value into the caller's return slot.
+Vec3* __fastcall Vec3_MulAssign(Vec3* self, void*, Vec3* ret, float s)
 {
     self->x = (float)((double)s * self->x);
     self->y = (float)((double)s * self->y);

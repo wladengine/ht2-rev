@@ -65,7 +65,7 @@ extern "C" DWORD* __cdecl SchValue_Make10007(DWORD* out, int unused, DWORD v)
     return out;
 }
 
-extern "C" DWORD* __cdecl SchValue_Make10008(DWORD* out, int unused, DWORD v)
+extern "C" DWORD* __cdecl SchValue_MakeCharacter(DWORD* out, int unused, DWORD v)
 {
     out[0] = v;
     out[1] = 0;
@@ -202,7 +202,7 @@ static BYTE* SceneObj_FindCommandTarget(int key)
     return 0;
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*);
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*);
 
 extern "C" int __cdecl Sch_ErrorCode(int code, int severity);
 extern "C" void __cdecl Sch_TypeError(int code, int severity, const char* name);

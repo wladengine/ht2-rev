@@ -1,0 +1,28 @@
+{
+  "description": "A two-node chain loses its tail. Observe the returned predecessor, both nodes, the descriptor and writable table sentinel.",
+  "entry": "0x592f20",
+  "result": "eax",
+  "ecx": "0x1000100",
+  "args": [
+    "0x1000300"
+  ],
+  "objects": [
+    {
+      "offset": "0x100",
+      "hex": "000500010002000100030001"
+    },
+    {
+      "offset": "0x200",
+      "hex": "0000000000030001"
+    },
+    {
+      "offset": "0x300",
+      "hex": "0002000100000000"
+    },
+    {
+      "offset": "0x500",
+      "hex": "c1c1c1c1d2d2d2d2"
+    }
+  ],
+  "symbol": "@Movbod_ListPop@12"
+}

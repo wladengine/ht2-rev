@@ -4,6 +4,7 @@
 
 #include "car.h"
 #include "vecmath.h"
+#include "x87.h"
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
 extern "C" Matrix* __fastcall SceneObj_Matrix1(BYTE* self, void*, Matrix* out);  // moving_items.cpp
@@ -28,7 +29,7 @@ extern "C" int __fastcall Vehicle_MakeOut(BYTE* self, void*);
 extern "C" int __fastcall Node_GetWorld(BYTE* self, void*, void* out);
 
 KING_VAR(int, g_6cec68, 6cec68)
-KING_VAR(int, g_6968ac, 6968ac)
+KING_VAR(int, g_mainViewStartupState, 6968ac)
 KING_VAR(BYTE*, g_options, 6cec78)            // +386, +388, +390: volumes in percent
 typedef BYTE* Ptrs[1];
 typedef int Ints[1];
@@ -97,9 +98,10 @@ extern "C" void __fastcall Cab_SetState(BYTE* self, void*, int state)
         CallVirt(s, 40);
 }
 
-extern "C" void __cdecl Obj6968ac_Clear()
+// [FUN_4e0130]
+extern "C" void __cdecl MainView_ClearStartupState(const char*)
 {
-    g_6968ac = 0;
+    g_mainViewStartupState = 0;
 }
 
 extern "C" void __fastcall Wnd4e0140_Destruct(BYTE* self, void*)
@@ -108,15 +110,16 @@ extern "C" void __fastcall Wnd4e0140_Destruct(BYTE* self, void*)
     Media5c53e0_Destroy(self, 0);
 }
 
-extern "C" BYTE* __fastcall Wnd4e01d0_Construct(BYTE* self, void*, int a)
+// [FUN_4e01d0]
+extern "C" BYTE* __fastcall GameMainView_Construct(BYTE* self, void*, int a)
 {
     Timeline_Construct(self, 0, a);
     F(void*, self, 0) = g_vtbl64d6c8;
-    g_6968ac = 0;
+    g_mainViewStartupState = 0;
     return self;
 }
 
-// [FUN_5dbbb0] with the rectangle by value; the object in ECX is passed on
+// [FUN_4e0630] calls FUN_5dbbb0 with the rectangle by value; the object in ECX is passed on
 extern "C" void __fastcall Obj_4e0630(void* self, void*, const Rect16* r)
 {
     CallThis(FUN_5dbbb0, self, *r);
@@ -203,7 +206,8 @@ extern "C" int __cdecl Bodies_Overlap(BYTE* a, const float* ma, const float* pa,
 extern "C" int __cdecl Bodies_Pair(BYTE* a, int a1, int a2, BYTE* b, int b1, int b2, int x);
 
 // Collision routines consume both the world transform and its inverse.
-extern "C" int __cdecl SceneObj_Collide(BYTE* a, BYTE* b, DWORD arg)
+// [FUN_5922d0]
+extern "C" int __cdecl Bodies_TestOverlapAtCurrentTransforms(BYTE* a, BYTE* b, DWORD arg)
 {
     Matrix worldA, worldB, inverseA, inverseB;
     SceneObj_Matrix1(a, 0, &worldA);
@@ -213,6 +217,7 @@ extern "C" int __cdecl SceneObj_Collide(BYTE* a, BYTE* b, DWORD arg)
     return Bodies_Overlap(a, (const float*)&worldA, (const float*)&inverseA, b, (const float*)&worldB, (const float*)&inverseB, (float*)arg);
 }
 
+// [FUN_5929c0]
 extern "C" int __cdecl SceneObj_CollideShape(void* shape, DWORD arg2, DWORD arg3,
                                              BYTE* object, DWORD arg5)
 {
@@ -268,7 +273,7 @@ static BYTE* SceneObj_FindCommandTarget(int key)
     return 0;
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*); // mmt.cpp
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*); // mmt.cpp
 
 // Advance the texture frame, clamping one-shot sequences and wrapping loops.
 extern "C" void __fastcall SceneTexture_Advance(BYTE* self, void*)
@@ -283,8 +288,9 @@ extern "C" void __fastcall SceneTexture_Advance(BYTE* self, void*)
     F(int, self, 108) = frame;
     ++F(DWORD, self, 124);
     F(DWORD, F(BYTE*, self, 72), 36) = F(DWORD*, self, 120)[frame];
-    if (F(float, self, 104) > F(float, self, 100))
-        Pooled_Set4(self, 0);
+    // The elapsed time is the left operand in the original x87 comparison.
+    if (!(x87_compare_status(F(float, self, 104), F(float, self, 100)) & (X87_C0 | X87_C3)))
+        Pooled_MarkForRelease(self, 0);
     else
         F(float, self, 104) = (float)(F(double, F(BYTE*, self, 88), 2960)
                                      + F(float, self, 104));
@@ -442,7 +448,7 @@ extern "C" void __cdecl Startup_ReadOptions()
 
 
 // ---------------------------------------------------------------------------
-extern "C" int __cdecl Carat_ReadFill2(int a, int b, int fill, int c, int d, int n);
+extern "C" int __cdecl Ini_ReadIntsWithDefault(int a, int b, int fill, int c, int d, int n);
 extern "C" void FUN_4e12d0(); KING_ALIAS("_FUN_4e12d0", "_Path_Join")    // a path moved to a drive (path, drive, out)
 extern "C" int __cdecl Table71e858_Get(int i);
 extern "C" void __cdecl Sys_Exit(const char* msg);
@@ -509,10 +515,10 @@ extern "C" void __cdecl Startup_ReadSection()
     g_su696be4 = Startup_OptIs(s_su673008, s_su6729a8);
     g_su696be8 = Startup_OptIs(s_su672ffc, s_su6729a8);
     g_su696bec = Startup_OptIs(s_su672ff0, s_su6729a8);
-    Carat_ReadFill2((int)((char*)s_su672eb8), (int)((char*)s_su672fe4), 0, (int)((char*)g_su696bf0), (int)((char*)s_su672ec8), 5);
-    Carat_ReadFill2((int)((char*)s_su672eb8), (int)((char*)s_su672fd8), 10, (int)((char*)g_su696c04), (int)((char*)s_su672ec8), 5);
-    Carat_ReadFill2((int)((char*)s_su672eb8), (int)((char*)s_su672fcc), 380, (int)((char*)g_su696c18), (int)((char*)s_su672ec8), 5);
-    Carat_ReadFill2((int)((char*)s_su672eb8), (int)((char*)s_su672fc0), 430, (int)((char*)g_su696c2c), (int)((char*)s_su672ec8), 5);
+    Ini_ReadIntsWithDefault((int)((char*)s_su672eb8), (int)((char*)s_su672fe4), 0, (int)((char*)g_su696bf0), (int)((char*)s_su672ec8), 5);
+    Ini_ReadIntsWithDefault((int)((char*)s_su672eb8), (int)((char*)s_su672fd8), 10, (int)((char*)g_su696c04), (int)((char*)s_su672ec8), 5);
+    Ini_ReadIntsWithDefault((int)((char*)s_su672eb8), (int)((char*)s_su672fcc), 380, (int)((char*)g_su696c18), (int)((char*)s_su672ec8), 5);
+    Ini_ReadIntsWithDefault((int)((char*)s_su672eb8), (int)((char*)s_su672fc0), 430, (int)((char*)g_su696c2c), (int)((char*)s_su672ec8), 5);
     g_su696c44 = 1.5f;
     g_su696c54 = Startup_OptIs(s_su672fb8, s_su672994);
     g_su696c48 = Startup_OptIs(s_su672fb0, s_su6729a8);
@@ -1055,7 +1061,7 @@ void __fastcall VehicleSounds_Find(BYTE* s)
 
 // === drawing the world view ($L_4e0950)
 
-extern "C" double __cdecl Vec3_LengthSq4e298b(const Vec3* v);
+extern "C" double __cdecl WorldVec3_LengthSquared(const Vec3* v);
 extern "C" void __fastcall View_DrawObject(BYTE* s);
 extern "C" void __fastcall Dash_DrawOverlays(BYTE* s, void*);
 extern "C" void __fastcall Item_AfterEvents(BYTE* s);
@@ -1074,7 +1080,7 @@ static double Wv_DistSq(BYTE* o, float x, float y, float z)
     BYTE m[48];
     const float* p = (const float*)((BYTE*)SceneObj_Matrix1(o, 0, (Matrix*)m) + 36);
     float d[3] = {x - p[0], y - p[1], z - p[2]};
-    return Vec3_LengthSq4e298b((const Vec3*)d);
+    return WorldVec3_LengthSquared((const Vec3*)d);
 }
 
 extern "C" {
@@ -1145,10 +1151,21 @@ extern "C" {
 // [FUN_4e10d0] *out = v / k
 float* __cdecl Vec3_DivScalar(float* out, const float* v, float k)
 {
-    float x = (float)(v[0] / (double)k), y = (float)(v[1] / (double)k), z = (float)(v[2] / (double)k);
-    out[0] = x;
-    out[1] = y;
-    out[2] = z;
+    // Divide each binary32 operand directly. Widening the divisor can quiet a
+    // signaling NaN before FDIV. The final store sets the x87 rounding flag.
+    DWORD bits[3];
+    for (int axis = 0; axis < 3; ++axis) {
+        const float* component = v + axis;
+        DWORD rounded;
+        __asm {
+            mov eax, component
+            fld dword ptr [eax]
+            fdiv k
+            fstp dword ptr rounded
+        }
+        bits[axis] = rounded;
+    }
+    memcpy(out, bits, sizeof bits);
     return out;
 }
 
@@ -1483,11 +1500,11 @@ extern "C" void __cdecl Startup_ReadOptions();
 extern "C" void Ai_Joy(); KING_ALIAS("_Ai_Joy", "_Joy_Init")
 extern "C" void __cdecl Controls_ListPresets();
 extern "C" int __cdecl Controls_SelectPreset(int i);
-extern "C" void __cdecl Mmt_Set6f4ba4(int a, int b);
+extern "C" void __cdecl Joy_SetAcquisitionCallbacks(int a, int b);
 extern "C" void Ai_FfForget(); KING_ALIAS("_Ai_FfForget", "_Ff_Forget")
 extern "C" void Ai_FfCreate(); KING_ALIAS("_Ai_FfCreate", "_Ff_Create")
 extern "C" void Ai_Dump(); KING_ALIAS("_Ai_Dump", "_Dump_Text")
-extern "C" BYTE* __fastcall Wnd4e01d0_Construct(BYTE* self, void*, int a);
+extern "C" BYTE* __fastcall GameMainView_Construct(BYTE* self, void*, int a);
 extern "C" BYTE* __fastcall Windows_AddActive(BYTE* self, void*, BYTE* w);
 extern "C" BYTE* __fastcall Windows_Add(BYTE* self, void*, BYTE* w);
 extern "C" BYTE* __fastcall Windows_Add2(BYTE* self, void*, BYTE* w);
@@ -1495,7 +1512,6 @@ extern "C" void __fastcall Wasm597410_Create(BYTE* self, void*);
 extern "C" void __fastcall Wasm_598d80(BYTE* self, void*);
 extern "C" BYTE* __fastcall NodeN_Construct(BYTE* self, void*, const char* name, int kind, int n);
 extern "C" void Ai_View3D(); KING_ALIAS("_Ai_View3D", "@View3D_Construct@24")
-extern "C" void Ai_Music(); KING_ALIAS("_Ai_Music", "_Obj6968ac_Clear")
 extern "C" BYTE* __fastcall Cluster_Construct(BYTE* self, void*);
 extern "C" int __fastcall Window_SetSurface(BYTE* self, void*, int s);
 extern "C" void __cdecl World_InitTables(int a, int b, int c);
@@ -1552,11 +1568,11 @@ void __fastcall App_Start(BYTE* a, void*, int argc, char** argv)
     g_ai696ca4 = CallC<int>(Ai_Joy, F(int, a, 388), g_ai696c58 * 100, 0) == 0;
     Controls_ListPresets();
     Controls_SelectPreset(0);
-    Mmt_Set6f4ba4((int)((void*)Ai_FfForget), (int)((void*)Ai_FfCreate));
+    Joy_SetAcquisitionCallbacks((int)((void*)Ai_FfForget), (int)((void*)Ai_FfCreate));
     int rect[4] = {0, top, w, bottom};
     BYTE* p = (BYTE*)operator new(9408);
     if (p)
-        p = Wnd4e01d0_Construct(p, 0, (int)rect);
+        p = GameMainView_Construct(p, 0, (int)rect);
     g_ai696ca0 = p;
     Windows_AddActive(a, 0, p);
     World_InitTables((int)g_ai696ca0, (int)&g_ai696750, F(int, a, 388));
@@ -1598,7 +1614,7 @@ void __fastcall App_Start(BYTE* a, void*, int argc, char** argv)
     g_ai696cb0 = v;
     Windows_Add(a, 0, v);
     CallVirt(g_ai696cb0, 32);
-    CallC(Ai_Music, "truck.mid");
+    MainView_ClearStartupState("truck.mid");
     BYTE* c = (BYTE*)operator new(180);
     if (c)
         c = Cluster_Construct(c, 0);
@@ -1779,7 +1795,7 @@ void __cdecl Bus_OnFare(void*, double amount)
 // === the game's main control window and its shell screens (FUN_527f30 with its tail $L_5280e2)
 
 extern "C" BYTE* __fastcall Mn_WindowCtor(BYTE* s, void*, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8); KING_ALIAS("@Mn_WindowCtor@40", "@ControlWindow_Construct@40")
-extern "C" void* __cdecl Mn_LoadFonts(); KING_ALIAS("_Mn_LoadFonts", "_Carat_LoadFonts")
+extern "C" void* __cdecl Mn_LoadFonts(); KING_ALIAS("_Mn_LoadFonts", "_Menu_LoadLargeAndMenuFonts")
 extern "C" void __cdecl Mn_Set720080(const char* s); KING_ALIAS("_Mn_Set720080", "_Set720080")
 extern "C" BYTE* __fastcall Mn_OverlaysLoad(BYTE* s, void*, const char* path, BYTE* o, int size); KING_ALIAS("@Mn_OverlaysLoad@20", "@Overlays_Load@20")
 extern "C" BYTE* __cdecl Mn_Find(const char* name); KING_ALIAS("_Mn_Find", "_Objects_Find")
@@ -2321,7 +2337,7 @@ void __fastcall GameWindow_Draw(BYTE* s, void*)
     Is_Info(g_isInfo6ceccc, 3);
     Is_Info(g_isInfo6cecd0, 4);
     Is_Info(g_isInfo6cecd4, 5);
-    Is_SetSurface(F(BYTE*, g_isParent69684c, 12), 0, *F(BYTE**, F(BYTE*, F(BYTE*, g_isApp696ca0, 9396), 100), 0));
+    Is_SetSurface(F(BYTE*, g_isParent69684c, 12), 0, F(BYTE**, F(BYTE*, g_isApp696ca0, 9396), 100)[0]);
     if (g_isIntro675d40)
     {
         BYTE* p = (BYTE*)operator new(2312);
@@ -2341,7 +2357,7 @@ void __fastcall GameWindow_Draw(BYTE* s, void*)
         if (!(int)Dd_TestMode(800, 600, 1, 3584, &o2, (DWORD*)&o1, (DWORD*)&o0))
             MainWnd_SetVideoMode(&g_isWindows696750, 0, 800, 600, 1, ~(Is_ScreenFlags() | 0x4000) & g_isFlags69685c);
         MainWnd_SetVideoMode(&g_isWindows696750, 0, 800, 600, 1, 3584);
-        Is_PaletteApply(*F(BYTE**, F(BYTE*, F(BYTE*, g_isApp696ca0, 9396), 100), 0), 0);
+        Is_PaletteApply(F(BYTE**, F(BYTE*, g_isApp696ca0, 9396), 100)[0], 0);
         Is_Refresh(g_isParent69684c, 0);
         g_is696878 = 0;
     }
@@ -2420,7 +2436,7 @@ void __fastcall MovieScreen_Frame(BYTE* s, void*)
         if (!(int)Dd_TestMode(800, 600, 1, 3584, &o2, (DWORD*)&o1, (DWORD*)&o0))
             MainWnd_SetVideoMode(&g_isWindows696750, 0, 800, 600, 1, ~(Is_ScreenFlags() | 0x4000) & g_isFlags69685c);
         MainWnd_SetVideoMode(&g_isWindows696750, 0, 800, 600, 1, 3584);
-        Is_PaletteApply(*F(BYTE**, F(BYTE*, F(BYTE*, g_isApp696ca0, 9396), 100), 0), 0);
+        Is_PaletteApply(F(BYTE**, F(BYTE*, g_isApp696ca0, 9396), 100)[0], 0);
     }
     else
         g_mv696878 = -1;

@@ -17,6 +17,7 @@ extern "C" DWORD __fastcall GridTriangle_SetPoints(BYTE* self,void*,DWORD a,DWOR
     F(volatile DWORD,self,4)=a; F(volatile DWORD,self,8)=b;
     F(volatile DWORD,self,12)=c; F(volatile DWORD,self,20)=owner; return 1;
 }
+// [FUN_606100]
 extern "C" BYTE* __fastcall GridEdge_Construct(BYTE* self,void*)
 {
     F(BYTE*,self,4)=F(BYTE*,self,0)=self;
@@ -41,6 +42,7 @@ static void GridEdge_OrientPair(BYTE* self,unsigned offset,BYTE* pair)
         F(BYTE*,F(BYTE*,self,offset),4)=left;
     }
 }
+// [FUN_606170]
 extern "C" DWORD __fastcall GridEdge_SetPairs(BYTE* self,void*,BYTE* first,BYTE* second)
 {
     if(!GridEdge_ValidPair(first)) return 0;
@@ -75,6 +77,7 @@ extern "C" BYTE* __fastcall GridMesh_CreateTriangle(BYTE* self,void*,DWORD a,DWO
     F(float,t,28)=(float)CallVirt<double>(F(BYTE*,self,4),36,a,b,c,t+12);
     MarineQueue_InsertNode(F(BYTE*,self,32),0,t); return t;
 }
+// [FUN_606400]
 extern "C" BYTE* __fastcall GridMesh_CreatePoint(BYTE* self,void*,const DWORD* point)
 {
     BYTE* p=(BYTE*)operator new(12);
@@ -82,6 +85,7 @@ extern "C" BYTE* __fastcall GridMesh_CreatePoint(BYTE* self,void*,const DWORD* p
     F(volatile DWORD,p,0)=point[0]; F(volatile DWORD,p,4)=point[1];
     F(WORD,p,8)=F(WORD,self,36); ++F(WORD,self,36); return p;
 }
+// [FUN_6062c0]
 extern "C" BYTE* __fastcall GridMesh_RemoveTriangle(BYTE* self,void*,BYTE* triangle)
 {
     if(F(BYTE*,self,40)==triangle) {
@@ -112,10 +116,12 @@ extern "C" BYTE* __fastcall GridMesh_RemoveEdge(BYTE* self,void*,BYTE* edge)
     }
     return MarineQueue_RemoveLink(F(BYTE*,self,28),0,edge);
 }
+// [FUN_606750]
 extern "C" void __fastcall GridEdge_Destruct(BYTE* self,void*)
 {
     F(void*,self,76)=F(void*,self,44)=F(void*,self,16)=g_topDataVtable;
 }
+// [FUN_6069d0]
 extern "C" void __fastcall GridBranch_Destruct(BYTE* self,void*)
 {
     BYTE* parent=F(BYTE*,self,8);

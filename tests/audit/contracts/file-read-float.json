@@ -1,0 +1,289 @@
+{
+  "original_sha256": "31fbd1dbbe7706183f09a3688482791255db2bfb557c02675374b96796ce2ebd",
+  "original_va": "5ab190",
+  "symbol": "_File_ReadFloat",
+  "result": "fp",
+  "stack": 4,
+  "services": {
+    "read": {
+      "original_va": "61e20f",
+      "symbol": "_fread"
+    }
+  },
+  "cases": [
+    {
+      "name": "end of file",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        16814644
+      ]
+    },
+    {
+      "name": "bytes 01",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "01"
+            ]
+          ],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        16781825
+      ]
+    },
+    {
+      "name": "bytes 1020",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "1020"
+            ]
+          ],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        16785424
+      ]
+    },
+    {
+      "name": "bytes ab12fe",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "ab12fe"
+            ]
+          ],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        33428139
+      ]
+    },
+    {
+      "name": "bytes 00000000",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "00000000"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        0
+      ]
+    },
+    {
+      "name": "bytes 00000080",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "00000080"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        2147483648
+      ]
+    },
+    {
+      "name": "bytes 0000c03f",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "0000c03f"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        1069547520
+      ]
+    },
+    {
+      "name": "bytes 0000807f",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "0000807f"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        2139095040
+      ]
+    },
+    {
+      "name": "bytes 0000c07f",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            4,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "0000c07f"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        2143289344
+      ]
+    }
+  ]
+}

@@ -79,7 +79,8 @@ extern "C" void __fastcall Car_558930(BYTE* self, void*)
 }
 
 // copies the engine's state to the towed vehicle at +21880
-extern "C" void __fastcall Car_CopyToTowed(BYTE* self, void*)
+// [FUN_558990]
+extern "C" void __fastcall Tractor_CopyControlsToTrailer(BYTE* self, void*)
 {
     if (!F(BYTE*, self, 21880))
         return;
@@ -234,4 +235,4 @@ static BYTE* SceneObj_FindCommandTarget(int key)
     return 0;
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*);
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*);

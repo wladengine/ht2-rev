@@ -36,6 +36,7 @@ KING_VAR(MarineTriple, g_mi_725db8, 725db8)
 KING_VAR(MarineTriple, g_mi_725e18, 725e18)
 KING_VAR(MarineMatrix, g_mi_725d70, 725d70)
 KING_VAR(MarineConfig, g_mi_725e28, 725e28)
+// [FUN_60a8b0]
 extern "C" DWORD* __cdecl MarineInit_Identity(DWORD* matrix)
 {
     for(unsigned i=0;i<16;++i) matrix[i]=(i%5==0)?0x3f800000u:0;

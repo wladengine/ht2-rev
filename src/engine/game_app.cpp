@@ -214,6 +214,9 @@ CWindow* CGameApp::WindowFromPoint(int x, int y)
 // ---------------------------------------------------------------------------
 // Video mode
 
+KING_VAR(char, g_videoModeFontName, 676220)
+KING_VAR(char, g_videoModeFallbackFontName, 682ed4)
+
 void CGameApp::SetVideoMode(int width, int height, int cres, DWORD flags)
 {
     if (flags == (DWORD)-1)
@@ -227,13 +230,13 @@ void CGameApp::SetVideoMode(int width, int height, int cres, DWORD flags)
     if (m_pMenuFont) {
         Font_Destroy(m_pMenuFont);
         operator delete(m_pMenuFont);
-        m_pMenuFont = Font_Load(g_pApp->MakePath("menu.fon"));
+        m_pMenuFont = Font_Load(g_pApp->MakePath(&g_videoModeFontName));
         if (!m_pMenuFont)
-            m_pMenuFont = Font_Load("menu.fon");
+            m_pMenuFont = Font_Load(&g_videoModeFontName);
         if (!m_pMenuFont) {
-            m_pMenuFont = Font_Load(g_pApp->MakePath("menu.sft"));
+            m_pMenuFont = Font_Load(g_pApp->MakePath(&g_videoModeFallbackFontName));
             if (!m_pMenuFont)
-                m_pMenuFont = Font_Load("menu.sft");
+                m_pMenuFont = Font_Load(&g_videoModeFallbackFontName);
         }
     }
 
@@ -377,8 +380,9 @@ CWindow* __fastcall CGameApp_WindowFromPoint(CGameApp* self, void*, int x, int y
     return self->WindowFromPoint(x, y);
 }
 
+// [FUN_5e1b30]
 void __fastcall CGameApp_SetVideoMode(CGameApp* self, void*, int width, int height, int cres,
-                                      DWORD flags)                         // [FUN_5e1b30]
+                                      DWORD flags)
 {
     self->SetVideoMode(width, height, cres, flags);
 }

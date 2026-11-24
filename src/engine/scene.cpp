@@ -5,6 +5,7 @@
 // buffers, volume through the DirectSound mixer of directsound.cpp).
 
 #include "king.h"
+#include "outline_sphere.h"
 #include "x87.h"
 #include <math.h>
 
@@ -29,13 +30,13 @@ extern "C" void FUN_5f2a40(); KING_ALIAS("_FUN_5f2a40", "_VertexDesc_Build")
 extern "C" BYTE* __fastcall Node_Construct(BYTE* self, void*, const char* name, int kind);
 extern "C" void FUN_5ef6d0(); KING_ALIAS("_FUN_5ef6d0", "@Node_Construct@16")    // base node constructor (name, kind)
 extern "C" void __fastcall Rec5e5840_Free(BYTE* self, void*);
-extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s);
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void __fastcall SceneSlotNode_Destroy(BYTE* s);
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 extern "C" void __fastcall Value_Free(int* s);
 extern "C" void FUN_5f4a90(); KING_ALIAS("_FUN_5f4a90", "@Value_Free@4")
 extern "C" void __fastcall Obj5e5cb0_Init(BYTE* self, void*);
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
-extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@Sce5ef660_Destroy@4")
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
+extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@SceneNode_DestroyBase@4")
 extern "C" AsmLabel g_dtor5a3df0; KING_ALIAS("_g_dtor5a3df0", "@Wo_Free20@4")
 extern "C" AsmLabel g_dtor5e57a0; KING_ALIAS("_g_dtor5e57a0", "@Fw5e57a0_Destroy@4")
 KING_VAR(AsmLabel, g_vtbl65282c, 65282c)
@@ -54,7 +55,7 @@ extern "C" void FUN_604730(); KING_ALIAS("_FUN_604730", "_Sound_ErrorText")
 extern "C" int __cdecl Channels_Create(int n);
 extern "C" void __cdecl Streams_Collect();
 extern "C" void __cdecl Snd_Free(int i);
-extern "C" void* __cdecl Data_Read5e99c0(void* a, const char* name);
+extern "C" void* __cdecl Sound_ReadBytesFromFile(void* a, const char* name);
 extern "C" int __cdecl Image_Read(BYTE* img, FILE* f, long off);
 extern "C" void Mixer_Close(); KING_ALIAS("_Mixer_Close", "_Mixer_ShutdownOnce")
 extern "C" void Scene_EachCallback(); KING_ALIAS("_Scene_EachCallback", "_Path_FindJoins")
@@ -280,7 +281,7 @@ void __cdecl Node_TransformByFrame(void* point, int on, BYTE* src)
 }
 
 // [FUN_5fb7d0] a lies within |c - b| + 0.001 of both b and c
-int __cdecl Near3(float a, float b, float c)
+int __cdecl CoordinateWithinSegmentSpan(float a, float b, float c)
 {
     double t = fabs((double)c - b) + 0.001;
     if (fabs((double)a - c) > t)
@@ -327,12 +328,12 @@ float __cdecl Sound_SetVolume(float v)
     if (!g_soundOn)
         return v;
     float old = (float)(Mixer_GetVolume() * 1.0101010101010102);
-    double x = v;
-    if (x > 1.0f)
-        x = 1.0f;
-    else if (!(x >= 0.0f))
-        x = 0.0f;
-    Mixer_SetVolume((float)(x * 0.99));
+    // The caller can observe which bound was tested last in the x87 condition flags.
+    if (!(x87_compare_status(v, 1.0f) & (X87_C0 | X87_C3)))
+        v = 1.0f;
+    else if (x87_compare_status(v, 0.0f) & X87_C0)
+        v = 0.0f;
+    Mixer_SetVolume((float)(v * 0.99));
     return old;
 }
 
@@ -447,7 +448,7 @@ int __fastcall SoundFile_Load(BYTE* self, void*)
     if (!(f & 2) || (f & 1))
         return 1;
     if (F(int, self, 0)) {
-        Data_Read5e99c0(self, (const char*)(F(int, self, 0)));
+        Sound_ReadBytesFromFile(self, (const char*)(F(int, self, 0)));
         F(DWORD, self, 24) |= 1;
         return 1;
     }
@@ -597,7 +598,7 @@ void __fastcall Node5f1530_Destroy(BYTE* self, void*)
     F(void*, self, 0) = g_vtbl652c68;
     ArrayDelete(F(BYTE*, self, 56), 88, (void (*)())(void*)g_dtor5e57a0);
     Rec5e5840_Free(self + 60, 0);
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
 // [FUN_5f06e0]
@@ -607,14 +608,14 @@ void __fastcall Node5f06e0_Destroy(BYTE* self, void*)
     ArrayDelete(F(BYTE*, self, 64), 28, (void (*)())(void*)g_dtor5a3df0);
     operator delete(F(void*, self, 68));
     Rec5e5840_Free(self + 72, 0);
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 // [FUN_5f07a0]
 void __fastcall Node5f07a0_Destroy(BYTE* self, void*)
 {
     Value_Free((int*)(self + 56));
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 // [FUN_5f0810]
@@ -622,7 +623,7 @@ void __fastcall Node5f0810_Destroy(BYTE* self, void*)
 {
     F(void*, self, 0) = g_vtbl6528d8;
     operator delete(F(void*, self, 80));
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 // [FUN_5faa60]
@@ -633,7 +634,7 @@ void __fastcall Node5faa60_Destroy(BYTE* self, void*)
     operator delete(F(void*, self, 60));
     if (F(void*, self, 52))
         operator delete(F(void*, self, 52));
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
 // [FUN_5fcc70]
@@ -641,7 +642,7 @@ void __fastcall Node5fcc70_Destroy(BYTE* self, void*)
 {
     F(void*, self, 0) = g_vtbl652d68;
     operator delete(F(void*, self, 64));
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 }
@@ -748,7 +749,6 @@ extern "C" void __cdecl Channels_Release(void);
 extern "C" void __fastcall SoundFile_Destroy(BYTE* self, void*);
 extern "C" void FUN_5fd250(); KING_ALIAS("_FUN_5fd250", "@SoundFile_Destroy@8")
 extern "C" void __cdecl Mixer_Shutdown(void);
-extern "C" void __fastcall Outline_BoundingSphere(BYTE* s, void*, float* v);
 extern "C" void __fastcall Sphere_Merge(float* s, void*, const float* b);
 extern "C" void FUN_5e5580(); KING_ALIAS("_FUN_5e5580", "@Sphere_Merge@12")
 KING_VAR(BYTE**, g_sc723b34p, 723b34)
@@ -792,16 +792,18 @@ extern "C" void __cdecl Sound_Stop()
 // [FUN_5fa5f0] moves the chain of n (+48) segments (40 bytes each, at +52) to the point +56: the first to it, the others following
 extern "C" void __fastcall Chain_MoveTo(BYTE* self, void*)
 {
-    ScVec t = {0, 0, 0};
     if (F(int, self, 48) < 1)
         return;
-    F(ScVec, self, 20) = F(ScVec, self, 56);
-    Outline_BoundingSphere(F(BYTE*, self, 52), 0, (float*)(self + 20));
+    const ScVec& position = F(ScVec, self, 56);
+    OutlineSphere& bounds = F(OutlineSphere, self, 20);
+    memcpy(bounds, &position, sizeof position);
+    Outline_BoundingSphere(F(BYTE*, self, 52), nullptr, bounds);
     for (int i = 1; i < F(int, self, 48); i++)
     {
-        t = F(ScVec, self, 56);
-        Outline_BoundingSphere(F(BYTE*, self, 52) + i * 40, 0, (float*)&t);
-        Sphere_Merge((float*)(self + 20), 0, (const float*)&t);
+        OutlineSphere outlineSphere;
+        memcpy(outlineSphere, &position, sizeof position);
+        Outline_BoundingSphere(F(BYTE*, self, 52) + i * 40, nullptr, outlineSphere);
+        Sphere_Merge(bounds, nullptr, outlineSphere);
     }
 }
 
@@ -906,13 +908,13 @@ extern "C" long __cdecl Mesh_Draw(BYTE* r, BYTE* mesh, BYTE* mat, ScVec3* p, int
 // ---------------------------------------------------------------------------
 // Small virtual methods and static initializers.
 
-extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@Sce5ef660_Destroy@4")
+extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@SceneNode_DestroyBase@4")
 extern "C" void FUN_5f06e0(); KING_ALIAS("_FUN_5f06e0", "@Node5f06e0_Destroy@8")
 extern "C" void FUN_5f07a0(); KING_ALIAS("_FUN_5f07a0", "@Node5f07a0_Destroy@8")
 extern "C" void FUN_5f0810(); KING_ALIAS("_FUN_5f0810", "@Node5f0810_Destroy@8")
 extern "C" void FUN_5f08c0(); KING_ALIAS("_FUN_5f08c0", "@Sce5f08c0_Destruct@8")
 extern "C" void FUN_5f15a0(); KING_ALIAS("_FUN_5f15a0", "@Node5f1530_Destroy@8")
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 extern "C" void FUN_5fa720(); KING_ALIAS("_FUN_5fa720", "@Sce5fa720_Destroy@4")
 extern "C" void FUN_5faa60(); KING_ALIAS("_FUN_5faa60", "@Node5faa60_Destroy@8")
 extern "C" void FUN_5fcc70(); KING_ALIAS("_FUN_5fcc70", "@Node5fcc70_Destroy@8")
@@ -1281,8 +1283,8 @@ extern "C" int __fastcall Sce_5f4880(BYTE* s, void*, int a, BYTE* b)
     return 1;
 }
 
-// [$L_5fccd0] FUN_5f21e0 inside the lock 71f800 (count 723aa4)
-extern "C" int __fastcall Sce_5fccd0(BYTE* s, void*, int a, int b)
+// [$L_5fccd0] Query child slot zero. Only the outermost room query updates its timer.
+extern "C" int __fastcall Room_QueryChildSlot(BYTE* s, void*, int a, int b)
 {
     if (F(BYTE, s, 40) & 1)
         return 0;
@@ -1766,7 +1768,7 @@ KING_VAR(AsmLabel, g_sce652840, 652840)
 KING_VAR(AsmLabel, g_sce64d81c, 64d81c)
 
 // [FUN_5ef660] (vtable 652840) frees +12
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s)
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s)
 {
     F(void*, s, 0) = g_sce652840;
     operator delete(F(void*, s, 12));
@@ -1789,7 +1791,7 @@ extern "C" void __fastcall Sce5fa720_Destroy(BYTE* s)
         CallStd(Sce_VecDtor, a, 40, F(int, a, -4), (BYTE*)g_sce4c47f0);
         operator delete(a - 4);
     }
-    Sce5ef660_Destroy(s);
+    SceneNode_DestroyBase(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -1797,15 +1799,15 @@ extern "C" void __fastcall Sce5fa720_Destroy(BYTE* s)
 
 extern "C" BYTE* __fastcall SoundFile_Construct(BYTE* self, void*, const char* name);
 extern "C" void FUN_5fd1d0(); KING_ALIAS("_FUN_5fd1d0", "@SoundFile_Construct@12")
-extern "C" void* __cdecl Data_Read5e99a0(void* a, const char* name);
-extern "C" void* __cdecl Data_Read5e9910(const char* name);
+extern "C" int __cdecl Sound_SetRawFileSize(void* a, const char* name);
+extern "C" void* __cdecl Sound_LoadFile(const char* name);
 extern "C" int __cdecl Mixer_Load(int idx, int a, int b);
 KING_VAR(AsmLabel, g_sce652cb4, 652cb4)
 KING_VAR(int, g_sce723b28, 723b28)
 KING_VAR(BYTE**, g_sce723b34, 723b34)
 
 // [FUN_5f1a70] a node (vtable 652cb4): the children of every slot (+48, count +52) unlinked and deleted
-extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s)
+extern "C" void __fastcall SceneSlotNode_Destroy(BYTE* s)
 {
     F(void*, s, 0) = g_sce652cb4;
     for (int j = 0; j < F(int, s, 52); j++) {
@@ -1821,7 +1823,7 @@ extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s)
             CallVirt(F(BYTE**, s, 48)[j], 0, 1);
     }
     operator delete(F(void*, s, 48));
-    Sce5ef660_Destroy(s);
+    SceneNode_DestroyBase(s);
 }
 
 // [FUN_5fcf80] a sound (id, slot, streamed): made (streamed: a 28-byte stream object) and entered in the table 723b34
@@ -1832,10 +1834,10 @@ extern "C" BYTE* __cdecl Sound_Create(int id, int slot, int streamed)
     BYTE* r;
     if (streamed) {
         BYTE* m = (BYTE*)operator new(28);
-        BYTE* o = m ? SoundFile_Construct(m, 0, (const char*)id) : 0;
-        r = (BYTE*)Data_Read5e99a0(o, (const char*)id);
+        r = m ? SoundFile_Construct(m, 0, (const char*)id) : 0;
+        Sound_SetRawFileSize(r, (const char*)id);
     } else {
-        r = (BYTE*)Data_Read5e9910((const char*)id);
+        r = (BYTE*)Sound_LoadFile((const char*)id);
     }
     if (!r)
         return 0;
@@ -1861,8 +1863,8 @@ extern "C" BYTE* __cdecl Sound_CreateFromFile(void* file, int slot, int size, in
     BYTE* r;
     if (streamed) {
         BYTE* m = (BYTE*)operator new(28);
-        BYTE* o = m ? CallThis<BYTE*>(FUN_5fd230, m, file, (int)ftell((FILE*)file)) : 0;
-        r = (BYTE*)Image_SetData(o, (int)file, size);
+        r = m ? CallThis<BYTE*>(FUN_5fd230, m, file, (int)ftell((FILE*)file)) : 0;
+        Image_SetData(r, (int)file, size);
     } else {
         r = Sound_ReadFile((FILE*)file, size);
     }
@@ -1877,7 +1879,7 @@ extern "C" BYTE* __cdecl Sound_CreateFromFile(void* file, int slot, int size, in
 // ---------------------------------------------------------------------------
 // Destructor thunks: the vtable, then the base destructor; static object cleanups.
 
-extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@Sce5ef660_Destroy@4")
+extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@SceneNode_DestroyBase@4")
 KING_VAR(AsmLabel, g_q46_722940, 722940)
 KING_VAR(AsmLabel, g_q46_723190, 723190)
 extern "C" BYTE* __fastcall ListHead_Construct(BYTE* s, void*);
@@ -1896,7 +1898,7 @@ extern "C" int __cdecl Static723190_Construct(void)
 extern "C" void __fastcall Sce5f08c0_Destruct(BYTE* s, void*)
 {
     F(void*, s, 0) = g_q46_652a08;
-    Sce5ef660_Destroy(s);
+    SceneNode_DestroyBase(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -2056,9 +2058,8 @@ extern "C" int __fastcall SceneNode5f4170_Draw(BYTE* s, void*, BYTE* a, BYTE* b)
 
 extern "C" int __fastcall Face_RayHit(BYTE* s, void*, int flags, BYTE* r);
 extern "C" void FUN_5fbdf0(); KING_ALIAS("_FUN_5fbdf0", "@Face_RayHit@16")
-// [$L_5fc2c0] the base test of node s for a and b; when it sets bit 2 the name "<+132>::<+164>" goes to b + 124
-// (and 0 is returned)
-extern "C" int __fastcall SceneNode5fc2c0_Test(BYTE* s, void*, BYTE* a, BYTE* b)
+// [$L_5fc2c0] Test the portal face. An unresolved destination (flag 4) yields its qualified name.
+extern "C" int __fastcall Portal_QueryFace(BYTE* s, void*, BYTE* a, BYTE* b)
 {
     int r = Face_RayHit(s, 0, (int)a, b);
     if (!(r & 4))
@@ -2315,7 +2316,7 @@ extern "C" void __fastcall Render_PopShade(BYTE* self, void*);
 // +68: with +80 (or +76 without flags bit 4) its plane (+48) is moved into view space, normalised and pushed as
 // the shade around the referred object's (+64) draw (vtbl+48, flags bit 4 added with +80; its material +36 and
 // the view's +8276 from +84 set for it); 1 after a passed test
-extern "C" int __fastcall SceneNode5f98c0_Draw(BYTE* s, void*, int flags, BYTE* b)
+extern "C" int __fastcall ShadedReference_Draw(BYTE* s, void*, int flags, BYTE* b)
 {
     BYTE w1[48], t1[48], t2[48], t3[48], m[48], out[12];
     memcpy(w1, (BYTE*)g_q109_7025f0, 48);
@@ -2417,12 +2418,14 @@ KING_VAR(double, g_q182_64da58, 64da58)
 // v scaled by 683c0c and kept in 0..1
 static float Sce182_Unit(float v)
 {
-    v = g_q182_683c0c * v;
-    if (v > g_q182_64c250)
+    double scaled = (double)g_q182_683c0c * v;
+    // VC6 stores a float copy, then tests the upper limit with ST(0) still live.
+    volatile float rounded = (float)scaled;
+    if (scaled > g_q182_64c250)
         return 1.0f;
-    if (!(v >= g_q182_64c264))
+    if (!(rounded >= g_q182_64c264))
         return 0;
-    return v;
+    return rounded;
 }
 // [FUN_5fd430] plays sound s (when sound is on and its sample +28 is loaded) at volume vol and pitch pitch: a new
 // channel (5fd580) is started (+20 playing, +24 the channel), a playing one updated; +12 the play stamp
@@ -2526,7 +2529,7 @@ extern "C" int __cdecl Sce_SetRootDir(const char* dir)
 typedef void* SceFreeLists[17];
 KING_VAR(SceFreeLists, g_q195_68d1c0, 68d1c0)
 KING_VAR(volatile LONG, g_q195_68d204, 68d204)
-extern "C" void __fastcall Stl_Lock(volatile LONG* l, void*);
+extern "C" void __fastcall StlAllocator_AcquireLock(volatile LONG* l, void*);
 extern "C" void __cdecl free(void*);
 // [$L_5ffc60] destroys a vector of 56-byte records (each one's storage freed) and returns its storage to the STL
 // allocator
@@ -2544,7 +2547,7 @@ extern "C" void __fastcall Vec56_Destroy(BYTE** v, void*)
         return;
     }
     void** list = &g_q195_68d1c0[(bytes + 7) >> 3];
-    Stl_Lock(&g_q195_68d204, 0);
+    StlAllocator_AcquireLock(&g_q195_68d204, 0);
     *(void**)p = *list;
     *list = p;
     g_q195_68d204 = 0;
@@ -2610,12 +2613,12 @@ extern "C" int __fastcall Node_DrawWithFog(BYTE* s, void*, int a, BYTE* r)
 // ---------------------------------------------------------------------------
 // Thunks.
 
-extern "C" int __fastcall q238_Node5f1a70_Destroy(BYTE* s); KING_ALIAS("@q238_Node5f1a70_Destroy@4", "@Node5f1a70_Destroy@4")
-extern "C" int __fastcall q238_Sce5ef660_Destroy(BYTE* s); KING_ALIAS("@q238_Sce5ef660_Destroy@4", "@Sce5ef660_Destroy@4")
-// [FUN_5f0770] forwards to Node5f1a70_Destroy
-extern "C" int __fastcall Thunk5f0770(BYTE* s) { return q238_Node5f1a70_Destroy(s); }
-// [FUN_5f0870] forwards to Sce5ef660_Destroy
-extern "C" int __fastcall Thunk5f0870(BYTE* s) { return q238_Sce5ef660_Destroy(s); }
+extern "C" int __fastcall q238_SceneSlotNode_Destroy(BYTE* s); KING_ALIAS("@q238_SceneSlotNode_Destroy@4", "@SceneSlotNode_Destroy@4")
+extern "C" int __fastcall q238_SceneNode_DestroyBase(BYTE* s); KING_ALIAS("@q238_SceneNode_DestroyBase@4", "@SceneNode_DestroyBase@4")
+// [FUN_5f0770] forwards to SceneSlotNode_Destroy
+extern "C" int __fastcall Thunk5f0770(BYTE* s) { return q238_SceneSlotNode_Destroy(s); }
+// [FUN_5f0870] forwards to SceneNode_DestroyBase
+extern "C" int __fastcall Thunk5f0870(BYTE* s) { return q238_SceneNode_DestroyBase(s); }
 
 extern "C" void q241_L_5ef4b0(); KING_ALIAS("_q241_L_5ef4b0", "_Static723978_Destroy")
 // [$L_5ef4a0] registers 5ef4b0 at exit
@@ -3185,6 +3188,21 @@ int __fastcall Light_ReadOld(BYTE* s, void*, int f, int a, int b)
 
 // === whether a point is in a volume (FUN_5f88d0)
 
+// Compare the norm in ST(0) before rounding it to binary64. At 64-bit
+// precision a point just outside a sphere can have a binary64 norm of 1.
+static bool Volume_WithinRadius(const float* delta, float radius)
+{
+    unsigned short relation;
+    __asm {
+        push delta
+        call FUN_5ab4d0
+        add esp, 4
+        fcomp radius
+        fnstsw relation
+    }
+    return (relation & (X87_C0 | X87_C3)) != 0;
+}
+
 // p less the shape's point (+0), as floats
 static void Vt_Rel(float* v, const float* p, const float* g)
 {
@@ -3208,15 +3226,15 @@ int __fastcall Volume_Contains(DWORD* s, void*, const float* p)
     case 1:
     case 2: {
         Vt_Rel(v, p, g);
-        double d = CallC<double>(FUN_5ab4d0, v);
-        return s[0] == 1 ? !(d > g[3]) : d > g[3];
+        const bool inside = Volume_WithinRadius(v, g[3]);
+        return s[0] == 1 ? inside : !inside;
     }
     case 3:
     case 4: {
         Vt_Rel(v, p, g);
         double t = (double)g[5] * v[2] + (double)g[4] * v[1] + (double)g[3] * v[0];
-        double at = t < 0 ? -t : t;
-        if (g[7] < at)
+        const double height = x87_fabs(t);
+        if (x87_compare_status(double(g[7]), height) & X87_C0)
             return s[0] == 4;
         float w[3];
         if (s[0] == 3) {
@@ -3224,14 +3242,15 @@ int __fastcall Volume_Contains(DWORD* s, void*, const float* p)
             w[0] = (float)(v[0] - t * g[3]);
             w[1] = (float)((double)v[1] - py);
             w[2] = (float)((double)v[2] - pz);
-            return !(CallC<double>(FUN_5ab4d0, w) > g[6]);
+            return Volume_WithinRadius(w, g[6]);
         }
         float q[3] = {(float)(t * g[3]), (float)(t * g[4]), (float)(t * g[5])};
         Vt_Rel(w, v, q);
-        return CallC<double>(FUN_5ab4d0, w) > g[6];
+        return !Volume_WithinRadius(w, g[6]);
     }
     case 5:
-        return (double)g[2] * p[2] + (double)g[1] * p[1] + (double)p[0] * g[0] + g[3] > g_sce64b678;
+        return !(x87_compare_status((double)g[2] * p[2] + (double)g[1] * p[1] + (double)p[0] * g[0] + g[3],
+                                    g_sce64b678) & (X87_C0 | X87_C3));
     }
     return 0;
 }
@@ -3240,7 +3259,7 @@ int __fastcall Volume_Contains(DWORD* s, void*, const float* p)
 
 // === finding the music files (FUN_5ff5e0)
 
-extern "C" BYTE* __cdecl Copy1(const BYTE* first, const BYTE* last, BYTE* dest);
+extern "C" BYTE* __cdecl ByteRange_Move(const BYTE* first, const BYTE* last, BYTE* dest);
 extern "C" void Mf_Reserve(); KING_ALIAS("_Mf_Reserve", "@Vec1_Reserve@16")
 extern "C" void Mf_FilterConstruct(); KING_ALIAS("_Mf_FilterConstruct", "@Filter1_Construct@8")
 extern "C" void Mf_FilterSetLength(); KING_ALIAS("_Mf_FilterSetLength", "@Filter1_SetLength@12")
@@ -3257,7 +3276,7 @@ static void Mf_Path(Mf_Vec* v, const char* s)
     BYTE* p = n ? (BYTE*)Stl_Allocate(n) : 0;
     v->begin = v->end = p;
     v->cap = p + n;
-    v->end = Copy1(dir->begin, dir->end, p);
+    v->end = ByteRange_Move(dir->begin, dir->end, p);
     CharVec_InsertRange44c220((BYTE**)v, 0, v->end, (BYTE*)s, (BYTE*)(s + strlen(s) + 1));
 }
 
@@ -3285,7 +3304,7 @@ void __cdecl Music_FindFiles(const char* pattern)
             Mf_Path(&name, fd.cFileName);
             BYTE rec[56];
             CallThis(Mf_Reserve, rec, (int)(name.end - name.begin), &fill);
-            F(BYTE*, rec, 4) = Copy1(name.begin, name.end, F(BYTE*, rec, 0));
+            F(BYTE*, rec, 4) = ByteRange_Move(name.begin, name.end, F(BYTE*, rec, 0));
             CallThis(Mf_FilterConstruct, rec + 16);
             F(double, rec, 40) = 0.1;
             F(double, rec, 48) = 0;
@@ -3345,7 +3364,7 @@ int __fastcall Portal_SplitItem(BYTE* s, void*, BYTE* o)
     float qz = (float)(dist * n[2]), qy = (float)(dist * n[1]);
     double qx = dist * n[0];
     float pz = (float)((double)sp[2] - qz), py = (float)((double)sp[1] - qy), px = (float)(sp[0] - qx);
-    if (!Near3(px, p[0], F(float, s, 84)) || !Near3(py, p[1], F(float, s, 88)) || !Near3(pz, p[2], F(float, s, 92)))
+    if (!CoordinateWithinSegmentSpan(px, p[0], F(float, s, 84)) || !CoordinateWithinSegmentSpan(py, p[1], F(float, s, 88)) || !CoordinateWithinSegmentSpan(pz, p[2], F(float, s, 92)))
         return 0;
     BYTE* c = Pc_NewPiece(o);
     F(BYTE, c, 40) |= F(BYTE, o, 40) & 1;
@@ -4198,8 +4217,8 @@ int __fastcall Face_RayHit(BYTE* s, void*, int flags, BYTE* r)
         h[0] = (float)((double)w[0] + a[0]);
         h[1] = (float)((double)w[1] + a[1]);
         h[2] = (float)((double)w[2] + a[2]);
-        if (Near3(h[0], F(float, s, 60), F(float, s, 84)) && Near3(h[1], F(float, s, 64), F(float, s, 88))
-            && Near3(h[2], F(float, s, 68), F(float, s, 92)))
+        if (CoordinateWithinSegmentSpan(h[0], F(float, s, 60), F(float, s, 84)) && CoordinateWithinSegmentSpan(h[1], F(float, s, 64), F(float, s, 88))
+            && CoordinateWithinSegmentSpan(h[2], F(float, s, 68), F(float, s, 92)))
         {
             if (!o)
             {
@@ -4226,8 +4245,8 @@ int __fastcall Face_RayHit(BYTE* s, void*, int flags, BYTE* r)
     float rr = F(float, r, 0);
     for (int k = 0; k < 3; k++)
         h[k] = (float)((double)g[k] + (float)((double)N[k] * rr));
-    if (Near3(h[0], F(float, s, 60), F(float, s, 84)) && Near3(h[1], F(float, s, 64), F(float, s, 88))
-        && Near3(h[2], F(float, s, 68), F(float, s, 92)))
+    if (CoordinateWithinSegmentSpan(h[0], F(float, s, 60), F(float, s, 84)) && CoordinateWithinSegmentSpan(h[1], F(float, s, 64), F(float, s, 88))
+        && CoordinateWithinSegmentSpan(h[2], F(float, s, 68), F(float, s, 92)))
         return CallVirt<int>(o, 52, flags, r);
     return 0;
 }
@@ -5645,7 +5664,9 @@ extern "C" {
 // played on +80 with the pitch from their sum and +52. Returns 0 when muted or not updated
 int __fastcall SoundSource_Update(BYTE* s, void*, int fl, const BYTE* m, int c, int d)
 {
-    BYTE fr[232];
+    // Matrix_RotationZ writes all 12 floats at offset 196, through byte 243.
+    // A 232-byte frame overwrites the return address and the fl/m arguments.
+    BYTE fr[196 + 12 * sizeof(float)];
     memset(fr + 40, 0, 24);
     for (int k = 0; k < 4; k++)
         memset(fr + 88 + k * 12, 0, 12);

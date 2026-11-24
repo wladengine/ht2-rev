@@ -19,8 +19,8 @@ extern "C" void FUN_44b4a0(); KING_ALIAS("_FUN_44b4a0", "_Ai_PoolFree")    // th
 extern "C" void* __cdecl Stl_Allocate(unsigned bytes);
 extern "C" int __cdecl Sch_ErrorCode(int code, int severity);
 extern "C" void FUN_4a52e0(); KING_ALIAS("_FUN_4a52e0", "_Sch_ErrorCode")    // script error (code, fatal)
-extern "C" void __cdecl Sch4ab570_Construct(BYTE* d, const BYTE* s);
-extern "C" void FUN_4ab570(); KING_ALIAS("_FUN_4ab570", "_Sch4ab570_Construct")    // constructs a 44-byte element at p from x
+extern "C" void __cdecl EvalFrame_PlacementCopy(BYTE* d, const BYTE* s);
+extern "C" void FUN_4ab570(); KING_ALIAS("_FUN_4ab570", "_EvalFrame_PlacementCopy")    // constructs a 44-byte element at p from x
 extern "C" void __fastcall Elems44_InsertAux(BYTE** v, void*, BYTE* pos, const BYTE* x);
 extern "C" void FUN_4aa460(); KING_ALIAS("_FUN_4aa460", "@Elems44_InsertAux@16")    // vector<44 bytes>::insert_aux
 extern "C" void FUN_4ace70(); KING_ALIAS("_FUN_4ace70", "_Deque_CopyCharsTag")    // copy (first, last, deque iterator, tag)
@@ -36,18 +36,18 @@ KING_VAR(AsmLabel, s_errNotSymbolList, 67115c)
 extern "C" int __cdecl Sch_Error(int code, int level, const char* a, const char* b);
 extern "C" void FUN_4a54e0(); KING_ALIAS("_FUN_4a54e0", "_Sch_Error")
 extern "C" void FUN_4b6500(); KING_ALIAS("_FUN_4b6500", "@SchSymbol_Construct@12")
-extern "C" void FUN_4a8580(); KING_ALIAS("_FUN_4a8580", "@SchNode4a8580_Construct@8")
+extern "C" void FUN_4a8580(); KING_ALIAS("_FUN_4a8580", "@Begin_Construct@8")
 extern "C" void FUN_4910a0(); KING_ALIAS("_FUN_4910a0", "@RingB_Construct@12")
 extern "C" void FUN_491380(); KING_ALIAS("_FUN_491380", "@Pooled_Construct@12")
 extern "C" BYTE* __fastcall RingA_Construct(BYTE* s, void*, BYTE* ring, int a, int b);
-extern "C" void FUN_4a81d0(); KING_ALIAS("_FUN_4a81d0", "@SchNode4a81d0_Construct@8")
-extern "C" void FUN_4a9040(); KING_ALIAS("_FUN_4a9040", "@SchNode4a9040_Construct@8")
-extern "C" void FUN_4a86f0(); KING_ALIAS("_FUN_4a86f0", "@SchNode4a86f0_Construct@8")
-extern "C" void FUN_4a8a90(); KING_ALIAS("_FUN_4a8a90", "@SchNode4a8a90_Construct@8")
-extern "C" void FUN_4a8bd0(); KING_ALIAS("_FUN_4a8bd0", "@SchNode4a8bd0_Construct@8")
-extern "C" void FUN_4a9770(); KING_ALIAS("_FUN_4a9770", "@SchNode4a9770_Construct@8")
-extern "C" void FUN_4a9a70(); KING_ALIAS("_FUN_4a9a70", "@SchNode4a9a70_Construct@8")
-extern "C" void FUN_4a9e80(); KING_ALIAS("_FUN_4a9e80", "@SchNode4a9e80_Construct@8")
+extern "C" void FUN_4a81d0(); KING_ALIAS("_FUN_4a81d0", "@Lambda_Construct@8")
+extern "C" void FUN_4a9040(); KING_ALIAS("_FUN_4a9040", "@Define_Construct@8")
+extern "C" void FUN_4a86f0(); KING_ALIAS("_FUN_4a86f0", "@If_Construct@8")
+extern "C" void FUN_4a8a90(); KING_ALIAS("_FUN_4a8a90", "@Quote_Construct@8")
+extern "C" void FUN_4a8bd0(); KING_ALIAS("_FUN_4a8bd0", "@Set_Construct@8")
+extern "C" void FUN_4a9770(); KING_ALIAS("_FUN_4a9770", "@Eval_Construct@8")
+extern "C" void FUN_4a9a70(); KING_ALIAS("_FUN_4a9a70", "@CallCC_Construct@8")
+extern "C" void FUN_4a9e80(); KING_ALIAS("_FUN_4a9e80", "@Apply_Construct@8")
 extern "C" void FUN_4b62c0(); KING_ALIAS("_FUN_4b62c0", "@SchString_Construct@12")
 KING_VAR(AsmLabel, s_tIdentifier, 66ce4c)
 KING_VAR(AsmLabel, s_tUnspecified, 671168)
@@ -72,17 +72,17 @@ KING_VAR(int, g_free44Count, 693650)          // freed 44-byte blocks
 KING_VAR(Blocks, g_free44, 692650)
 KING_VAR(int, g_free32Count, 694658)          // freed 32-byte blocks
 KING_VAR(Blocks, g_free32, 693658)
-KING_VAR(AsmLabel, g_vtbl64bf68, 64bf68)
+KING_VAR(AsmLabel, g_EvalFrameVtable, 64bf68)
 KING_VAR(AsmLabel, g_vtbl64bf70, 64bf70)
-KING_VAR(AsmLabel, g_vtbl64bf80, 64bf80)
-KING_VAR(AsmLabel, g_vtbl64bf94, 64bf94)
-KING_VAR(AsmLabel, g_vtbl64bfa8, 64bfa8)
-KING_VAR(AsmLabel, g_vtbl64bfbc, 64bfbc)
-KING_VAR(AsmLabel, g_vtbl64bfd0, 64bfd0)
-KING_VAR(AsmLabel, g_vtbl64bfe4, 64bfe4)
-KING_VAR(AsmLabel, g_vtbl64bff8, 64bff8)
-KING_VAR(AsmLabel, g_vtbl64c00c, 64c00c)
-KING_VAR(AsmLabel, g_vtbl64c020, 64c020)
+KING_VAR(AsmLabel, g_LambdaVtable, 64bf80)
+KING_VAR(AsmLabel, g_BeginVtable, 64bf94)
+KING_VAR(AsmLabel, g_IfVtable, 64bfa8)
+KING_VAR(AsmLabel, g_QuoteVtable, 64bfbc)
+KING_VAR(AsmLabel, g_SetVtable, 64bfd0)
+KING_VAR(AsmLabel, g_DefineVtable, 64bfe4)
+KING_VAR(AsmLabel, g_EvalVtable, 64bff8)
+KING_VAR(AsmLabel, g_CallCCVtable, 64c00c)
+KING_VAR(AsmLabel, g_ApplyVtable, 64c020)
 
 static void AiFree(void* p, int size) { Ai_PoolFree(p, size); }
 static void SchError(int code) { Sch_ErrorCode(code, 1); }
@@ -96,7 +96,7 @@ struct SchValue {
     DWORD flags;
     int   m_12;
 };
-enum { SCH_IMMEDIATE = 0x10000 };
+enum { SCH_PAIR = 2, SCH_BOOLEAN = 7, SCH_SPECIAL_FORM = 34, SCH_IMMEDIATE = 0x10000 };
 
 // obj, m_4 and flags, as the values' copy constructor copies them
 static void CopyRef(SchValue* to, const SchValue* from)
@@ -248,11 +248,12 @@ extern "C" const char* __fastcall SchValue_Name(const SchValue* self, void*)
 // ---------------------------------------------------------------------------
 // Expression nodes
 
-extern "C" BYTE* __fastcall SchNode4a7060_Construct(BYTE* self, void*)
+// [FUN_4a7060] Construct the 44-byte evaluation frame.
+extern "C" BYTE* __fastcall EvalFrame_Construct(BYTE* self, void*)
 {
     for (int i = 4; i <= 40; i += 4)
         F(int, self, i) = 0;
-    F(void*, self, 0) = g_vtbl64bf68;
+    F(void*, self, 0) = g_EvalFrameVtable;
     return self;
 }
 
@@ -283,15 +284,24 @@ static BYTE* NodeWithVtbl(BYTE* self, void* vtbl)
     F(void*, self, 0) = vtbl;
     return self;
 }
-extern "C" BYTE* __fastcall SchNode4a81d0_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bf80); }
-extern "C" BYTE* __fastcall SchNode4a8580_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bf94); }
-extern "C" BYTE* __fastcall SchNode4a86f0_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bfa8); }
-extern "C" BYTE* __fastcall SchNode4a8a90_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bfbc); }
-extern "C" BYTE* __fastcall SchNode4a8bd0_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bfd0); }
-extern "C" BYTE* __fastcall SchNode4a9040_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bfe4); }
-extern "C" BYTE* __fastcall SchNode4a9770_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64bff8); }
-extern "C" BYTE* __fastcall SchNode4a9a70_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64c00c); }
-extern "C" BYTE* __fastcall SchNode4a9e80_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_vtbl64c020); }
+// [FUN_4a81d0]
+extern "C" BYTE* __fastcall Lambda_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_LambdaVtable); }
+// [FUN_4a8580]
+extern "C" BYTE* __fastcall Begin_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_BeginVtable); }
+// [FUN_4a86f0]
+extern "C" BYTE* __fastcall If_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_IfVtable); }
+// [FUN_4a8a90]
+extern "C" BYTE* __fastcall Quote_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_QuoteVtable); }
+// [FUN_4a8bd0]
+extern "C" BYTE* __fastcall Set_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_SetVtable); }
+// [FUN_4a9040]
+extern "C" BYTE* __fastcall Define_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_DefineVtable); }
+// [FUN_4a9770]
+extern "C" BYTE* __fastcall Eval_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_EvalVtable); }
+// [FUN_4a9a70]
+extern "C" BYTE* __fastcall CallCC_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_CallCCVtable); }
+// [FUN_4a9e80]
+extern "C" BYTE* __fastcall Apply_Construct(BYTE* self, void*) { return NodeWithVtbl(self, g_ApplyVtable); }
 
 // ---------------------------------------------------------------------------
 // vector<44-byte elements>, vector<12-byte elements>
@@ -310,7 +320,7 @@ extern "C" void __fastcall Vec44_PushBack(BYTE* self, void*, const void* x)
 {
     BYTE* end = F(BYTE*, self, 4);
     if (end != F(BYTE*, self, 8)) {
-        Sch4ab570_Construct(end, (const BYTE*)x);
+        EvalFrame_PlacementCopy(end, (const BYTE*)x);
         F(BYTE*, self, 4) += 44;
     } else
         Elems44_InsertAux((BYTE**)self, 0, end, (const BYTE*)x);
@@ -326,6 +336,7 @@ extern "C" BYTE* __fastcall SchValue_Object(const SchValue* self, void*)
     return self->obj;
 }
 
+// [FUN_4ab540]
 extern "C" void __cdecl SchValue_Release(SchValue* v)
 {
     if ((v->flags & SCH_IMMEDIATE) || !v->obj)
@@ -357,8 +368,8 @@ extern "C" SchValue* __fastcall SchItem_Value(const BYTE* self, void*, SchValue*
     return out;
 }
 
-// the copy constructor of 16-byte values and deque iterators
-extern "C" DWORD* __fastcall Sch_Copy16(DWORD* self, void*, const DWORD* from)
+// [FUN_4abea0] Copy the current pointer, block bounds and map slot of a deque iterator.
+extern "C" DWORD* __fastcall DequeIterator_Copy(DWORD* self, void*, const DWORD* from)
 {
     self[0] = from[0];
     self[1] = from[1];
@@ -399,7 +410,8 @@ extern "C" DequeIt* __fastcall DequeIt_Advance(DequeIt* self, void*, int n)
     return self;
 }
 
-extern "C" int __fastcall DequeIt_Diff(const DequeIt* self, void*, const DequeIt* o)
+// [FUN_4acb10]
+extern "C" int __fastcall ByteDeque_IteratorDistance(const DequeIt* self, void*, const DequeIt* o)
 {
     return Distance(*o, *self);
 }
@@ -410,7 +422,8 @@ extern "C" DequeIt* __cdecl Deque_CopyChars(DequeIt* out, const char* first, con
     return out;
 }
 
-extern "C" DequeIt* __cdecl Deque_CopyLoop(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
+// [FUN_4acef0]
+extern "C" DequeIt* __cdecl ByteDeque_CopyBytesForward(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
 {
     int n = Distance(first, last);
     char* s = first.cur;
@@ -438,7 +451,8 @@ extern "C" DequeIt* __cdecl Deque_CopyLoop(DequeIt* out, DequeIt first, DequeIt 
     return out;
 }
 
-extern "C" DequeIt* __cdecl Deque_CopyCharsLoop(DequeIt* out, const char* first, const char* last, DequeIt dest)
+// [FUN_4acfb0]
+extern "C" DequeIt* __cdecl ByteDeque_CopyFromArray(DequeIt* out, const char* first, const char* last, DequeIt dest)
 {
     int n = (int)(last - first);
     char* d = dest.cur;
@@ -491,40 +505,46 @@ extern "C" DequeIt* __cdecl Deque_CopyBackwardLoop(DequeIt* out, DequeIt first, 
 
 // the layers of std::copy above the loops; the extra arguments the original
 // passes down (tags) are unused
-extern "C" DequeIt* __cdecl Deque_Copy4acb90(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
+// [FUN_4acb90]
+extern "C" DequeIt* __cdecl Deque_CopyByteRange(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
 {
-    return Deque_CopyLoop(out, first, last, dest);
+    return ByteDeque_CopyBytesForward(out, first, last, dest);
 }
 
-extern "C" DequeIt* __cdecl Deque_Copy4ad130(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
+// [FUN_4ad130]
+extern "C" DequeIt* __cdecl ByteDeque_CopyIteratorRangeDispatch(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
 {
-    return Deque_Copy4acb90(out, first, last, dest);
+    return Deque_CopyByteRange(out, first, last, dest);
 }
 
-extern "C" DequeIt* __cdecl Deque_Copy4acea0(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
+// [FUN_4acea0]
+extern "C" DequeIt* __cdecl ByteDeque_CopyIteratorRange(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
 {
-    return Deque_Copy4ad130(out, first, last, dest);
+    return ByteDeque_CopyIteratorRangeDispatch(out, first, last, dest);
 }
 
 extern "C" DequeIt* __cdecl Deque_Copy4acb40(DequeIt* out, DequeIt first, DequeIt last, DequeIt dest)
 {
-    return Deque_Copy4acea0(out, first, last, dest);
+    return ByteDeque_CopyIteratorRange(out, first, last, dest);
 }
 
-extern "C" DequeIt* __cdecl Deque_CopyChars4acbe0(DequeIt* out, const char* first, const char* last, DequeIt dest)
+// [FUN_4acbe0]
+extern "C" DequeIt* __cdecl Deque_CopyContiguousChars(DequeIt* out, const char* first, const char* last, DequeIt dest)
 {
-    return Deque_CopyCharsLoop(out, first, last, dest);
+    return ByteDeque_CopyFromArray(out, first, last, dest);
 }
 
-extern "C" DequeIt* __cdecl Deque_CopyChars4ad0f0(DequeIt* out, const char* first, const char* last, DequeIt dest)
+// [FUN_4ad0f0]
+extern "C" DequeIt* __cdecl ByteDeque_CopyArrayRange(DequeIt* out, const char* first, const char* last, DequeIt dest)
 {
-    return Deque_CopyChars4acbe0(out, first, last, dest);
+    return Deque_CopyContiguousChars(out, first, last, dest);
 }
 
 // ---------------------------------------------------------------------------
 // Pools of freed blocks, lists
 
-extern "C" void* __cdecl Pool44_New(int size)
+// [FUN_4ad270]
+extern "C" void* __cdecl SchPool_Allocate44(int size)
 {
     if (!g_free44Count)
         return operator new(size);
@@ -542,6 +562,7 @@ extern "C" void* __cdecl Pool32_New(int size)
     return operator new(size);
 }
 
+// [FUN_4af810]
 extern "C" BYTE** __fastcall SchListIt_PostInc(BYTE** self, void*, BYTE** out, int)
 {
     BYTE* n = *self;
@@ -563,9 +584,10 @@ extern "C" BYTE** __fastcall SchList_End(BYTE** self, void*, BYTE** out)
 }
 
 // a node holding x before pos
-extern "C" BYTE** __stdcall SchList_Insert(BYTE** out, BYTE* pos, int x)
+// [FUN_4afde0]
+extern "C" BYTE** __stdcall SchemeValueList_InsertBefore(BYTE** out, BYTE* pos, const DWORD* value)
 {
-    BYTE* n = ValueList_MakeNode((const DWORD*)x);
+    BYTE* n = ValueList_MakeNode(value);
     F(BYTE*, n, 0) = pos;
     F(BYTE*, n, 4) = F(BYTE*, pos, 4);
     F(BYTE*, F(BYTE*, pos, 4), 0) = n;
@@ -574,16 +596,18 @@ extern "C" BYTE** __stdcall SchList_Insert(BYTE** out, BYTE* pos, int x)
     return out;
 }
 
+// [FUN_4afc00]
 extern "C" void __fastcall SchList_PushBack(BYTE** self, void*, int x)
 {
     BYTE* end;
     SchList_End(self, 0, &end);
     BYTE* it;
-    SchList_Insert(&it, end, x);
+    SchemeValueList_InsertBefore(&it, end, (const DWORD*)x);
 }
 
 // the list's destructor (12-byte nodes)
-extern "C" void __fastcall SchList_Destroy(BYTE** self, void*)
+// [FUN_4afda0]
+extern "C" void __fastcall SchemeList_Destroy12ByteNodes(BYTE** self, void*)
 {
     BYTE* n = F(BYTE*, *self, 0);
     while (n != *self) {
@@ -597,7 +621,8 @@ extern "C" void __fastcall SchList_Destroy(BYTE** self, void*)
 }
 
 // the destructor of a list of values (20-byte nodes, the value at +8)
-extern "C" void __fastcall SchValueList_Destroy(BYTE** self, void*)
+// [FUN_4afe10]
+extern "C" void __fastcall SchemeValueList_ReleaseNodes(BYTE** self, void*)
 {
     BYTE* n = F(BYTE*, *self, 0);
     while (n != *self) {
@@ -611,6 +636,7 @@ extern "C" void __fastcall SchValueList_Destroy(BYTE** self, void*)
     AiFree(*self, 20);
 }
 
+// [FUN_4aff90]
 extern "C" BYTE** __fastcall SchList_EraseRange(BYTE* self, void*, BYTE** out, BYTE* first, BYTE* last)
 {
     while (first != last) {
@@ -636,7 +662,7 @@ extern "C" char* __cdecl Sch_ErrorText(int code, int severity);
 extern "C" void FUN_4a5380(); KING_ALIAS("_FUN_4a5380", "_Sch_ErrorText")    // the format of an error (code, level)
 extern "C" char* __cdecl Sch_MessageText(int i);
 extern "C" void FUN_4a59f0(); KING_ALIAS("_FUN_4a59f0", "_Sch_MessageText")    // the format of a message (code)
-extern "C" void __cdecl Port_WriteString(const char* s, DWORD h0, DWORD h1, DWORD h2);
+extern "C" DWORD __cdecl Port_WriteString(const char* s, DWORD h0, DWORD h1, DWORD h2);
 extern "C" void FUN_4b1450(); KING_ALIAS("_FUN_4b1450", "_Port_WriteString")    // shows a message (text, value by copy)
 extern "C" void __cdecl Sch4a5800_Dump(BYTE* s);
 extern "C" void FUN_4a5800(); KING_ALIAS("_FUN_4a5800", "_Sch4a5800_Dump")
@@ -786,6 +812,7 @@ extern "C" void __cdecl NameMap_Rebalance(RbNode* x, RbNode** root)
 }
 
 // vector<value of 12 bytes>::operator=
+// [FUN_4ab130]
 extern "C" BYTE** __fastcall Values_Assign(BYTE** d, void*, BYTE* const* s)
 {
     if ((const void*)s == (void*)d)
@@ -838,21 +865,20 @@ extern "C" BYTE* __fastcall Vec44_Erase(BYTE** self, void*, BYTE* first, BYTE* l
 // node's value at +96 passed by copy
 struct ValueArg { BYTE* obj; int m_4; DWORD flags; };
 
-static ValueArg NodeValue(BYTE* p)
+static DWORD WriteNodeMessage(BYTE* p, const char* text)
 {
     ValueArg v;
     CopyRef((SchValue*)&v, (const SchValue*)(p + 96));
-    return v;
+    return Port_WriteString(text, (DWORD)v.obj, v.m_4, v.flags);
 }
 
 // returns what the last FUN_4b1450 returned: the original leaves it in EAX,
 // and FUN_4a5c40 passes it on
 static int ShowMessage(BYTE* p, const char* text)
 {
-    typedef int (__cdecl* Show)(const char*, ValueArg);
-    ((Show)FUN_4b1450)(text, NodeValue(p));
+    WriteNodeMessage(p, text);
     Sch4a5800_Dump(p);
-    int r = ((Show)FUN_4b1450)(text, NodeValue(p));
+    int r = WriteNodeMessage(p, text);
     F(int, p, 120) = 1;
     return r;
 }
@@ -871,6 +897,7 @@ extern "C" int __cdecl Sch_Message1(BYTE* p, int code, int a)
     return ShowMessage(p, text);
 }
 
+// [FUN_4a5b50] Report a Scheme error using two format arguments and set the interpreter error flag.
 extern "C" int __cdecl Sch_Message2(BYTE* p, int code, int a, int b)
 {
     char text[2048];
@@ -928,14 +955,16 @@ extern "C" BYTE* __cdecl Elems44_Copy(const BYTE* first, const BYTE* last, BYTE*
     return dest;
 }
 
-extern "C" BYTE* __cdecl Elems44_CopyB(const BYTE* first, const BYTE* last, BYTE* dest)
+// [FUN_4ab930]
+extern "C" BYTE* __cdecl EvalFrame_CopyAssignRange(const BYTE* first, const BYTE* last, BYTE* dest)
 {
     for (int n = (last - first) / 44; n > 0; n--, first += 44, dest += 44)
         Elem44_Assign(dest, first, false);
     return dest;
 }
 
-extern "C" BYTE* __cdecl Elems44_CopyBack(const BYTE* first, const BYTE* last, BYTE* dest)
+// [FUN_4ab6c0]
+extern "C" BYTE* __cdecl EvalFrame_CopyAssignBackward(const BYTE* first, const BYTE* last, BYTE* dest)
 {
     for (int n = (last - first) / 44; n > 0; n--) {
         last -= 44;
@@ -946,7 +975,8 @@ extern "C" BYTE* __cdecl Elems44_CopyBack(const BYTE* first, const BYTE* last, B
 }
 
 // vector<value>::erase(first, last)
-extern "C" BYTE* __fastcall Values_Erase(BYTE** self, void*, BYTE* first, BYTE* last)
+// [FUN_4af820]
+extern "C" BYTE* __fastcall SchemeValueVector_EraseRange(BYTE** self, void*, BYTE* first, BYTE* last)
 {
     BYTE* d = first;
     BYTE* s = last;
@@ -991,7 +1021,7 @@ KING_ALIAS("_SchValue_MakeString", "FUN_4a1e30")
 KING_ALIAS("_SchValue_MakeStringB", "FUN_4a2400")
 KING_ALIAS("_SchValue_MakeIdent", "FUN_4a2230")
 KING_ALIAS("_SchValue_MakePair", "FUN_4a2140")
-KING_ALIAS("_SchValue_MakePairB", "FUN_4a28c0")
+KING_ALIAS("_SchValue_MakeEmptyPair", "FUN_4a28c0")
 KING_ALIAS("_SchValue_MakeNumber", "FUN_4a2310")
 KING_ALIAS("_SchValue_MakeNumberU", "FUN_4a24e0")
 KING_ALIAS("_SchValue_MakeVector", "FUN_4a2700")
@@ -1003,7 +1033,6 @@ KING_ALIAS("_SchValue_MakeEnv", "FUN_4a27e0")
 extern "C" void __cdecl Sch_TypeError(int code, int level, const char* name);
 KING_ALIAS("@SchValue_AsBool@12", "FUN_4a1940")
 KING_ALIAS("@SchValue_AsChar@12", "FUN_4a19c0")
-KING_ALIAS("_Deque_AllocPages@8", "FUN_4a29e0")
 
 // sch_istr.cpp's Environment and Port value factories. Both return exactly
 // the three words of a Scheme value; the second argument is a compiler slot.
@@ -1140,55 +1169,55 @@ DWORD* __cdecl Sch_MakeContinuation(DWORD* out, int unused, DWORD a)
 // [FUN_4aa9f0]
 DWORD* __cdecl Sch_MakeBegin(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a8580), 34, s_tBegin);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a8580), SCH_SPECIAL_FORM, s_tBegin);
 }
 
 // [FUN_4b00c0]
 DWORD* __cdecl Sch_MakeLambda(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a81d0), 34, s_tLambda);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a81d0), SCH_SPECIAL_FORM, s_tLambda);
 }
 
 // [FUN_4b01a0]
 DWORD* __cdecl Sch_MakeDefine(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a9040), 34, s_tDefine);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a9040), SCH_SPECIAL_FORM, s_tDefine);
 }
 
 // [FUN_4b0280]
 DWORD* __cdecl Sch_MakeIf(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a86f0), 34, s_tIf);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a86f0), SCH_SPECIAL_FORM, s_tIf);
 }
 
 // [FUN_4b0360]
 DWORD* __cdecl Sch_MakeQuote(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a8a90), 34, s_tQuote);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a8a90), SCH_SPECIAL_FORM, s_tQuote);
 }
 
 // [FUN_4b0440]
 DWORD* __cdecl Sch_MakeSet(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a8bd0), 34, s_tSet);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a8bd0), SCH_SPECIAL_FORM, s_tSet);
 }
 
 // [FUN_4b0520]
 DWORD* __cdecl Sch_MakeEval(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a9770), 34, s_tEval);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a9770), SCH_SPECIAL_FORM, s_tEval);
 }
 
 // [FUN_4b0600]
 DWORD* __cdecl Sch_MakeCallCC(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a9a70), 34, s_tCallCC);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a9a70), SCH_SPECIAL_FORM, s_tCallCC);
 }
 
 // [FUN_4b06e0]
 DWORD* __cdecl Sch_MakeApply(DWORD* out)
 {
-    return SchHandle_Take(out, SchNew0(12, FUN_4a9e80), 34, s_tApply);
+    return SchHandle_Take(out, SchNew0(12, FUN_4a9e80), SCH_SPECIAL_FORM, s_tApply);
 }
 
 
@@ -1367,7 +1396,7 @@ extern "C" DWORD* __cdecl Sch_MakeIdentifierP(DWORD* out, int unused, const DWOR
 extern "C" void FUN_4a50d0(); KING_ALIAS("_FUN_4a50d0", "_Sch_MakeIdentifierP")
 extern "C" void __fastcall Env_Define(BYTE* e, void*, BYTE* p, BYTE* n0, int n1, DWORD n2, BYTE* v0, int v1, DWORD v2);
 extern "C" void FUN_4a3180(); KING_ALIAS("_FUN_4a3180", "@Env_Define@36")
-extern "C" DWORD* __fastcall Sch_Copy16(DWORD* self, void*, const DWORD* from);
+extern "C" DWORD* __fastcall DequeIterator_Copy(DWORD* self, void*, const DWORD* from);
 extern "C" void FUN_4acb40(); KING_ALIAS("_FUN_4acb40", "_Deque_Copy4acb40")
 extern "C" void FUN_4acae0(); KING_ALIAS("_FUN_4acae0", "_Deque_CopyChars")
 
@@ -1382,7 +1411,7 @@ static void ReleaseRef(SchValue* v)
 extern "C" {
 
 // [FUN_4a3e40] h (by value) and a value made from b passed on to FUN_4a3180
-int __fastcall Eval4a3e40(BYTE* self, void*, int a, int b, BYTE* h0, int h1, DWORD h2)
+int __fastcall Env_DefineNamedValue(BYTE* self, void*, int a, int b, BYTE* h0, int h1, DWORD h2)
 {
     SchValue h = {h0, h1, h2};
     DWORD c1[3];
@@ -1399,8 +1428,8 @@ int __fastcall Eval4a3e40(BYTE* self, void*, int a, int b, BYTE* h0, int h1, DWO
 DequeIt* __cdecl Deque4acc20(DequeIt* out, DequeIt a, DequeIt b, int c, int d, DequeIt e)
 {
     DequeIt b2, a2, t;
-    Sch_Copy16((DWORD*)&b2, 0, (const DWORD*)&b);
-    Sch_Copy16((DWORD*)&a2, 0, (const DWORD*)&a);
+    DequeIterator_Copy((DWORD*)&b2, 0, (const DWORD*)&b);
+    DequeIterator_Copy((DWORD*)&a2, 0, (const DWORD*)&a);
     CallC(FUN_4acb40, &t, a2, b2, e);
     CallC(FUN_4acae0, out, c, d, t);
     return out;
@@ -1411,8 +1440,8 @@ DequeIt* __cdecl Deque4acd70(DequeIt* out, int c, int d, DequeIt a, DequeIt b, D
 {
     DequeIt t, b2, a2;
     CallC(FUN_4acae0, &t, c, d, e);
-    Sch_Copy16((DWORD*)&b2, 0, (const DWORD*)&b);
-    Sch_Copy16((DWORD*)&a2, 0, (const DWORD*)&a);
+    DequeIterator_Copy((DWORD*)&b2, 0, (const DWORD*)&b);
+    DequeIterator_Copy((DWORD*)&a2, 0, (const DWORD*)&a);
     CallC(FUN_4acb40, out, a2, b2, t);
     return out;
 }
@@ -1456,13 +1485,13 @@ BYTE** __fastcall Values4aadc0_Copy(BYTE** self, void*, BYTE* const* src)
 }
 
 // [FUN_4aac80] copy constructor: value at +4, values at +16, +28, value at +32
-BYTE* __fastcall Sch4aac80_Copy(BYTE* self, void*, const BYTE* src)
+BYTE* __fastcall EvalFrame_CopyConstruct(BYTE* self, void*, const BYTE* src)
 {
     CopyRef((SchValue*)(self + 4), (const SchValue*)(src + 4));
     Values_CopyConstruct((BYTE**)(self + 16), F(BYTE*, src, 16), F(BYTE*, src, 20), (int)(self + 16));
     F(int, self, 28) = F(int, src, 28);
     CopyRef((SchValue*)(self + 32), (const SchValue*)(src + 32));
-    F(void*, self, 0) = &g_vtbl64bf68;
+    F(void*, self, 0) = &g_EvalFrameVtable;
     return self;
 }
 
@@ -1502,18 +1531,17 @@ void __cdecl Sch4a5800_Dump(BYTE* s)
     }
 }
 
-// [FUN_4ad330] makes a closure of a, &c and &b, and passes it with a and
-// b to the object of h
-void __cdecl Sch4ad330(int a, Value3 h, int b, int c)
+// [FUN_4ad330] Bind a native procedure under its Scheme name in the supplied environment.
+void __cdecl Sch_RegisterNativeProcedure(int interpreter, Value3 environment, int name, int function)
 {
     DWORD l[3];
-    const SchValue* r = (const SchValue*)Sch_MakeClosureB(l, 0, a, (const DWORD*)&c, (const DWORD*)&b);
+    const SchValue* r = (const SchValue*)Sch_MakeClosureB(l, 0, interpreter, (const DWORD*)&function, (const DWORD*)&name);
     DWORD v[3];
     CopyRef((SchValue*)v, r);
-    BYTE* o = SchValue_Object((const SchValue*)&h, 0);
-    Eval4a3e40(o, 0, a, b, (BYTE*)v[0], v[1], v[2]);
+    BYTE* o = SchValue_Object((const SchValue*)&environment, 0);
+    Env_DefineNamedValue(o, 0, interpreter, name, (BYTE*)v[0], v[1], v[2]);
     ReleaseRef((SchValue*)l);
-    ReleaseRef((SchValue*)&h);
+    ReleaseRef((SchValue*)&environment);
 }
 
 }
@@ -1521,10 +1549,10 @@ void __cdecl Sch4ad330(int a, Value3 h, int b, int c)
 extern "C" {
 
 // [FUN_4ab570] placement copy (the copy constructor FUN_4aac80)
-void __cdecl Sch4ab570_Construct(BYTE* d, const BYTE* s)
+void __cdecl EvalFrame_PlacementCopy(BYTE* d, const BYTE* s)
 {
     if (d)
-        Sch4aac80_Copy(d, 0, s);
+        EvalFrame_CopyConstruct(d, 0, s);
 }
 
 }
@@ -1538,7 +1566,7 @@ extern "C" void FUN_4a5910(); KING_ALIAS("_FUN_4a5910", "_Sch_Message0")    // s
 extern "C" {
 
 // [FUN_4a70b0] sets the value at +4 to h and clears the values at +16
-void __fastcall Sch4a70b0_Reset(BYTE* self, void*, BYTE* h0, int h1, DWORD h2)
+void __fastcall EvalFrame_ResetExpression(BYTE* self, void*, BYTE* h0, int h1, DWORD h2)
 {
     SchValue* v = (SchValue*)(self + 4);
     if (v->obj && !(v->flags & SCH_IMMEDIATE)) {
@@ -1558,7 +1586,7 @@ void __fastcall Sch4a70b0_Reset(BYTE* self, void*, BYTE* h0, int h1, DWORD h2)
 
 // [FUN_4a5c40] appends the value h to the values at o+16 (reserving 8 when
 // empty); an empty h appended to an empty list sends message 31
-void __cdecl Sch4a5c40_Append(BYTE* ctx, BYTE* o, const DWORD* h)
+void __cdecl EvalFrame_AppendValue(BYTE* ctx, BYTE* o, const DWORD* h)
 {
     BYTE** v = (BYTE**)(o + 16);
     if (v[0] != v[1]) {
@@ -1787,76 +1815,67 @@ SchValue* __cdecl SchList_Nth(SchValue* out, int n, BYTE* h0, int h1, DWORD h2)
 
 extern "C" void __fastcall SchNode_Destroy(void** self, int);
 extern "C" void FUN_4b13b0(); KING_ALIAS("_FUN_4b13b0", "@SchNode_Destroy@8")    // the script node base destructor
-KING_VAR(char, vt_64bf80, 64bf80)
-KING_VAR(char, vt_64bf94, 64bf94)
-KING_VAR(char, vt_64bfa8, 64bfa8)
-KING_VAR(char, vt_64bfbc, 64bfbc)
-KING_VAR(char, vt_64bfd0, 64bfd0)
-KING_VAR(char, vt_64bfe4, 64bfe4)
-KING_VAR(char, vt_64bff8, 64bff8)
-KING_VAR(char, vt_64c00c, 64c00c)
-KING_VAR(char, vt_64c020, 64c020)
 
 // [FUN_4a8570] destructor of a script node class (vtable 64bf80)
-extern "C" void __fastcall SchNode4a8570_Destroy(void** self, int)
+extern "C" void __fastcall Lambda_Destroy(void** self, int)
 {
-    self[0] = &vt_64bf80;
+    self[0] = g_LambdaVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a86e0] destructor of a script node class (vtable 64bf94)
-extern "C" void __fastcall SchNode4a86e0_Destroy(void** self, int)
+extern "C" void __fastcall Begin_Destroy(void** self, int)
 {
-    self[0] = &vt_64bf94;
+    self[0] = g_BeginVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a8a80] destructor of a script node class (vtable 64bfa8)
-extern "C" void __fastcall SchNode4a8a80_Destroy(void** self, int)
+extern "C" void __fastcall If_Destroy(void** self, int)
 {
-    self[0] = &vt_64bfa8;
+    self[0] = g_IfVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a8bc0] destructor of a script node class (vtable 64bfbc)
-extern "C" void __fastcall SchNode4a8bc0_Destroy(void** self, int)
+extern "C" void __fastcall Quote_Destroy(void** self, int)
 {
-    self[0] = &vt_64bfbc;
+    self[0] = g_QuoteVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a9030] destructor of a script node class (vtable 64bfd0)
-extern "C" void __fastcall SchNode4a9030_Destroy(void** self, int)
+extern "C" void __fastcall Set_Destroy(void** self, int)
 {
-    self[0] = &vt_64bfd0;
+    self[0] = g_SetVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a9760] destructor of a script node class (vtable 64bfe4)
-extern "C" void __fastcall SchNode4a9760_Destroy(void** self, int)
+extern "C" void __fastcall Define_Destroy(void** self, int)
 {
-    self[0] = &vt_64bfe4;
+    self[0] = g_DefineVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a9a60] destructor of a script node class (vtable 64bff8)
-extern "C" void __fastcall SchNode4a9a60_Destroy(void** self, int)
+extern "C" void __fastcall Eval_Destroy(void** self, int)
 {
-    self[0] = &vt_64bff8;
+    self[0] = g_EvalVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4a9e70] destructor of a script node class (vtable 64c00c)
-extern "C" void __fastcall SchNode4a9e70_Destroy(void** self, int)
+extern "C" void __fastcall CallCC_Destroy(void** self, int)
 {
-    self[0] = &vt_64c00c;
+    self[0] = g_CallCCVtable;
     SchNode_Destroy(self, 0);
 }
 
 // [FUN_4aa150] destructor of a script node class (vtable 64c020)
-extern "C" void __fastcall SchNode4aa150_Destroy(void** self, int)
+extern "C" void __fastcall Apply_Destroy(void** self, int)
 {
-    self[0] = &vt_64c020;
+    self[0] = g_ApplyVtable;
     SchNode_Destroy(self, 0);
 }
 
@@ -1907,7 +1926,6 @@ extern "C" void __cdecl SchPool2_Free(void* p)
     g_poolCount694658++;
 }
 
-KING_VAR(char, vt_64bf68, 64bf68)
 
 // [FUN_4a36f0] destructor of a handle pair: the handle at +12, then the one at +0
 extern "C" void __fastcall HandlePair_Destroy(BYTE* self, int)
@@ -1917,9 +1935,9 @@ extern "C" void __fastcall HandlePair_Destroy(BYTE* self, int)
 }
 
 // [FUN_4a7230] destructor of a script node with a handle list (vtable 64bf68)
-extern "C" void __fastcall SchListNode_Destroy(BYTE* self, int)
+extern "C" void __fastcall EvalFrame_Destroy(BYTE* self, int)
 {
-    *(void**)self = &vt_64bf68;
+    *(void**)self = g_EvalFrameVtable;
     SchHandle_Release((void**)(self + 32), 0);
     BYTE* b = F(BYTE*, self, 16);
     BYTE* e = F(BYTE*, self, 20);
@@ -1998,7 +2016,7 @@ extern "C" int __cdecl Sch_ErrorCode(int code, int severity)
     if (g_errorFile)
         fprintf(g_errorFile, text);
     if (g_errorHook69224c) {
-        char* b = (char*)operator new(strlen(text) + 19);
+        char* b = (char*)operator new(strlen(text) + 20);
         sprintf(b, text);
         g_errorHook69224c(code, severity, b);
         operator delete(b);
@@ -2040,7 +2058,7 @@ KING_VAR(AsmLabel, s_tNumber, 66ca60)
 
 
 // [$L_4a7550]
-extern "C" int __fastcall SpecialForm_TypeId(BYTE*) { return 34; }
+extern "C" int __fastcall SpecialForm_TypeId(BYTE*) { return SCH_SPECIAL_FORM; }
 // [$L_4a7560]
 extern "C" const char* __fastcall SpecialForm_TypeName(BYTE*) { return s_tSpecialForm; }
 // [$L_4a81f0]
@@ -2083,27 +2101,27 @@ static BYTE* Sch_DeleteAfter(BYTE* self, int flags, void (*dtor)())
 }
 
 // [$L_4a7090]
-extern "C" BYTE* __fastcall Sch4a7090_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchListNode_Destroy); }
+extern "C" BYTE* __fastcall Sch4a7090_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())EvalFrame_Destroy); }
 // [$L_4a7570]
 extern "C" BYTE* __fastcall SpecialForm_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, FUN_4b13b0); }
 // [$L_4a8200]
-extern "C" BYTE* __fastcall Lambda_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a8570_Destroy); }
+extern "C" BYTE* __fastcall Lambda_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Lambda_Destroy); }
 // [$L_4a85b0]
-extern "C" BYTE* __fastcall Begin_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a86e0_Destroy); }
+extern "C" BYTE* __fastcall Begin_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Begin_Destroy); }
 // [$L_4a8720]
-extern "C" BYTE* __fastcall If_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a8a80_Destroy); }
+extern "C" BYTE* __fastcall If_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())If_Destroy); }
 // [$L_4a8ac0]
-extern "C" BYTE* __fastcall Quote_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a8bc0_Destroy); }
+extern "C" BYTE* __fastcall Quote_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Quote_Destroy); }
 // [$L_4a8c00]
-extern "C" BYTE* __fastcall Set_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a9030_Destroy); }
+extern "C" BYTE* __fastcall Set_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Set_Destroy); }
 // [$L_4a9070]
-extern "C" BYTE* __fastcall Define_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a9760_Destroy); }
+extern "C" BYTE* __fastcall Define_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Define_Destroy); }
 // [$L_4a97a0]
-extern "C" BYTE* __fastcall Eval_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a9a60_Destroy); }
+extern "C" BYTE* __fastcall Eval_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Eval_Destroy); }
 // [$L_4a9aa0]
-extern "C" BYTE* __fastcall CallCC_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4a9e70_Destroy); }
+extern "C" BYTE* __fastcall CallCC_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())CallCC_Destroy); }
 // [$L_4a9eb0]
-extern "C" BYTE* __fastcall Apply_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())SchNode4aa150_Destroy); }
+extern "C" BYTE* __fastcall Apply_DeletingDestructor(BYTE* s, void*, int flags) { return Sch_DeleteAfter(s, flags, (void (*)())Apply_Destroy); }
 
 // [$L_4b0b40] numbers come from the value pool and go back to it
 extern "C" BYTE* __fastcall Number_DeletingDestructor(BYTE* s, void*, int flags)
@@ -2172,9 +2190,9 @@ extern "C" void FUN_4ad030(); KING_ALIAS("_FUN_4ad030", "_Deque_CopyBackwardLoop
 extern "C" DequeIt* __cdecl Deque_CopyBackward(DequeIt* out, DequeIt a, DequeIt b, DequeIt c)
 {
     DequeIt c2, b2, a2;
-    Sch_Copy16((DWORD*)&c2, 0, (const DWORD*)&c);
-    Sch_Copy16((DWORD*)&b2, 0, (const DWORD*)&b);
-    Sch_Copy16((DWORD*)&a2, 0, (const DWORD*)&a);
+    DequeIterator_Copy((DWORD*)&c2, 0, (const DWORD*)&c);
+    DequeIterator_Copy((DWORD*)&b2, 0, (const DWORD*)&b);
+    DequeIterator_Copy((DWORD*)&a2, 0, (const DWORD*)&a);
     CallC(FUN_4ad030, out, a2, b2, c2, out, 0);
     return out;
 }
@@ -2226,7 +2244,7 @@ extern "C" SchValue* __cdecl SchValue_MakeEnv(SchValue* out, int, void* parent);
 extern "C" void FUN_4a27e0(); KING_ALIAS("_FUN_4a27e0", "_SchValue_MakeEnv")
 extern "C" void FUN_40c100(); KING_ALIAS("_FUN_40c100", "@Str_Assign@12")
 extern "C" void FUN_4aa430(); KING_ALIAS("_FUN_4aa430", "@SchValue_Object@8")
-extern "C" void FUN_4a3e40(); KING_ALIAS("_FUN_4a3e40", "@Eval4a3e40@28")         // environment: define (p, name, value)
+extern "C" void FUN_4a3e40(); KING_ALIAS("_FUN_4a3e40", "@Env_DefineNamedValue@28")         // environment: define (p, name, value)
 extern "C" void FUN_4b00c0(); KING_ALIAS("_FUN_4b00c0", "_Sch_MakeLambda")
 extern "C" void FUN_4aa9f0(); KING_ALIAS("_FUN_4aa9f0", "_Sch_MakeBegin")
 extern "C" void FUN_4b01a0(); KING_ALIAS("_FUN_4b01a0", "_Sch_MakeDefine")
@@ -2236,7 +2254,7 @@ extern "C" void FUN_4b0440(); KING_ALIAS("_FUN_4b0440", "_Sch_MakeSet")
 extern "C" void FUN_4b0520(); KING_ALIAS("_FUN_4b0520", "_Sch_MakeEval")
 extern "C" void FUN_4b0600(); KING_ALIAS("_FUN_4b0600", "_Sch_MakeCallCC")
 extern "C" void FUN_4b06e0(); KING_ALIAS("_FUN_4b06e0", "_Sch_MakeApply")
-extern "C" void FUN_4ad330(); KING_ALIAS("_FUN_4ad330", "_Sch4ad330")             // defines a native (p, env, name, function)
+extern "C" void FUN_4ad330(); KING_ALIAS("_FUN_4ad330", "_Sch_RegisterNativeProcedure")
 extern "C" DWORD* __cdecl Sch_MakeStringP(DWORD* out, int unused, const DWORD* s);
 extern "C" void FUN_4b07c0(); KING_ALIAS("_FUN_4b07c0", "_Sch_MakeStringP")
 extern "C" void FUN_4b08a0(); KING_ALIAS("_FUN_4b08a0", "_SchInput_MakeEnvironment")
@@ -2762,12 +2780,12 @@ extern "C" void FUN_49c560(); KING_ALIAS("_FUN_49c560", "@SchValue_Assign@12")
 extern "C" BYTE* __fastcall Vec12_At(BYTE** self, void*, int i);
 extern "C" void FUN_4a16c0(); KING_ALIAS("_FUN_4a16c0", "@Vec12_At@12")
 extern "C" void FUN_4a27e0(); KING_ALIAS("_FUN_4a27e0", "_SchValue_MakeEnv")
-extern "C" SchValue* __cdecl SchValue_MakePairB(SchValue* out, int, void* a);
-extern "C" void FUN_4a28c0(); KING_ALIAS("_FUN_4a28c0", "_SchValue_MakePairB")
-extern "C" BYTE* __fastcall SchNode4a7060_Construct(BYTE* self, void*);
-extern "C" void FUN_4a7060(); KING_ALIAS("_FUN_4a7060", "@SchNode4a7060_Construct@8")
-extern "C" void __fastcall SchListNode_Destroy(BYTE* self, int);
-extern "C" void FUN_4a7230(); KING_ALIAS("_FUN_4a7230", "@SchListNode_Destroy@8")
+extern "C" SchValue* __cdecl SchValue_MakeEmptyPair(SchValue* out, int, void* a);
+extern "C" void FUN_4a28c0(); KING_ALIAS("_FUN_4a28c0", "_SchValue_MakeEmptyPair")
+extern "C" BYTE* __fastcall EvalFrame_Construct(BYTE* self, void*);
+extern "C" void FUN_4a7060(); KING_ALIAS("_FUN_4a7060", "@EvalFrame_Construct@8")
+extern "C" void __fastcall EvalFrame_Destroy(BYTE* self, int);
+extern "C" void FUN_4a7230(); KING_ALIAS("_FUN_4a7230", "@EvalFrame_Destroy@8")
 extern "C" BYTE* __fastcall SchRef_Construct(BYTE* self, void*, BYTE* obj);
 extern "C" BYTE* __fastcall Vec44_Back(BYTE* self, void*);
 extern "C" void FUN_4aa180(); KING_ALIAS("_FUN_4aa180", "@Vec44_Back@8")
@@ -2838,7 +2856,7 @@ void __fastcall Closure_Apply(BYTE* self, void*, BYTE* p)
                 int off = last * 12, n = last - (i - 1);
                 do {
                     SchValue pr;
-                    SchValue_MakePairB(&pr, 0, p);
+                    SchValue_MakeEmptyPair(&pr, 0, p);
                     Eva_CheckObject(&pr);
                     Eva_AssignSame((SchValue*)(pr.obj + 32), &acc);
                     CallThis(FUN_40c100, &acc, &pr);
@@ -2881,8 +2899,8 @@ void __fastcall Closure_Apply(BYTE* self, void*, BYTE* p)
     F(BYTE*, p, 112) = top;
     CallVirt(top, 4, 0);
     BYTE node[44];
-    Vec44_PushBack(p + 108, 0, SchNode4a7060_Construct(node, 0));
-    SchListNode_Destroy(node, 0);
+    Vec44_PushBack(p + 108, 0, EvalFrame_Construct(node, 0));
+    EvalFrame_Destroy(node, 0);
     CallThis(FUN_49c560, F(BYTE*, p, 112) - 12, &env);
 
     SchValue nil, rest;
@@ -2894,7 +2912,7 @@ void __fastcall Closure_Apply(BYTE* self, void*, BYTE* p)
         CallThis(FUN_40c100, F(BYTE*, p, 112) - 40, CallC<SchValue*>(FUN_407f00, &tmp, self + 20));
     } else {
         SchValue b;
-        SchValue_MakePairB(&tmp, 0, p);
+        SchValue_MakeEmptyPair(&tmp, 0, p);
         CallThis(FUN_40c100, SchValue_Object(&tmp, 0) + 32, self + 20);
         CallThis(FUN_40c100, CallThis<BYTE*>(FUN_4aa430, &tmp) + 20, CallC<SchValue*>(FUN_4aa9f0, &b, 0));
         ReleaseRef(&b);
@@ -2915,7 +2933,7 @@ static void Eva_PopReturn(BYTE* p, SchValue* v)
     BYTE* top = F(BYTE*, p, 112) - 44;
     F(BYTE*, p, 112) = top;
     CallVirt(top, 4, 0);
-    Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)v);
+    EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)v);
 }
 
 extern "C" {
@@ -2954,13 +2972,13 @@ void __fastcall Define_Step(void*, void*, BYTE* p)
             ReleaseRef(&clo);
         } else {
             SchValue tmp;
-            Sch4a5c40_Append(p, frame, (const DWORD*)(F(BYTE*, frame, 4) + 20));
+            EvalFrame_AppendValue(p, frame, (const DWORD*)(F(BYTE*, frame, 4) + 20));
             CallThis(FUN_40c100, frame + 4, CallC<SchValue*>(FUN_4090a0, &tmp, frame + 4));
             ReleaseRef(&tmp);
             F(int, frame, 28) = 1;
             BYTE node[44];
-            Vec44_PushBack(p + 108, 0, SchNode4a7060_Construct(node, 0));
-            SchListNode_Destroy(node, 0);
+            Vec44_PushBack(p + 108, 0, EvalFrame_Construct(node, 0));
+            EvalFrame_Destroy(node, 0);
             BYTE* prev = F(BYTE*, p, 112) - 88;
             CallThis(FUN_40c100, F(BYTE*, p, 112) - 40, F(BYTE*, prev, 4) + 20);
             CallThis(FUN_49c560, F(BYTE*, p, 112) - 12, prev + 32);
@@ -3016,7 +3034,7 @@ void __fastcall Sch_Destruct(BYTE* self, void*)
     Eva_ClearField((SchValue*)(self + 60));
     Eva_ClearField((SchValue*)(self + 48));
     Vec44_Erase((BYTE**)(self + 108), 0, F(BYTE*, self, 108), F(BYTE*, self, 112));
-    Values_Erase((BYTE**)(self + 4224), 0, F(BYTE*, self, 4224), F(BYTE*, self, 4228));
+    SchemeValueVector_EraseRange((BYTE**)(self + 4224), 0, F(BYTE*, self, 4224), F(BYTE*, self, 4228));
     BYTE* list[4];
     SchList_Construct(list, 0, 0);
     BYTE* ring = self + 24;
@@ -3048,7 +3066,7 @@ void __fastcall Sch_Destruct(BYTE* self, void*)
     SchList_EraseRange((BYTE*)objs, 0, &out, first, *objs);
     if (F(BYTE*, self, 16) != ring)
         Sch_ErrorCode(5, 768);
-    SchValueList_Destroy(list, 0);
+    SchemeValueList_ReleaseNodes(list, 0);
     StrRefVec_Destroy((BYTE**)(self + 4224), 0);
     Vec44_Destroy((BYTE**)(self + 108));
     ReleaseRef((SchValue*)(self + 96));
@@ -3056,7 +3074,7 @@ void __fastcall Sch_Destruct(BYTE* self, void*)
     ReleaseRef((SchValue*)(self + 72));
     ReleaseRef((SchValue*)(self + 60));
     ReleaseRef((SchValue*)(self + 48));
-    SchList_Destroy(objs, 0);
+    SchemeList_Destroy12ByteNodes(objs, 0);
     RingMember_Destruct(ring, 0);
     RingMember_Destruct(self + 4, 0);
 }
@@ -3081,8 +3099,8 @@ KING_VAR(char, s_unbound6710f8, 6710f8)
 static void Eva_PushFrame(BYTE* p, SchValue* expr)
 {
     BYTE node[44];
-    Vec44_PushBack(p + 108, 0, SchNode4a7060_Construct(node, 0));
-    SchListNode_Destroy(node, 0);
+    Vec44_PushBack(p + 108, 0, EvalFrame_Construct(node, 0));
+    EvalFrame_Destroy(node, 0);
     CallThis(FUN_40c100, F(BYTE*, p, 112) - 40, expr);
     CallThis(FUN_49c560, F(BYTE*, p, 112) - 12, F(BYTE*, p, 112) - 88 + 32);
 }
@@ -3106,7 +3124,7 @@ void __cdecl Sch_EvalNext(BYTE* p, int next)
         SchScope_Get(env->obj, 0, &out, (int)c.obj, c.m_4, &idx);
         if (idx == -1)
             Sch_Message1(p, 32, (int)&s_unbound6710f8);
-        Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)&out);
+        EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)&out);
         ReleaseRef(&out);
     } else if (t == 9) {
         int idx = -1, depth = 0;
@@ -3116,10 +3134,10 @@ void __cdecl Sch_EvalNext(BYTE* p, int next)
         if (idx == -1) {
             Sch_Message1(p, 32, (int)(F(const char*, c.obj, 12)));
             tmp.obj = 0; tmp.m_4 = 0; tmp.flags = 0;
-            Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)&tmp);
+            EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)&tmp);
             ReleaseRef(&tmp);
         } else {
-            Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)&out);
+            EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)&out);
             SchValue imm, cached;
             SchValue_CopyImmediate((DWORD*)&cached, 0, (const DWORD*)(SchValue_Immediate(&imm, 0, depth, idx)));
             ReleaseRef(&imm);
@@ -3127,7 +3145,7 @@ void __cdecl Sch_EvalNext(BYTE* p, int next)
             ReleaseRef(&cached);
         }
         ReleaseRef(&out);
-    } else if (t == 2) {
+    } else if (t == SCH_PAIR) {
         BYTE* f4 = F(BYTE*, p, 112) - 40;
         Eva_AssignSame((SchValue*)f4, CallC<SchValue*>(FUN_4090a0, &tmp, f4));
         ReleaseRef(&tmp);
@@ -3137,7 +3155,7 @@ void __cdecl Sch_EvalNext(BYTE* p, int next)
         ReleaseRef(&e);
         return;
     } else {
-        Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)&c);
+        EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)&c);
     }
     BYTE* f4 = F(BYTE*, p, 112) - 40;
     CallThis(FUN_40c100, f4, CallC<SchValue*>(FUN_4090a0, &tmp, f4));
@@ -3153,12 +3171,12 @@ void __cdecl Sch_EvalNext(BYTE* p, int next)
 
 KING_VAR(AsmLabel, s_ev64bf60, 64bf60)
 KING_VAR(AsmLabel, s_ev6709d4, 6709d4)
-extern "C" void FUN_4a7060(); KING_ALIAS("_FUN_4a7060", "@SchNode4a7060_Construct@8")
-extern "C" void FUN_4ab570(); KING_ALIAS("_FUN_4ab570", "_Sch4ab570_Construct")
+extern "C" void FUN_4a7060(); KING_ALIAS("_FUN_4a7060", "@EvalFrame_Construct@8")
+extern "C" void FUN_4ab570(); KING_ALIAS("_FUN_4ab570", "_EvalFrame_PlacementCopy")
 extern "C" void FUN_4aa460(); KING_ALIAS("_FUN_4aa460", "@Elems44_InsertAux@16")
-extern "C" void FUN_4a7230(); KING_ALIAS("_FUN_4a7230", "@SchListNode_Destroy@8")
+extern "C" void FUN_4a7230(); KING_ALIAS("_FUN_4a7230", "@EvalFrame_Destroy@8")
 extern "C" void FUN_40c100(); KING_ALIAS("_FUN_40c100", "@Str_Assign@12")
-extern "C" void FUN_4a28c0(); KING_ALIAS("_FUN_4a28c0", "_SchValue_MakePairB")
+extern "C" void FUN_4a28c0(); KING_ALIAS("_FUN_4a28c0", "_SchValue_MakeEmptyPair")
 extern "C" DWORD* __cdecl Sch_MakeIdentifierA(DWORD* out, int unused, DWORD name);
 extern "C" void FUN_4aa830(); KING_ALIAS("_FUN_4aa830", "_Sch_MakeIdentifierA")
 extern "C" DWORD* __cdecl Sch_MakeIdentifierB(DWORD* out, int unused, DWORD name);
@@ -3170,17 +3188,17 @@ extern "C" void FUN_4aa730(); KING_ALIAS("_FUN_4aa730", "_Sch_MakeUnspecified")
 extern "C" void FUN_454580(); KING_ALIAS("_FUN_454580", "@Str_CopyConstruct@12")
 
 // pushes a fresh frame record (44 bytes) on the interpreter's frame stack (+108) with environment +60
-static void Ev_PushFrame(BYTE* p)
+static void EvalStack_PushTopLevelFrame(BYTE* p)
 {
     BYTE node[44];
-    BYTE* n = SchNode4a7060_Construct(node, 0);
+    BYTE* n = EvalFrame_Construct(node, 0);
     BYTE** v = (BYTE**)(p + 108);
     if (v[1] != v[2]) {
-        Sch4ab570_Construct(v[1], n);
+        EvalFrame_PlacementCopy(v[1], n);
         v[1] += 44;
     } else
         Elems44_InsertAux(v, 0, v[1], n);
-    SchListNode_Destroy(node, 0);
+    EvalFrame_Destroy(node, 0);
     CallThis(FUN_40c100, F(BYTE*, p, 112) - 12, p + 60);
 }
 
@@ -3204,13 +3222,13 @@ SchValue* __cdecl Sch_EvalTop(SchValue* out, BYTE* p, SchValue12 arg)
 {
     SchValue* v = (SchValue*)&arg;
     F(int, p, 120) = 0;
-    Ev_PushFrame(p);
+    EvalStack_PushTopLevelFrame(p);
     SchValue h1;
-    SchValue_MakePairB(&h1, 0, p);
+    SchValue_MakeEmptyPair(&h1, 0, p);
     Eva_CheckObject(&h1);
     Eva_AssignSame((SchValue*)(h1.obj + 20), v);
     SchValue h2;
-    SchValue_MakePairB(&h2, 0, p);
+    SchValue_MakeEmptyPair(&h2, 0, p);
     SchValue t;
     SchValue* id = (SchValue*)Sch_MakeIdentifierA((DWORD*)&t, 0, (DWORD)((const char*)s_ev64bf60));
     Eva_CheckObject(&h2);
@@ -3219,10 +3237,10 @@ SchValue* __cdecl Sch_EvalTop(SchValue* out, BYTE* p, SchValue12 arg)
     Eva_CheckObject(&h2);
     Eva_AssignSame((SchValue*)(h2.obj + 32), &h1);
     SchValue h3;
-    SchValue_MakePairB(&h3, 0, p);
+    SchValue_MakeEmptyPair(&h3, 0, p);
     CallThis(FUN_40c100, Ev_Obj(&h3) + 20, &h2);
     SchValue h4;
-    SchValue_MakePairB(&h4, 0, p);
+    SchValue_MakeEmptyPair(&h4, 0, p);
     SchValue12 name;
     Sch_MakeIdentifierB((DWORD*)&name, 0, (DWORD)((const char*)s_ev6709d4));
     int depth = 0, index = -1;
@@ -3234,7 +3252,7 @@ SchValue* __cdecl Sch_EvalTop(SchValue* out, BYTE* p, SchValue12 arg)
     CallC(FUN_4a6880, &r, p, Sv_Copy(&h4));
     if (F(int, p, 120) == 0) {
         Ev_ClearFrames(p);
-        Ev_PushFrame(p);
+        EvalStack_PushTopLevelFrame(p);
         CallC(FUN_4a6880, &t, p, Sv_Copy(&r));
         Ev_ClearFrames(p);
         CallThis(FUN_454580, out, &t);
@@ -3257,8 +3275,8 @@ SchValue* __cdecl Sch_EvalTop(SchValue* out, BYTE* p, SchValue12 arg)
 KING_VAR(AsmLabel, s_rl66ce4c, 66ce4c)
 extern "C" void FUN_4a5910(); KING_ALIAS("_FUN_4a5910", "_Sch_Message0")
 extern "C" void FUN_4a5a60(); KING_ALIAS("_FUN_4a5a60", "_Sch_Message1")
-extern "C" void __cdecl Sch4a5c40_Append(BYTE* ctx, BYTE* o, const DWORD* h);
-extern "C" void FUN_4a5c40(); KING_ALIAS("_FUN_4a5c40", "_Sch4a5c40_Append")
+extern "C" void __cdecl EvalFrame_AppendValue(BYTE* ctx, BYTE* o, const DWORD* h);
+extern "C" void FUN_4a5c40(); KING_ALIAS("_FUN_4a5c40", "_EvalFrame_AppendValue")
 extern "C" void __cdecl Sch_EvalNext(BYTE* p, int next);
 extern "C" void FUN_4a5db0(); KING_ALIAS("_FUN_4a5db0", "_Sch_EvalNext")
 extern "C" const char* __fastcall SchValue_Name(const SchValue* self, void*);
@@ -3283,7 +3301,7 @@ static void Rl_Return(BYTE* p, SchValue* r)
     BYTE** fr = (BYTE**)(p + 108);
     fr[1] -= 44;
     CallVirt(fr[1], 4, 0);
-    Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)r);
+    EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)r);
 }
 
 static int Rl_Frames(BYTE* p)
@@ -3394,13 +3412,13 @@ void __fastcall Set_Step(void*, void*, BYTE* p)
     int state = F(int, frame, 28);
     if (state == 0) {
         SchValue tmp;
-        Sch4a5c40_Append(p, frame, (const DWORD*)(F(BYTE*, frame, 4) + 20));
+        EvalFrame_AppendValue(p, frame, (const DWORD*)(F(BYTE*, frame, 4) + 20));
         Eva_AssignSame((SchValue*)(frame + 4), CallC<SchValue*>(FUN_4090a0, &tmp, frame + 4));
         ReleaseRef(&tmp);
         F(int, frame, 28) = 1;
         BYTE node[44];
-        Vec44_PushBack(p + 108, 0, SchNode4a7060_Construct(node, 0));
-        SchListNode_Destroy(node, 0);
+        Vec44_PushBack(p + 108, 0, EvalFrame_Construct(node, 0));
+        EvalFrame_Destroy(node, 0);
         BYTE* prev = F(BYTE*, p, 112) - 88;
         Eva_AssignSame((SchValue*)(F(BYTE*, p, 112) - 40), (SchValue*)(F(BYTE*, prev, 4) + 20));
         CallThis(FUN_40c100, F(BYTE*, p, 112) - 12, prev + 32);
@@ -3538,7 +3556,7 @@ void __fastcall CallCC_Step(void*, void*, BYTE* p)
     if (F(int, top, -16) != 1)
         return;
     SchValue args, cont, call;
-    SchValue_MakePairB(&args, 0, p);
+    SchValue_MakeEmptyPair(&args, 0, p);
     Sch_MakeContinuation((DWORD*)&cont, 0, (DWORD)p);
     Eva_CheckObject(&cont);
     if ((BYTE*)(p + 108) != cont.obj + 20)
@@ -3548,12 +3566,12 @@ void __fastcall CallCC_Step(void*, void*, BYTE* p)
     CallVirt(F(BYTE*, cont.obj, 24), 4, 0);
     Eva_CheckObject(&args);
     Eva_AssignSame((SchValue*)(args.obj + 20), &cont);
-    SchValue_MakePairB(&call, 0, p);
+    SchValue_MakeEmptyPair(&call, 0, p);
     CallThis(FUN_40c100, SchValue_Object(&call, 0) + 20, F(BYTE*, F(BYTE*, p, 112), -28) + 12);
     CallThis(FUN_40c100, SchValue_Object(&call, 0) + 32, &args);
     SchValue c;
     CallThis(FUN_454580, &c, &call);
-    Sch4a70b0_Reset(Vec44_Back(p + 108, 0), 0, c.obj, c.m_4, c.flags);
+    EvalFrame_ResetExpression(Vec44_Back(p + 108, 0), 0, c.obj, c.m_4, c.flags);
     ReleaseRef(&call);
     ReleaseRef(&cont);
     ReleaseRef(&args);
@@ -3571,7 +3589,7 @@ static void If_Continue(BYTE* p, const SchValue* e)
 {
     SchValue c;
     CopyRef(&c, e);
-    Sch4a70b0_Reset(Vec44_Back(p + 108, 0), 0, c.obj, c.m_4, c.flags);
+    EvalFrame_ResetExpression(Vec44_Back(p + 108, 0), 0, c.obj, c.m_4, c.flags);
 }
 
 // returns unspecified from the top frame
@@ -3601,19 +3619,19 @@ void __fastcall If_Step(void*, void*, BYTE* p)
     SchValue v;
     CopyRef(&v, (SchValue*)(F(BYTE*, top, -28) + 12));
     int truth = -1;
-    if ((BYTE)v.flags == 7) {
+    if ((BYTE)v.flags == SCH_BOOLEAN) {
         SchValue h;
         SchValue_AsBool(&h, 0, &v);
         truth = (int)h.obj;
         SchHandle_Release((void**)&h, 0);
     }
     top = F(BYTE*, p, 112);
-    if (F(BYTE, top, -32) != 2)
+    if (F(BYTE, top, -32) != SCH_PAIR)
         If_ReturnUnspecified(p);
     else if (truth) {
         BYTE* e = (BYTE*)Sch_Deref2nd(0, (int*)(Vec44_Back(p + 108, 0) + 4));
         If_Continue(p, (SchValue*)(e + 20));
-    } else if (F(BYTE, F(BYTE*, top, -40), 40) == 2) {
+    } else if (F(BYTE, F(BYTE*, top, -40), 40) == SCH_PAIR) {
         BYTE* e = (BYTE*)Sch_Deref2nd(0, (int*)(Vec44_Back(p + 108, 0) + 4));
         e = (BYTE*)Sch_Deref2nd(0, (int*)(e + 32));
         If_Continue(p, (SchValue*)(e + 20));
@@ -3708,7 +3726,7 @@ void __fastcall Lambda_Step(BYTE* self, void*, BYTE* p)
     BYTE** frames = (BYTE**)(p + 108);
     frames[1] -= 44;
     CallVirt(frames[1], 4, 0);
-    Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)&c);
+    EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)&c);
     SchHandle_Release((void**)&c, 0);
 }
 
@@ -3740,8 +3758,8 @@ void __fastcall Eval_Step(BYTE* self, void*, BYTE* p)
     frames[1] = F(BYTE*, p, 112) - 44;
     CallVirt(frames[1], 4, 0);
     BYTE n[44];
-    Vec44_PushBack((BYTE*)frames, 0, SchNode4a7060_Construct(n, 0));
-    SchListNode_Destroy(n, 0);
+    Vec44_PushBack((BYTE*)frames, 0, EvalFrame_Construct(n, 0));
+    EvalFrame_Destroy(n, 0);
     top = F(BYTE*, p, 112);
     SchValue* d = (SchValue*)(top - 40);
     if (d->obj && !(d->flags & SCH_IMMEDIATE) && --F(int, d->obj, 4) == 0 &&
@@ -3829,14 +3847,14 @@ SchValue* __cdecl Sch_EvalNested(SchValue* out, BYTE* p, BYTE* v0, int v1, DWORD
 {
     SchValue v = {v0, v1, v2, 0};
     BYTE node[44];
-    BYTE* n = SchNode4a7060_Construct(node, 0);
+    BYTE* n = EvalFrame_Construct(node, 0);
     BYTE** fr = (BYTE**)(p + 108);
     if (fr[1] != fr[2]) {
-        Sch4ab570_Construct(fr[1], n);
+        EvalFrame_PlacementCopy(fr[1], n);
         fr[1] += 44;
     } else
         Elems44_InsertAux(fr, 0, fr[1], n);
-    SchListNode_Destroy(node, 0);
+    EvalFrame_Destroy(node, 0);
     BYTE* top = F(BYTE*, p, 112);
     Eva_AssignSame((SchValue*)(top - 40), &v);
     CallThis(FUN_40c100, F(BYTE*, p, 112) - 12, fr[0] + (fr[1] - fr[0]) / 44 * 44 - 56);
@@ -3880,16 +3898,16 @@ void __fastcall Continuation_Resume(BYTE* c, void*, BYTE* p)
             d[0] = q;
             d[2] = q + n * 44;
         } else if ((unsigned)size >= (unsigned)n) {
-            BYTE* to = Elems44_CopyB(s[0], s[1], d[0]);
+            BYTE* to = EvalFrame_CopyAssignRange(s[0], s[1], d[0]);
             for (BYTE* e = to; e != d[1]; e += 44)
                 CallVirt(e, 4, 0);
         } else {
-            Elems44_CopyB(s[0], s[0] + size * 44, d[0]);
+            EvalFrame_CopyAssignRange(s[0], s[0] + size * 44, d[0]);
             Items44_UninitCopy(s[0] + size * 44, s[1], d[1], 0);
         }
         d[1] = d[0] + n * 44;
     }
-    Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, (const DWORD*)&v);
+    EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, (const DWORD*)&v);
     ReleaseRef(&v);
 }
 
@@ -3897,7 +3915,7 @@ void __fastcall Continuation_Resume(BYTE* c, void*, BYTE* p)
 
 // === dumping a frame (FUN_4a55c0)
 
-extern "C" void FUN_4b8070(); KING_ALIAS("_FUN_4b8070", "_Sch4b8070")     // writes a value (out, ctx, value, port)
+extern "C" void FUN_4b8070(); KING_ALIAS("_FUN_4b8070", "_Sch_WriteDatum")
 extern "C" void FUN_4a16c0(); KING_ALIAS("_FUN_4a16c0", "@Vec12_At@12")
 KING_VAR(char, s_fd67109c, 67109c)
 KING_VAR(char, s_fd671090, 671090)
@@ -3984,7 +4002,7 @@ extern "C" void __fastcall Vec44_Destroy(BYTE** v)
         Ai_PoolFree(v[0], n * 44);
 }
 
-// [$L_4a7360] clears a script list node (like SchListNode_Destroy, keeping it): the handle at +4, the values at
+// [$L_4a7360] clears a script list node (like EvalFrame_Destroy, keeping it): the handle at +4, the values at
 // +16 and the handle at +32 (assigned an empty value)
 extern "C" void __fastcall SchListNode_Clear(BYTE* self)
 {
@@ -4042,10 +4060,10 @@ void __fastcall Native_Apply(BYTE* f, void*, BYTE* p)
 // ---------------------------------------------------------------------------
 // string? ($L_49c610) and a begin-like frame's step ($L_4a85d0)
 
-extern "C" int __cdecl Sch_SecondArg(BYTE* p, SchValue* out, BYTE** args, int where);
+extern "C" int __cdecl Sch_GetUnaryArgument(BYTE* p, SchValue* out, BYTE** args, int where);
 extern "C" DWORD* __cdecl SchValue_Make10007(DWORD* out, int unused, DWORD v);
 extern "C" int __cdecl Sch_Deref2nd(void*, int* p);
-void __fastcall Sch4a70b0_Reset(BYTE* self, void*, BYTE* h0, int h1, DWORD h2);
+void __fastcall EvalFrame_ResetExpression(BYTE* self, void*, BYTE* h0, int h1, DWORD h2);
 void __cdecl Sch_EvalNext(BYTE* p, int next);
 
 extern "C" {
@@ -4055,7 +4073,7 @@ extern "C" {
 SchValue* __cdecl Nat_IsString(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)s_rn670890))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)s_rn670890))
     {
         out->obj = 0;
         out->m_4 = 0;
@@ -4101,7 +4119,7 @@ void __fastcall Frame_StepSequence(BYTE* f, void*, BYTE* p)
         v.flags = fl;
         F(int, v.obj, 4)++;
     }
-    Sch4a70b0_Reset(Vec44_Back(p + 108, 0), 0, v.obj, v.m_4, v.flags);
+    EvalFrame_ResetExpression(Vec44_Back(p + 108, 0), 0, v.obj, v.m_4, v.flags);
 }
 
 }  // extern "C"
@@ -4112,7 +4130,7 @@ extern "C" void Ia_StrCopy(); KING_ALIAS("_Ia_StrCopy", "@Str_CopyConstruct@12")
 extern "C" void Ia_StrAssign(); KING_ALIAS("_Ia_StrAssign", "@Str_Assign@12")
 extern "C" BYTE** __fastcall Values4aadc0_Copy(BYTE** self, void*, BYTE* const* src);
 extern "C" BYTE** __fastcall Values_Assign(BYTE** d, void*, BYTE* const* s);
-extern "C" BYTE* __fastcall Sch4aac80_Copy(BYTE* self, void*, const BYTE* src);
+extern "C" BYTE* __fastcall EvalFrame_CopyConstruct(BYTE* self, void*, const BYTE* src);
 extern "C" BYTE* __cdecl Items44_UninitCopyB(const BYTE* first, const BYTE* last, BYTE* dest, void*);
 extern "C" void FUN_4abba0(); KING_ALIAS("_FUN_4abba0", "_Items44_UninitCopyB")
 KING_VAR(AsmLabel, g_ia64bf68, 64bf68)
@@ -4126,7 +4144,7 @@ void __fastcall Elems44_InsertAux(BYTE** v, void*, BYTE* pos, const BYTE* x)
     if (v[1] != v[2])
     {
         if (v[1])
-            Sch4aac80_Copy(v[1], 0, v[1] - 44);
+            EvalFrame_CopyConstruct(v[1], 0, v[1] - 44);
         v[1] += 44;
         BYTE t[44];
         CallThis(Ia_StrCopy, t + 4, x + 4);
@@ -4135,12 +4153,12 @@ void __fastcall Elems44_InsertAux(BYTE** v, void*, BYTE* pos, const BYTE* x)
         CallThis(Ia_StrCopy, t + 32, x + 32);
         F(void*, t, 0) = &g_ia64bf68;
         BYTE* e = v[1];
-        Elems44_CopyBack(pos, e - 88, e - 44);
+        EvalFrame_CopyAssignBackward(pos, e - 88, e - 44);
         CallThis(Ia_StrAssign, pos + 4, t + 4);
         Values_Assign((BYTE**)(pos + 16), 0, (BYTE* const*)(t + 16));
         F(DWORD, pos, 28) = F(DWORD, t, 28);
         CallThis(Ia_StrAssign, pos + 32, t + 32);
-        SchListNode_Destroy(t, 0);
+        EvalFrame_Destroy(t, 0);
         return;
     }
     int n = (v[1] - v[0]) / 44;
@@ -4148,7 +4166,7 @@ void __fastcall Elems44_InsertAux(BYTE** v, void*, BYTE* pos, const BYTE* x)
     BYTE* buf = len ? (BYTE*)Stl_Allocate(len * 44) : 0;
     BYTE* nf = Items44_UninitCopyB(v[0], pos, buf, pos);
     if (nf)
-        Sch4aac80_Copy(nf, 0, x);
+        EvalFrame_CopyConstruct(nf, 0, x);
     BYTE* ne = Items44_UninitCopyB(pos, v[1], nf + 44, nf);
     for (BYTE* p = v[0]; p != v[1]; p += 44)
         CallVirt(p, 4, 0);
@@ -4246,17 +4264,8 @@ extern "C" BYTE* __fastcall SchMap_CopySubtree(BYTE* tree, void*, const BYTE* x,
     return top;
 }
 
-// [FUN_4ac330] deque<char>: allocates the 512-byte pages of [first, last)
-extern "C" void* __cdecl Ai_OperatorNew(unsigned n);
-extern "C" void __fastcall Deque_AllocPages512(BYTE* self, void*, char** first, char** last)
-{
-    for (; first < last; first++) {
-        void* p = malloc(512);
-        if (!p)
-            p = Ai_OperatorNew(512);
-        *first = (char*)p;
-    }
-}
+extern "C" void* __cdecl Stl_RetryMallocAfterFailure(unsigned n);
+extern "C" void __fastcall Deque_AllocPages512(BYTE*, void*, char** first, char** last);
 
 // [FUN_4ac0b0] deque<char>::insert (pos, first, last): at the front or the
 // back after reserving room, elsewhere through insert_aux (4ac3d0)
@@ -4272,7 +4281,7 @@ extern "C" void __fastcall Dq_ReserveFrontPages(BYTE* self, void*, unsigned k)
     for (unsigned i = 1; i <= n; i++) {
         void* page = malloc(512);
         if (!page)
-            page = Ai_OperatorNew(512);
+            page = Stl_RetryMallocAfterFailure(512);
         F(void**, self, 20)[-(int)i] = page;
     }
 }
@@ -4286,7 +4295,7 @@ extern "C" void __fastcall Dq_ReserveBackPages(BYTE* self, void*, unsigned k)
     for (unsigned i = 1; i <= n; i++) {
         void* page = malloc(512);
         if (!page)
-            page = Ai_OperatorNew(512);
+            page = Stl_RetryMallocAfterFailure(512);
         F(void**, self, 36)[i] = page;
     }
 }
@@ -4321,7 +4330,7 @@ extern "C" void __fastcall Deque_InsertRange(BYTE* self, void*, DequeIt pos, con
 // [FUN_4ace70] copy (first, last, deque iterator dest, tag) into out
 extern "C" DequeIt* __cdecl Deque_CopyCharsTag(DequeIt* out, const char* first, const char* last, DequeIt dest, int)
 {
-    Deque_CopyChars4ad0f0(out, first, last, dest);
+    ByteDeque_CopyArrayRange(out, first, last, dest);
     return out;
 }
 
@@ -4334,7 +4343,7 @@ extern "C" void __fastcall Quote_Step(BYTE* self, void*, BYTE* p)
     BYTE* v = F(BYTE*, F(BYTE*, p, 112), -40);
     DWORD h[3];
     DWORD fl = F(DWORD, v, 28);
-    if (fl & 65536) {
+    if (fl & SCH_IMMEDIATE) {
         h[2] = fl;
         h[0] = F(DWORD, v, 20);
         h[1] = F(DWORD, v, 24);
@@ -4353,9 +4362,9 @@ extern "C" void __fastcall Quote_Step(BYTE* self, void*, BYTE* p)
     BYTE* fr = F(BYTE*, p, 112) - 44;
     F(BYTE*, p, 112) = fr;
     CallVirt(fr, 4, 0);
-    Sch4a5c40_Append(p, F(BYTE*, p, 112) - 44, h);
+    EvalFrame_AppendValue(p, F(BYTE*, p, 112) - 44, h);
     BYTE* o = (BYTE*)h[0];
-    if (!(h[2] & 65536) && o) {
+    if (!(h[2] & SCH_IMMEDIATE) && o) {
         F(int, o, 4)--;
         o = (BYTE*)h[0];
         if (!F(int, o, 4) && o)
@@ -4363,16 +4372,16 @@ extern "C" void __fastcall Quote_Step(BYTE* self, void*, BYTE* p)
     }
 }
 
+static DequeIt Dq_Plus(DequeIt it, int n) { return *DequeIt_Advance(&it, 0, n); }
 // [FUN_4ac3d0] deque<char>::_M_insert_aux (pos, first, last, n): the SGI
 // algorithm, moving the shorter side (start +8, finish +24)
-static DequeIt Dq_Plus(DequeIt it, int n) { return *DequeIt_Advance(&it, 0, n); }
 extern "C" void __fastcall Deque_InsertAux(BYTE* self, void*, DequeIt pos, const char* first, const char* last, unsigned n)
 {
     DequeIt& start = *(DequeIt*)(self + 8);
     DequeIt& finish = *(DequeIt*)(self + 24);
     DequeIt out;
     int before = Distance(start, pos);
-    unsigned length = (unsigned)DequeIt_Diff(&finish, 0, &start);
+    unsigned length = (unsigned)ByteDeque_IteratorDistance(&finish, 0, &start);
     if ((unsigned)before < length >> 1) {
         unsigned room = (unsigned)(start.cur - start.first);
         if (n > room)
@@ -4384,13 +4393,13 @@ extern "C" void __fastcall Deque_InsertAux(BYTE* self, void*, DequeIt pos, const
             DequeIt startN = Dq_Plus(start, (int)n);
             Deque_Copy4acb40(&out, start, startN, newStart);
             start = newStart;
-            Deque_Copy4acb90(&out, startN, pos, oldStart);
-            Deque_CopyChars4acbe0(&out, first, last, Dq_Plus(pos, -(int)n));
+            Deque_CopyByteRange(&out, startN, pos, oldStart);
+            Deque_CopyContiguousChars(&out, first, last, Dq_Plus(pos, -(int)n));
         } else {
             const char* mid = first + (n - before);
             Deque4acc20(&out, start, pos, (int)first, (int)mid, newStart);
             start = newStart;
-            Deque_CopyChars4acbe0(&out, mid, last, oldStart);
+            Deque_CopyContiguousChars(&out, mid, last, oldStart);
         }
     } else {
         unsigned room = (unsigned)(finish.last - finish.cur - 1);
@@ -4405,12 +4414,12 @@ extern "C" void __fastcall Deque_InsertAux(BYTE* self, void*, DequeIt pos, const
             Deque_Copy4acb40(&out, finishN, finish, finish);
             finish = newFinish;
             Deque_CopyBackward(&out, pos, finishN, oldFinish);
-            Deque_CopyChars4acbe0(&out, first, last, pos);
+            Deque_CopyContiguousChars(&out, first, last, pos);
         } else {
             const char* mid = first + after;
             Deque4acd70(&out, (int)mid, (int)last, pos, finish, finish);
             finish = newFinish;
-            Deque_CopyChars4acbe0(&out, first, mid, pos);
+            Deque_CopyContiguousChars(&out, first, mid, pos);
         }
     }
 }

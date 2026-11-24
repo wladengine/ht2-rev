@@ -4,6 +4,7 @@
 
 #include "car.h"
 #include "vecmath.h"
+#include "x87.h"
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
 
@@ -79,7 +80,8 @@ extern "C" void __fastcall Node_Matrix(BYTE* self, void*, Matrix* out)
     *out = *Matrix_Translation(&m, *F(Vec3*, self, 52));
 }
 
-extern "C" void __fastcall Node_SetMatrix(BYTE* self, void*, const Matrix* m)
+// [FUN_5a4030]
+extern "C" void __fastcall WeatherNode_ApplyTransform(BYTE* self, void*, const Matrix* m)
 {
     if (F(void*, self, 48)) {
         Node_ApplyMatrix((BYTE*)(F(void*, self, 48)), 0, m, 0);
@@ -87,9 +89,12 @@ extern "C" void __fastcall Node_SetMatrix(BYTE* self, void*, const Matrix* m)
     }
     *F(Vec3Bits*, self, 52) = F(Vec3Bits, m, 36);
     BYTE* q = F(BYTE*, self, 32) + 20;
-    int w = F(int, q, 12);
+    // The original reads all four words and writes back the fourth unchanged.
+    Rect16 saved;
+    for (int i = 0; i < 4; ++i)
+        saved.m[i] = F(volatile DWORD, q, 4 * i);
     *(Vec3Bits*)q = *F(Vec3Bits*, self, 52);
-    F(int, q, 12) = w;
+    F(volatile DWORD, q, 12) = saved.m[3];
 }
 
 extern "C" void __cdecl Set7025b0(int v)
@@ -98,6 +103,7 @@ extern "C" void __cdecl Set7025b0(int v)
 }
 
 // marks pixel (x, y) of the surface's current buffer
+// [FUN_5a5730]
 extern "C" void __cdecl Surface_Mark(const WORD* s, int x, int y, const BYTE* flags)
 {
     if (!flags || !(flags[28] & 1))
@@ -115,7 +121,8 @@ extern "C" void __fastcall Obj5a58c0_Start(BYTE* self, void*)
     F(DWORD, self, 164) |= 0x20;
 }
 
-extern "C" void __fastcall Obj5a6860_Set(BYTE* self, void*, int a, int b, int c, int d, int flags)
+// [FUN_5a6860]
+extern "C" void __fastcall Sky_SetAzimuthAndElevation(BYTE* self, void*, int a, int b, int c, int d, int flags)
 {
     if (!(flags & 16)) {
         F(int, self, 40) = a;
@@ -147,7 +154,7 @@ extern "C" void __fastcall Objects_Release(BYTE* self, void*)
         operator delete(F(void*, self, 36));
 }
 
-// "r g b" (0..255) into a color of floats
+// [FUN_5a88f0] Read three decimal RGB channels (0..255) from a mutable settings line.
 extern "C" void __cdecl Color_Parse(float* out, char* text)
 {
     out[0] = (float)(atoi(NextToken(&text)) * 0.00392156862745098);
@@ -166,12 +173,13 @@ extern "C" void __fastcall Obj5a8960_Set(BYTE* self, void*, int a, int b, double
     F(int, self, 116) = g;
 }
 
+// [FUN_5a8d30]
 extern "C" void __cdecl Color_Lerp(const float* a, const float* b, float t, float* out)
 {
     double x = t;
-    if (x > 1.0f)
+    if (!(x87_compare_status(t, 1.0f) & (X87_C0 | X87_C3)))
         x = 1.0f;
-    else if (!(x >= 0.0f))
+    else if (x87_compare_status(t, 0.0f) & X87_C0)
         x = 0.0f;
     double u = 1.0f - x;
     out[0] = (float)(x * a[0] + u * b[0]);
@@ -200,20 +208,15 @@ extern "C" double __cdecl Blend4(float a, float b, const float* p)
 
 extern "C" double __fastcall Wave_Value(BYTE* self, void*, double phase)
 {
-    double w = 1.0f - ((double)F(float, self, 544) + F(float, self, 544));
-    double s = x87_sin(F(double, self, 120)) * 0.3 + 1.0;
-    double m = s * (1.0 - x87_fabs(w));
-    double v = (m * x87_sin(F(double, self, 104) - 1.5707963 + phase) + w + 1.0) * 0.5;
-    if (v > 1.0)
-        return 1.0;
-    if (!(v >= 0.0))
-        return 0.0;
-    return v;
+    return x87_weather_wave(F(float, self, 544), F(double, self, 120), F(double, self, 104), phase);
 }
 
-extern "C" void __cdecl Fog_Set(double level, int a, int b)
+KING_VAR(double, fogChannelScale, 64eba0)
+
+// [FUN_5aa430]
+extern "C" void __cdecl Fog_SetGrayscaleAndRange(double level, int a, int b)
 {
-    int i = (int)(level * 255.0);
+    DWORD i = static_cast<DWORD>(static_cast<__int64>(level * fogChannelScale));
     g_7025c8 = a;
     g_67e8c8 = ((((DWORD)i | 0xffffff00) << 8 | i) << 8) | i;
     g_7025cc = b;
@@ -227,9 +230,10 @@ extern "C" void __cdecl File_WriteShort(int v, FILE* f)
 
 extern "C" int __cdecl File_ReadInt(FILE* f)
 {
-    int v;
-    fread(&v, 4, 1, f);
-    return v;
+    // 8.1 reads into the incoming stream slot. A short read retains its untouched bytes.
+    static_assert(sizeof(f) == sizeof(int), "The binary reader uses a 32-bit stream slot");
+    fread(&f, sizeof(int), 1, f);
+    return reinterpret_cast<int>(f);
 }
 
 extern "C" void __cdecl File_WriteInt(int v, FILE* f)
@@ -238,15 +242,17 @@ extern "C" void __cdecl File_WriteInt(int v, FILE* f)
     File_WriteShort(v >> 16, f);
 }
 
+// [FUN_5ab190] Read a binary32 value from the binary stream.
 extern "C" float __cdecl File_ReadFloat(FILE* f)
 {
-    float v;
-    fread(&v, 4, 1, f);
-    return v;
+    static_assert(sizeof(f) == sizeof(float), "The binary reader uses a 32-bit stream slot");
+    fread(&f, sizeof(float), 1, f);
+    float value;
+    memcpy(&value, &f, sizeof(value));
+    return value;
 }
 
-// the next word of *p (spaces and tabs separate them); *p moves past it,
-// NULL at the end of the line
+// [FUN_5ab1b0] Split a mutable line on spaces and tabs. Other control bytes end the line.
 extern "C" char* __cdecl NextToken(char** pp)
 {
     BYTE* p = (BYTE*)*pp;
@@ -335,7 +341,7 @@ static BYTE* SceneObj_FindCommandTarget(int key)
     return 0;
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*);
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*);
 
 // ---------------------------------------------------------------------------
 extern "C" BYTE* __cdecl Node_ParentRoot(BYTE* node);
@@ -395,9 +401,10 @@ extern "C" size_t __cdecl fread(void* p, size_t size, size_t n, FILE* f);
 // [FUN_5ab0f0] a signed 16-bit value from the file
 extern "C" int __cdecl File_ReadShort(FILE* f)
 {
-    short v;
-    fread(&v, 2, 1, f);
-    return v;
+    fread(&f, sizeof(short), 1, f);
+    short value;
+    memcpy(&value, &f, sizeof(value));
+    return value;
 }
 
 
@@ -578,27 +585,27 @@ extern "C" void* __fastcall Camera_Get(BYTE* self, void*, void* out);
 extern "C" Matrix* __cdecl Matrix_Inverse(Matrix* out, const Matrix* m);
 extern "C" void FUN_5fd870(); KING_ALIAS("_FUN_5fd870", "@Sound_UpdateAt@36")
 
-// [$L_5a5000] the rain sound (+176) is placed at the point (+88..+96) seen from the camera
-extern "C" void __fastcall Wea_RainSound(BYTE* s)
+static constexpr double kEffectSoundRange = 50.0;
+
+// [$L_5a5000] Place the effect's sound in camera space on its first frame.
+extern "C" void __fastcall SheetAnim_StepWithSound(BYTE* s)
 {
     if (!F(int, s, 16) && F(BYTE*, s, 176)) {
-        BYTE frame[108];  // the original's stack frame: the matrix at +12, the camera buffer at +64
-        float* m = (float*)(frame + 12);
-        BYTE* cam = (BYTE*)Camera_Get(F(BYTE*, s, 100), 0, frame + 64);
-        Matrix_Inverse((Matrix*)m, (const Matrix*)cam);
+        Matrix camera, inverse;
+        const Matrix* pose = (const Matrix*)Camera_Get(F(BYTE*, s, 100), 0, &camera);
+        const float* m = Matrix_Inverse(&inverse, pose)->m;
         float px = F(float, s, 88), py = F(float, s, 92), pz = F(float, s, 96);
         float v[3];
-        v[0] = (float)((double)m[1] * px + (double)m[7] * pz + (double)m[4] * py + m[10]);
-        v[1] = (float)((double)m[2] * px + (double)m[8] * pz + (double)m[5] * py + m[11]);
-        v[2] = (float)((double)m[3] * px + (double)m[9] * pz + (double)m[6] * py + m[12]);
-        CallThis(FUN_5fd870, F(BYTE*, s, 176), *(DWORD*)&v[0], *(DWORD*)&v[1], *(DWORD*)&v[2], 50.0, F(double, s, 184));
+        for (int i = 0; i < 3; ++i)
+            v[i] = (float)((double)m[i] * px + (double)m[6 + i] * pz + (double)m[3 + i] * py + m[9 + i]);
+        CallThis(FUN_5fd870, F(BYTE*, s, 176), *(DWORD*)&v[0], *(DWORD*)&v[1], *(DWORD*)&v[2], kEffectSoundRange, F(double, s, 184));
     }
     SheetAnim_Step(s);
 }
 
 extern "C" void __fastcall Object_Destroy(BYTE* s);
 extern "C" void FUN_5d3290(); KING_ALIAS("_FUN_5d3290", "@Object_Destroy@4")
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
 KING_VAR(AsmLabel, g_wea6514d4, 6514d4)
 KING_VAR(AsmLabel, g_wea651590, 651590)
 
@@ -616,7 +623,7 @@ extern "C" void __fastcall Wea5a7240_Destroy(BYTE* s)
     F(void*, s, 0) = g_wea651590;
     operator delete(F(void*, s, 76));
     operator delete(F(void*, s, 80));
-    Sce5ef660_Destroy(s);
+    SceneNode_DestroyBase(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -628,7 +635,7 @@ extern "C" int __fastcall Texture_SetPixels(BYTE* self, void*, BYTE* data, BYTE*
 extern "C" void __fastcall Window_FreeBuffers(BYTE* self, void*);
 extern "C" void __fastcall Handle_Release(BYTE* self, void*);
 extern "C" void __fastcall Rec5e5840_Free(BYTE* self, void*);
-extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s);
+extern "C" void __fastcall SceneSlotNode_Destroy(BYTE* s);
 extern "C" void Wea_VecDtor(); KING_ALIAS("_Wea_VecDtor", "??_M@YGXPAXIHP6EX0@Z@Z")
 KING_VAR(AsmLabel, g_wea651390, 651390)
 KING_VAR(AsmLabel, g_wea6513b0, 6513b0)
@@ -668,7 +675,7 @@ extern "C" void __fastcall Wea5a47f0_Destroy(BYTE* s)
     if (F(BYTE*, s, 324))
         CallVirt(F(BYTE*, s, 324), 0, 1);
     Handle_Release(s, 0);
-    Sce5ef660_Destroy(s ? s + 256 : 0);
+    SceneNode_DestroyBase(s ? s + 256 : 0);
     Object_Destroy(s);
 }
 // [FUN_5a7310] (vtable 6515dc): its 28-byte items (+60), +64, +68
@@ -682,7 +689,7 @@ extern "C" void __fastcall Wea5a7310_Destroy(BYTE* s)
     }
     operator delete(F(void*, s, 64));
     Rec5e5840_Free(s + 68, 0);
-    Node5f1a70_Destroy(s);
+    SceneSlotNode_Destroy(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -980,15 +987,15 @@ extern "C" void __cdecl Gradient3(const float* a, const float* b, const float* c
                                   float* out)
 {
     double mid = (f0 + f1) * g_q177_64c258;
-    if (!(x <= f1)) {
+    if (!(x87_compare_status(x, f1) & (X87_C0 | X87_C3))) {
         memcpy(out, c, 12);
         return;
     }
-    if (!(x >= f0)) {
+    if (x87_compare_status(x, f0) & X87_C0) {
         memcpy(out, a, 12);
         return;
     }
-    if (x > mid) {
+    if (!(x87_compare_status(double(x), mid) & (X87_C0 | X87_C3))) {
         double u = (x - mid) / (f1 - mid), w = g_q175_64c250 - u;
         for (int k = 0; k < 3; k++)
             out[k] = (float)(w * b[k] + u * c[k]);
@@ -1510,6 +1517,14 @@ KING_VAR(double, g_mx6fb3e0, 6fb3e0)
 KING_VAR(double, g_mx64b5a0, 64b5a0)
 KING_VAR(double, g_mx64da58, 64da58)
 
+static int Sky_MixBand(double weight)
+{
+    // The original selects the low row when the comparison is unordered.
+    if (x87_compare_status(weight, g_mx64b5a0) & X87_C0)
+        return 0;
+    return (x87_compare_status(weight, g_mx64da58) & X87_C0) ? 1 : 2;
+}
+
 extern "C" {
 
 // [FUN_5a8e90] the sky colour (Sky_Color of x, y, t, mode) of the weather mix: the four weathers 6fb3d0..6fb3dc
@@ -1518,29 +1533,30 @@ void __cdecl Sky_MixColor(float x, float y, float t, float* r, float* g, float* 
 {
     const int idx[4] = {(int)g_wea6fb3d0, (int)g_wea6fb3d4, (int)g_wea6fb3d8, (int)g_wea6fb3dc};
     double u = g_mx6fb3e0, v = g_6fb3e8;
-    int ku = u < g_mx64b5a0 ? 0 : u < g_mx64da58 ? 1 : 2, kv = v < g_mx64b5a0 ? 0 : v < g_mx64da58 ? 1 : 2;
+    const int kv = Sky_MixBand(v);
+    const int ku = Sky_MixBand(u);
     float c[3], c2[3], c3[3];
     // row: d0/d8 (v low) or d4/dc (v high), blended by u into out
     struct Row {
-        static void Get(float x, float y, float t, const int* idx, int lo, int hi, int ku, float u, float* out,
+        static void Get(float x, float y, float t, const int* idx, int lo, int hi, int ku, double u, float* out,
                         float* tmp, BYTE* table, int mode)
         {
             if (ku != 2)
                 Sky_Color(x, y, t, out, table + idx[lo] * 96, mode);
             if (ku == 1) {
                 Sky_Color(x, y, t, tmp, table + idx[hi] * 96, mode);
-                Color_Lerp(tmp, out, u, out);
+                Color_Lerp(tmp, out, (float)u, out);
             } else if (ku == 2)
                 Sky_Color(x, y, t, out, table + idx[hi] * 96, mode);
         }
     };
     if (kv != 2)
-        Row::Get(x, y, t, idx, 0, 2, ku, (float)u, c, c2, table, mode);
+        Row::Get(x, y, t, idx, 0, 2, ku, u, c, c2, table, mode);
     if (kv == 1) {
-        Row::Get(x, y, t, idx, 1, 3, ku, (float)u, c2, c3, table, mode);
+        Row::Get(x, y, t, idx, 1, 3, ku, u, c2, c3, table, mode);
         Color_Lerp(c2, c, (float)v, c);
     } else if (kv == 2)
-        Row::Get(x, y, t, idx, 1, 3, ku, (float)u, c, c2, table, mode);
+        Row::Get(x, y, t, idx, 1, 3, ku, u, c, c2, table, mode);
     *r = c[0];
     *g = c[1];
     *b = c[2];
@@ -1715,7 +1731,7 @@ int __fastcall SheetAnim_Step(BYTE* s)
 
 // === a cloud layer following the camera (a method at $L_5a4370)
 
-extern "C" void __fastcall Node_SetMatrix(BYTE* self, void*, const Matrix* m);
+extern "C" void __fastcall WeatherNode_ApplyTransform(BYTE* self, void*, const Matrix* m);
 extern "C" void __fastcall Matrix_Transform2(Matrix* self, void*, const Matrix* by);
 extern "C" void Cl_Translation(); KING_ALIAS("_Cl_Translation", "_Matrix_Translation")
 KING_VAR(double, g_cl64b5b8, 64b5b8)
@@ -1746,7 +1762,7 @@ void __fastcall Layer_Follow(BYTE* s, void*, const float* a, float* b, const BYT
     }
     float m[12];
     Matrix_Transform2((Matrix*)b, 0, (const Matrix*)(CallC<float*>(Cl_Translation, m, v)));
-    Node_SetMatrix(s, 0, (const Matrix*)b);
+    WeatherNode_ApplyTransform(s, 0, (const Matrix*)b);
 }
 
 } // extern "C"
@@ -2050,7 +2066,7 @@ void __fastcall Weather_ApplySky(BYTE* s, void*)
             F(DWORD, Q, 120) |= 128;
         double a44 = F(double, s, 72) * g_wa651680;
         double a36 = F(double, s, 48) * g_wa651678;
-        Obj5a6860_Set(Q, 0, ((int*)&a44)[0], ((int*)&a44)[1], ((int*)&a36)[0], ((int*)&a36)[1], 0);
+        Sky_SetAzimuthAndElevation(Q, 0, ((int*)&a44)[0], ((int*)&a44)[1], ((int*)&a36)[0], ((int*)&a36)[1], 0);
         double c36 = x87_cos(a36);
         F(float, s, 556) = (float)(x87_cos(a44) * c36);
         F(float, s, 560) = (float)(x87_sin(a44) * c36);
@@ -2073,7 +2089,7 @@ void __fastcall Weather_ApplySky(BYTE* s, void*)
     if (v > g_wa64c250)
         F(float, s, 548) = 1.0f;
     double fog = F(float, s, 532);
-    Fog_Set(F(float, s, 548), ((int*)&fog)[0], ((int*)&fog)[1]);
+    Fog_SetGrayscaleAndRange(F(float, s, 548), ((int*)&fog)[0], ((int*)&fog)[1]);
     for (int i = 0; i < 16; i++)
     {
         BYTE* sw = F(BYTE*, s, 160 + i * 4);

@@ -8,8 +8,13 @@ typedef char AiText[1];
 KING_VAR(AiText, g_idText, 77e460)           // "(%d)" of an invalid id
 KING_VAR(AiText, g_positionText, 77e6e0)     // an invalid PositionId
 
-static const char s_roadId[] = "$Id: ai_road.cpp 2000/8/29 17:19:18";
-static const char s_roadFile[] = "C:\\Nek\\Vrappl\\Gi\\Htai\\Ai_road.cpp";
+typedef const char RoadDiagnosticText[1];
+KING_VAR(RoadDiagnosticText, s_roadId, 66fb68)
+KING_VAR(RoadDiagnosticText, s_roadFile, 66fc18)
+KING_VAR(RoadDiagnosticText, s_invalidIdMessage, 66cbf4)
+KING_VAR(RoadDiagnosticText, s_nodeIdLabel, 66fc3c)
+KING_VAR(RoadDiagnosticText, s_idNumberFormat, 66e4d0)
+KING_VAR(RoadDiagnosticText, s_missingConnectionMessage, 66fc4c)
 
 static bool ValidNode(int node)
 {
@@ -23,14 +28,14 @@ static bool ValidRoad(int road)
 
 static void InvalidId(int line, const char* kind, int id)
 {
-    sprintf(g_idText, "(%d)", id);
-    AiError(33, 100, s_roadFile, s_roadId, line, "Invalid id", kind, g_idText);
+    sprintf(g_idText, s_idNumberFormat, id);
+    AiError(33, 100, s_roadFile, s_roadId, line, s_invalidIdMessage, kind, g_idText);
 }
 
 static void InvalidPosition(int line, const PositionId* p)
 {
     sprintf(g_positionText, "(%d %g %d %d %x)", p->road, p->t, p->segment, p->object, p->m_24);
-    AiError(33, 100, s_roadFile, s_roadId, line, "Invalid id", "PositionId", g_positionText);
+    AiError(33, 100, s_roadFile, s_roadId, line, s_invalidIdMessage, "PositionId", g_positionText);
 }
 
 static void InitPosition(PositionId* p, int road, int node, double t)
@@ -74,7 +79,7 @@ extern "C" PositionId* __cdecl Road_EdgeStart(PositionId* out, RoadEdge* e)
     PositionId p;
     InitPosition(&p, e->id, e->from->id, 0);
     if (!ValidNode(p.node))
-        InvalidId(38, "NodeId", p.node);
+        InvalidId(38, s_nodeIdLabel, p.node);
     if (!ValidRoad(p.road) && !ValidNode(p.node))
         InvalidPosition(39, &p);
     *out = p;
@@ -93,6 +98,7 @@ extern "C" PositionId* __cdecl Road_EdgeEnd(PositionId* out, RoadEdge* e)
     return out;
 }
 
+// [FUN_47ff20] Build the position at the start node of a road.
 extern "C" PositionId* __cdecl Road_StartOf(PositionId* out, int road)
 {
     if (!ValidRoad(road))
@@ -100,13 +106,14 @@ extern "C" PositionId* __cdecl Road_StartOf(PositionId* out, int road)
     PositionId p;
     InitPosition(&p, road, g_roadEdges[road]->from->id, 0);
     if (!ValidNode(p.node))
-        InvalidId(57, "NodeId", p.node);
+        InvalidId(57, s_nodeIdLabel, p.node);
     if (!ValidRoad(road) && !ValidNode(p.node))
         InvalidPosition(58, &p);
     *out = p;
     return out;
 }
 
+// [FUN_4800a0] Use the final segment of the last geometry object at the end node.
 extern "C" PositionId* __cdecl Road_EndOf(PositionId* out, int road)
 {
     if (!ValidRoad(road))
@@ -121,13 +128,13 @@ extern "C" PositionId* __cdecl Road_EndOf(PositionId* out, int road)
     return out;
 }
 
-// the road joining two nodes, either way; -1 and an error if none
-extern "C" int* __cdecl Road_Between(int* out, int nodeA, int nodeB)
+// [FUN_480400] Find the first edge joining the two nodes in either direction.
+extern "C" int* __cdecl Road_FindEdgeBetweenNodes(int* out, int nodeA, int nodeB)
 {
     if (!ValidNode(nodeA))
-        InvalidId(103, "NodeId", nodeA);
+        InvalidId(103, s_nodeIdLabel, nodeA);
     if (!ValidNode(nodeB))
-        InvalidId(104, "NodeId", nodeB);
+        InvalidId(104, s_nodeIdLabel, nodeB);
     RoadNode* a = g_roadNodes[nodeA];
     RoadNode* b = g_roadNodes[nodeB];
     for (RoadEdge** e = g_roadEdges; e != g_roadEdgesEnd; e++)
@@ -137,7 +144,7 @@ extern "C" int* __cdecl Road_Between(int* out, int nodeA, int nodeB)
         }
     const char* nameB = Str(&b->name);
     const char* nameA = Str(&a->name);
-    AiError(0, 1, s_roadFile, s_roadId, 113, "Can node find road connecting", nameA, nameB);
+    AiError(0, 1, s_roadFile, s_roadId, 113, s_missingConnectionMessage, nameA, nameB);
     *out = -1;
     return out;
 }
@@ -223,13 +230,13 @@ extern "C" void __fastcall Vec8_Insert479760(BYTE** v, void*, BYTE* pos, const B
 extern "C" void FUN_479760(); KING_ALIAS("_FUN_479760", "@Vec8_Insert479760@16")
 extern "C" BYTE* __fastcall PlayerRec_Copy(BYTE* self, void*, const BYTE* src);
 extern "C" void FUN_47a230(); KING_ALIAS("_FUN_47a230", "@PlayerRec_Copy@12")
-extern "C" void* __cdecl Ai_OperatorNew(unsigned n);
+extern "C" void* __cdecl Stl_RetryMallocAfterFailure(unsigned n);
 extern "C" void FUN_47c070(); KING_ALIAS("_FUN_47c070", "_AiList_FindActive")
 extern "C" BYTE* __stdcall Alloc8_Copy(unsigned n, BYTE* first, BYTE* last);
 extern "C" void FUN_47b530(); KING_ALIAS("_FUN_47b530", "_Alloc8_Copy@12")
 KING_VAR(BYTE*, g_68cf6c, 68cf6c)
-KING_VAR(BYTE**, g_68a970, 68a970)
-KING_VAR(BYTE**, g_68a974, 68a974)
+KING_VAR(BYTE**, g_ambushSites, 68a970)
+KING_VAR(BYTE**, g_ambushSitesEnd, 68a974)
 extern "C" void __cdecl Ai_PoolFree(void* p, unsigned size);
 extern "C" void FUN_44b4a0(); KING_ALIAS("_FUN_44b4a0", "_Ai_PoolFree")
 extern "C" void* __cdecl Stl_Allocate(unsigned bytes);
@@ -325,11 +332,13 @@ static PositionId* Nowhere(PositionId* out)
     return out;
 }
 
+// [FUN_4801f0]
 extern "C" PositionId* __cdecl Road_RandomPosition(PositionId* out)
 {
     if (g_roadEdges == g_roadEdgesEnd)
         return Nowhere(out);
-    int range = (int)(EDGE_DOUBLE(g_roadEdgesEnd[-1], 40) * 100.0);
+    // The stock x87 conversion returns 64 bits; unsigned division uses its low dword.
+    unsigned range = static_cast<unsigned>(static_cast<__int64>(EDGE_DOUBLE(g_roadEdgesEnd[-1], 40) * 100.0));
     unsigned r = AiRandom(range);
     double x = (double)r * 0.01 - 1.0;
     if (!(x >= 0))
@@ -385,7 +394,7 @@ int __cdecl Ambush_Call477600(BYTE* a)
 // [FUN_478950] calls Ambush_Call477600 on every ambush
 void __cdecl Ambushes_Each477600()
 {
-    for (BYTE** it = g_68a970; it != g_68a974; it++)
+    for (BYTE** it = g_ambushSites; it != g_ambushSitesEnd; it++)
         Ambush_Call477600(*it);
 }
 
@@ -407,7 +416,7 @@ BYTE* __stdcall List1000_MakeNode(int x)
 {
     BYTE* p = (BYTE*)malloc(1000);
     if (!p)
-        p = (BYTE*)Ai_OperatorNew(1000);
+        p = (BYTE*)Stl_RetryMallocAfterFailure(1000);
     if (p + 8)
         PlayerRec_Copy(p + 8, 0, (const BYTE*)x);
     return p;
@@ -1191,7 +1200,7 @@ extern "C" void __fastcall Vec8_FreeStorage(BYTE** v)
 // === the player record's copy constructor (FUN_47a230)
 
 extern "C" void FUN_44b740(); KING_ALIAS("_FUN_44b740", "_Stl_Allocate")    // Stl_Allocate (bytes)
-extern "C" BYTE* __cdecl Copy1(const BYTE* first, const BYTE* last, BYTE* dest);
+extern "C" BYTE* __cdecl ByteRange_Move(const BYTE* first, const BYTE* last, BYTE* dest);
 extern "C" void FUN_4abce0(); KING_ALIAS("_FUN_4abce0", "@Vec12_Reserve@16")
 extern "C" void FUN_47e3e0(); KING_ALIAS("_FUN_47e3e0", "_Stl_UninitCopy12")
 extern "C" void FUN_47d330(); KING_ALIAS("_FUN_47d330", "_Stl_UninitCopy40")
@@ -1233,7 +1242,7 @@ BYTE* __fastcall PlayerRec_Copy(BYTE* self, void*, const BYTE* src)
         BYTE* p = size ? (BYTE*)Stl_Allocate(size) : 0;
         v[0] = v[1] = p;
         v[2] = p + size;
-        v[1] = Copy1(s[0], s[1], p);
+        v[1] = ByteRange_Move(s[0], s[1], p);
     }
     {
         BYTE** d = (BYTE**)(self + 16);
@@ -1258,7 +1267,7 @@ BYTE* __fastcall PlayerRec_Copy(BYTE* self, void*, const BYTE* src)
         BYTE* p = size ? (BYTE*)Stl_Allocate(size) : 0;
         d[0] = d[1] = p;
         d[2] = p + size;
-        d[1] = Copy1(b[0], b[1], p);
+        d[1] = ByteRange_Move(b[0], b[1], p);
     }
     Pc_Copy(self, src, 184, 264);
     {
@@ -1293,7 +1302,19 @@ BYTE* __fastcall PlayerRec_Copy(BYTE* self, void*, const BYTE* src)
     Pc_Copy(self, src, 844, 852);
     Pc_Copy(self, src, 856, 865);
     Pc_Copy(self, src, 868, 884);
-    Pc_Copy(self, src, 888, 940);
+    // These six binary64 fields pass through x87 during copy construction.
+    // Loading a subnormal sets DE. A masked signaling NaN is stored as a quiet NaN.
+    for (int offset = 888; offset < 936; offset += sizeof(double)) {
+        const BYTE* source = src + offset;
+        BYTE* destination = self + offset;
+        __asm {
+            mov eax, source
+            fld qword ptr [eax]
+            mov eax, destination
+            fstp qword ptr [eax]
+        }
+    }
+    Pc_Copy(self, src, 936, 940);
     Pc_Copy(self, src, 944, 969);
     Pc_Copy(self, src, 976, 988);
     return self;
@@ -1548,7 +1569,7 @@ void __cdecl Ai_LoadGlobals(const Lg_Chunk* c, BYTE** cur)
 
 // === stable_sort's adaptive step for doubles (FUN_47c9a0)
 
-extern "C" void __cdecl Doubles_ChunkInsertion(double* first, double* last, int chunk);
+extern "C" void __cdecl Doubles_SortChunksDescending(double* first, double* last, int chunk);
 extern "C" void __cdecl Doubles_MergeLoop(double* first, double* last, double* result, int step);
 extern "C" void __cdecl Doubles_MergeAdaptive(double* first, double* middle, double* last, int len1, int len2,
                                               double* buf, int bufSize, int pred);
@@ -1557,7 +1578,7 @@ extern "C" void __cdecl Doubles_MergeAdaptive(double* first, double* middle, dou
 static void SsD_SortWithBuffer(double* first, double* last, double* buf)
 {
     int len = (int)(last - first);
-    Doubles_ChunkInsertion(first, last, 7);
+    Doubles_SortChunksDescending(first, last, 7);
     for (int step = 7; step < len;) {
         Doubles_MergeLoop(first, last, buf, step);
         step *= 2;
@@ -1637,6 +1658,7 @@ static Rec40* R40_Copy(const Rec40* first, const Rec40* last, Rec40* to)
     return to;
 }
 
+// [FUN_47e150]
 static Rec40* R40_CopyBackward(const Rec40* first, const Rec40* last, Rec40* to)
 {
     while (last != first)
@@ -1727,7 +1749,7 @@ void __cdecl Road40_MergeAdaptive(Rec40* first, Rec40* middle, Rec40* last, int 
 
 // === rotating and merging 40-byte records without a buffer (FUN_47f4b0, FUN_47dba0)
 
-extern "C" BYTE* __cdecl Rotate40(BYTE* f, BYTE* m, BYTE* l);                          // ai_containers.cpp
+extern "C" BYTE* __cdecl RoadRecords_RotateRange(BYTE* f, BYTE* m, BYTE* l);                          // ai_containers.cpp
 
 extern "C" {
 
@@ -1745,7 +1767,7 @@ Rec40* __cdecl Road40_RotateAdaptive(Rec40* first, Rec40* middle, Rec40* last, i
         R40_Copy(middle, last, first);
         return R40_CopyBackward(buf, end, last);
     }
-    Rotate40((BYTE*)first, (BYTE*)middle, (BYTE*)last);
+    RoadRecords_RotateRange((BYTE*)first, (BYTE*)middle, (BYTE*)last);
     return first + (last - middle);
 }
 
@@ -1776,7 +1798,7 @@ void __cdecl Road40_MergeNoBuffer(Rec40* first, Rec40* middle, Rec40* last, int 
             cut1 = (Rec40*)UpperBound40((BYTE*)first, (BYTE*)middle, (const BYTE*)cut2);
             len11 = (int)(cut1 - first);
         }
-        Rotate40((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2);
+        RoadRecords_RotateRange((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2);
         Rec40* mid = cut1 + len22;
         Road40_MergeNoBuffer(first, cut1, mid, len11, len22, comp);
         first = mid;
@@ -1922,7 +1944,7 @@ void __cdecl NamedRecs_Load(BYTE** cur, BYTE** v)
 // === inserting a keyed byte vector (FUN_479520)
 
 extern "C" void FUN_47d360(); KING_ALIAS("_FUN_47d360", "_Rec16_UninitCopy")    // uninitialized copy of keyed vectors (first, last, dest, -)
-extern "C" BYTE* __cdecl Rec16m_CopyBack(const BYTE* f, const BYTE* l, BYTE* d);   // ai_containers.cpp
+extern "C" BYTE* __cdecl KeyedByteVectors_CopyBackward(const BYTE* f, const BYTE* l, BYTE* d);   // ai_containers.cpp
 extern "C" void __fastcall Vec1_Free(BYTE** v, int);                                // ai_world.cpp
 extern "C" BYTE** __fastcall VecChar_Copy(BYTE** self, int, BYTE* const* src);
 extern "C" void __fastcall VecB_FreeStorage(BYTE** v, int);
@@ -1941,7 +1963,7 @@ void __fastcall KeyedVecs_InsertAux(BYTE** s, void*, BYTE* pos, const BYTE* x)
         int key = F(int, x, 0);
         BYTE* v[3];
         VecChar_Copy(v, 0, (BYTE* const*)(x + 4));
-        Rec16m_CopyBack(pos, s[1] - 32, s[1] - 16);
+        KeyedByteVectors_CopyBackward(pos, s[1] - 32, s[1] - 16);
         F(int, pos, 0) = key;
         PodVec_Assign((BYTE**)(pos + 4), 0, v);
         Vec1_Free(v, 0);
@@ -1993,23 +2015,3 @@ BYTE* __cdecl Orders144_UninitCopyB(const BYTE* first, const BYTE* last, BYTE* d
 }
 
 } // extern "C"
-
-// [FUN_47d360] uninitialized copy of 16-byte records {int, vector<char>}
-// from [first, last) to dest; returns the end of the copies
-extern "C" BYTE* __cdecl Rec16_UninitCopy(BYTE* first, BYTE* last, BYTE* dest, BYTE*)
-{
-    for (; first != last; first += 16, dest += 16) {
-        if (!dest)
-            continue;
-        F(int, dest, 0) = F(int, first, 0);
-        BYTE* b = F(BYTE*, first, 4);
-        unsigned n = (unsigned)(F(BYTE*, first, 8) - b);
-        BYTE* p = n ? (BYTE*)Stl_Allocate(n) : 0;
-        F(BYTE*, dest, 4) = p;
-        F(BYTE*, dest, 8) = p;
-        F(BYTE*, dest, 12) = p + n;
-        memmove(p, b, F(BYTE*, first, 8) - b);
-        F(BYTE*, dest, 8) = p + (F(BYTE*, first, 8) - b);
-    }
-    return dest;
-}

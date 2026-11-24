@@ -1,0 +1,14 @@
+{
+  "entry": "0x401d30",
+  "result": "void",
+  "args": [],
+  "description": "Seed the three campaign start coordinates before the startup initializer runs. Steam resets the shared position to (-2250, 0, 0).",
+  "globals": [
+    {
+      "name": "start_position",
+      "address": "0x68b9a0",
+      "hex": "000000000000f43f000000000000044000000000006044c0"
+    }
+  ],
+  "symbol": "_Ai_InitStartPos"
+}

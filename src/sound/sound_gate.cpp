@@ -20,8 +20,8 @@ extern "C" double __cdecl atof(const char* s);
 
 extern "C" void __cdecl Providers_Rebuild();
 extern "C" void FUN_6016f0(); KING_ALIAS("_FUN_6016f0", "_Providers_Rebuild")    // rewinds the service provider list
-extern "C" int __cdecl Gate_600b50(int a);
-extern "C" void FUN_600b50(); KING_ALIAS("_FUN_600b50", "_Gate_600b50")    // DirectPlay error text (hr)
+extern "C" __declspec(noinline) const char* __cdecl DirectPlay_ErrorText(DWORD error);
+extern "C" void FUN_600b50(); KING_ALIAS("_FUN_600b50", "_DirectPlay_ErrorText")    // DirectPlay error text (hr)
 extern "C" void __cdecl Ai_Report(int a1, int level, int a3, int a4, int a5, int a6, int a7, int a8);
 extern "C" int __cdecl Gate_Send(DWORD to, const BYTE* buf, int size);
 extern "C" void FUN_601ff0(); KING_ALIAS("_FUN_601ff0", "_Gate_Send")
@@ -194,8 +194,8 @@ void __cdecl Dp_Create()
     int hr = CoCreateInstance(*(const CLSID*)g_clsidDirectPlay, 0, 1, *(const IID*)g_iidDirectPlay4,
                               (void**)&g_directPlay);
     if (hr < 0) {
-        int text = Gate_600b50(hr);
-        Ai_Report(2, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 647, (int)((const char*)s_noDirectPlay), text, (int)((void*)g_68d1c0));
+        const char* text = DirectPlay_ErrorText(hr);
+        Ai_Report(2, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 647, (int)((const char*)s_noDirectPlay), (int)text, (int)((void*)g_68d1c0));
     }
 }
 
@@ -738,8 +738,8 @@ int __cdecl Gate_Send(DWORD to, const BYTE* buf, int size)
     for (int i = 0; hr == (int)0x8877000e && i < g_sendRetries; i++)
         hr = Dp_SendEx(to, g_sendBuf[0], g_sendBuf[1] - g_sendBuf[0]);
     if (hr != (int)0x8000000a && hr < 0) {
-        int text = Gate_600b50(hr);
-        Ai_Report(5, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 1102, (int)("Cannot send message"), text, (int)((void*)g_68d1c0));
+        const char* text = DirectPlay_ErrorText(hr);
+        Ai_Report(5, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 1102, (int)("Cannot send message"), (int)text, (int)((void*)g_68d1c0));
     }
     return 0;
 }
@@ -756,10 +756,10 @@ extern "C" void FUN_487730(); KING_ALIAS("_FUN_487730", "@Vec_Construct@12")
 KING_VAR(char, g_723d90, 723d90)
 KING_VAR(char, g_723d60, 723d60)
 
-// [FUN_600b50] forwards to FUN_600660
-extern "C" int __cdecl Gate_600b50(int a)
+// [FUN_600b50] Resolve a DirectPlay failure for the diagnostic log.
+extern "C" __declspec(noinline) const char* __cdecl DirectPlay_ErrorText(DWORD error)
 {
-    return (int)DxError_Name(a);
+    return DxError_Name(error);
 }
 
 // [FUN_602bd0] empties blob s: Blob_Set(s, 0, 0)
@@ -895,7 +895,7 @@ extern "C" void __fastcall MsgBuf_Destroy(BYTE* self, int)
 }
 
 // ---------------------------------------------------------------------------
-extern "C" void FUN_600b50(); KING_ALIAS("_FUN_600b50", "_Gate_600b50")    // an error text
+extern "C" void FUN_600b50(); KING_ALIAS("_FUN_600b50", "_DirectPlay_ErrorText")    // an error text
 extern "C" void FUN_6016f0(); KING_ALIAS("_FUN_6016f0", "_Providers_Rebuild")
 KING_VAR(BYTE, g_sg723df0, 723df0)
 KING_VAR(AsmLabel, g_sg683ca0, 683ca0)
@@ -912,7 +912,7 @@ extern "C" int __cdecl Gate_Start(const char* name)
     HRESULT hr = CoInitialize(0);
     if (hr < 0)
     {
-        Ai_Report(6, 100, (int)((char*)s_sg68422c), (int)((char*)s_sg683c78), 1134, (int)((char*)s_sg684320), (int)((const char*)Gate_600b50(hr)), (int)((char*)s_sg68d1c0));
+        Ai_Report(6, 100, (int)((char*)s_sg68422c), (int)((char*)s_sg683c78), 1134, (int)((char*)s_sg684320), (int)DirectPlay_ErrorText(hr), (int)((char*)s_sg68d1c0));
         return -1;
     }
     if (name && strlen(name))
@@ -1035,7 +1035,7 @@ extern "C" int __cdecl Gate_723d90Init(void)
 typedef void* SgFreeLists[17];
 KING_VAR(SgFreeLists, g_q196_68d1c0, 68d1c0)
 KING_VAR(volatile LONG, g_q196_68d204, 68d204)
-extern "C" void __fastcall Stl_Lock(volatile LONG* l, void*);
+extern "C" void __fastcall StlAllocator_AcquireLock(volatile LONG* l, void*);
 extern "C" void __cdecl free(void*);
 // [$L_602550] destroys the vector of 32-byte provider records (each one's buffers freed) and returns its storage
 // to the STL allocator
@@ -1053,7 +1053,7 @@ extern "C" void __fastcall Providers_Destroy(BYTE** v, void*)
         return;
     }
     void** list = &g_q196_68d1c0[(bytes + 7) >> 3];
-    Stl_Lock(&g_q196_68d204, 0);
+    StlAllocator_AcquireLock(&g_q196_68d204, 0);
     *(void**)p = *list;
     *list = p;
     g_q196_68d204 = 0;
@@ -1151,7 +1151,7 @@ int __cdecl Net_Receive(BYTE* m)
             continue;
         }
         if (hr < 0) {
-            Ai_Report(1, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 513, (int)((const char*)s_rm684250), Gate_600b50(hr), (int)((void*)g_68d1c0));
+            Ai_Report(1, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 513, (int)((const char*)s_rm684250), (int)DirectPlay_ErrorText(hr), (int)((void*)g_68d1c0));
             break;
         }
         if (!from) {
@@ -1214,7 +1214,8 @@ HRESULT __cdecl Gate_BuildAddress(BYTE* l, const BYTE* sp, void** out, DWORD* si
 {
     DWORD types[41];
     memset(types, 0, sizeof types);
-    HRESULT hr = CallVirt<HRESULT>(l, 24, (void*)Gate_AddRecord, sp, types, 0);
+    // IDirectPlayLobby methods are COM stdcall: self is the first stack argument.
+    HRESULT hr = Com(l, 24, (void*)Gate_AddRecord, sp, types, 0);
     if (hr < 0)
         return hr;
     Gate_Elem e[11];
@@ -1248,13 +1249,13 @@ HRESULT __cdecl Gate_BuildAddress(BYTE* l, const BYTE* sp, void** out, DWORD* si
         n++;
     }
     DWORD sz;
-    hr = CallVirt<HRESULT>(l, 56, e, n, (void*)0, &sz);
+    hr = Com(l, 56, e, n, (void*)0, &sz);
     if (hr != (HRESULT)0x8877001E)
         return hr;
     void* buf = GlobalLock(GlobalAlloc(66, sz));
     if (!buf)
         return (HRESULT)0x8007000E;
-    hr = CallVirt<HRESULT>(l, 56, e, n, buf, &sz);
+    hr = Com(l, 56, e, n, buf, &sz);
     if (hr >= 0) {
         *out = buf;
         *size = sz;
@@ -1306,7 +1307,10 @@ int __cdecl Dp_Connect(DWORD sp0, DWORD sp1, DWORD sp2, DWORD sp3, int host, int
     CoCreateInstance(*(const CLSID*)(BYTE*)g_clsidLobby, 0, 1, *(const IID*)(BYTE*)g_iidLobby, (void**)&lobby);
     void* addr = 0;
     DWORD size = 0;
-    Gate_BuildAddress(lobby, (const BYTE*)&sp0, &addr, &size, h);
+    // The original GUID occupies four consecutive stack words. In C++ the
+    // parameters are separate objects, and optimized code can reuse sp1/sp2
+    // after copying them. Pass the complete GUID object, not &sp0's four bytes.
+    Gate_BuildAddress(lobby, (const BYTE*)sp, &addr, &size, h);
     DP_CALL0(lobby, 8);
     int hr = DP_CALL(g_directPlay, 152, addr, 0);
     if (hr == (int)0x88770005) {
@@ -1354,8 +1358,8 @@ int __cdecl Dp_Connect(DWORD sp0, DWORD sp1, DWORD sp2, DWORD sp3, int host, int
     g_723d88 = 0;
     if (hr < 0) {
         Dp_Drop();
-        int text = CallC<int>(FUN_600b50, hr, (void*)g_68d1c0);
-        Ai_Report(1, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 1038, (int)((const char*)s_dpNoPlayer), text, (int)((void*)g_68d1c0));
+        const char* text = DirectPlay_ErrorText(hr);
+        Ai_Report(1, 100, (int)((const char*)s_d1gateFile), (int)((const char*)s_d1gateId), 1038, (int)((const char*)s_dpNoPlayer), (int)text, (int)((void*)g_68d1c0));
         return -1;
     }
     g_723d88 = g_dpPlayer;
@@ -1738,8 +1742,8 @@ extern "C" int __cdecl Gate_Players(DWORD* out, BYTE** list)
         line = 1216;
         msg = sg_s684340;
     }
-    int text = Gate_600b50(hr);
-    Ai_Report(8, 100, (int)((const char*)sg_s68422c), (int)((const char*)sg_s683c78), line, (int)msg, text, (int)&sg_68d1c0);
+    const char* text = DirectPlay_ErrorText(hr);
+    Ai_Report(8, 100, (int)((const char*)sg_s68422c), (int)((const char*)sg_s683c78), line, (int)msg, (int)text, (int)&sg_68d1c0);
     return -1;
 }
 
@@ -1752,13 +1756,4 @@ extern "C" BYTE** __fastcall Sg_ListConstruct(BYTE** self)
     F(BYTE*, n, 0) = n;
     F(BYTE*, *self, 4) = *self;
     return self;
-}
-
-// [FUN_602ad0] uninitialized copy of 32-byte records from [first, last) to dest
-extern "C" BYTE* __cdecl DpRecords_UninitCopy(BYTE* first, BYTE* last, BYTE* dest, BYTE*)
-{
-    for (; first != last; first += 32, dest += 32)
-        if (dest)
-            DpRecord_Copy(dest, 0, first);
-    return dest;
 }

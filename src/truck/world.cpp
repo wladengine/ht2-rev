@@ -10,10 +10,11 @@
 
 typedef char AsmLabel[1];
 extern "C" int __cdecl fflush(FILE* f);
+extern "C" int __cdecl OldCrt_FormatCoordinates(char*, size_t, const char*, const char*, float, const float*);
 
 extern "C" void FUN_5de950(); KING_ALIAS("_FUN_5de950", "_Matrix_ToAngles")    // decomposes a matrix (by value) into six doubles
 extern "C" void FUN_5da950(); KING_ALIAS("_FUN_5da950", "_Matrix_FromPose")
-extern "C" int __fastcall Obj4eb150_Kind(BYTE* self, void*);    // carphys.cpp
+extern "C" int __fastcall SceneObject_GetKind(BYTE* self, void*);    // carphys.cpp
 extern "C" void __cdecl Switch_Select(BYTE* node, int i);
 extern "C" void FUN_5e1a10(); KING_ALIAS("_FUN_5e1a10", "_Switch_Select")    // set a switch
 extern "C" void __fastcall Sound_Play(BYTE* s, void*, float vol, float pitch, int a3);
@@ -27,7 +28,9 @@ extern "C" void FUN_4e5698(); KING_ALIAS("_FUN_4e5698", "_Obj_TransformVecs")   
 
 KING_VAR(BYTE*, g_6974c4, 6974c4)             // +2960 the frame time, +2968 the time (doubles)
 KING_VAR(float, g_radToDeg, 6735d0)
-typedef float Floats[1];
+KING_VAR(float, sineTableFallback, 64c264)
+KING_VAR(double, pointQueryRadius, 64b678)
+typedef float Floats[360];
 KING_VAR(Floats, g_table696ec0, 696ec0)       // 360 entries, one per degree
 KING_VAR(int, g_697520, 697520)
 KING_VAR(int, g_697524, 697524)
@@ -49,8 +52,8 @@ KING_VAR(AsmLabel, g_strVehLog, 674120)       // "vehprn%02d.log"
 KING_VAR(AsmLabel, g_strVehLogMode, 674130)
 
 struct Vec3Bits { DWORD x, y, z; };
-extern "C" unsigned __cdecl Query_Parts2(int a, int mode, BYTE* q);
-extern "C" unsigned __cdecl Query_Parts1(int a, int mode, BYTE* q);
+extern "C" unsigned __cdecl World_QueryRoadCollision(int a, int mode, BYTE* q);
+extern "C" unsigned __cdecl World_QueryObjectCollision(int a, int mode, BYTE* q);
 extern "C" unsigned __cdecl Query_4e7168(int a, int skip, float dist, const Vec3Bits* p, const Vec3Bits* d, BYTE* q);
 extern "C" unsigned __cdecl Query_4e7476(void* obj, int skip, float dist, const Vec3Bits* p, const Vec3Bits* d, BYTE* q);
 struct Mat48 { DWORD m[12]; };                  // a matrix passed by value
@@ -58,14 +61,19 @@ struct Mat48 { DWORD m[12]; };                  // a matrix passed by value
 // ---------------------------------------------------------------------------
 // Time
 
-// the time of the last frame, at most 0.25 s (g_6974c2 ms when it is set)
+// [FUN_4e2749] Seconds per frame. A nonzero signed millisecond override bypasses the upper limit.
 extern "C" double __cdecl Game_FrameTime()
 {
-    if (g_6974c2)
-        return (int)g_6974c2 / 1000.0;
-    double t = F(double, g_6974c4, 2960);
-    if (t > 0.25)
-        return 0.25f;
+    double t;
+    if (g_6974c2) {
+        t = (int)g_6974c2 / 1000.0;
+    } else {
+        t = F(double, g_6974c4, 2960);
+        if (t > 0.25)
+            return 0.25f;
+    }
+    // VC6 emitted FST m32 here, leaving the return value in ST(0).
+    volatile float rounded = (float)t;
     return t;
 }
 
@@ -74,25 +82,35 @@ extern "C" double __cdecl Game_Time()
 {
     if (g_6974c2)
         return g_6974bc;
-    return F(double, g_6974c4, 2968);
+    double time = F(double, g_6974c4, 2968);
+    // The single-precision store also updates the x87 exception flags.
+    volatile float rounded = (float)time;
+    return time;
 }
 
 // the table entry of the angle (radians) in whole degrees, 0 outside 0..359
-extern "C" float __cdecl Table360_At(float angle)
+// [FUN_4e27cf]
+extern "C" float __cdecl World_SampleSineByAngle(float angle)
 {
-    int i = (int)(angle * (double)g_radToDeg);
-    if (i < 0 || i >= 360)
-        return 0.0f;
+    // The original truncates to 64 bits and tests the low 32 bits.
+    unsigned i = static_cast<unsigned>(static_cast<__int64>(angle * (double)g_radToDeg));
+    if (i >= 360)
+        return sineTableFallback;
     return g_table696ec0[i];
 }
 
 // v . v (as aeffects.cpp Vec3_LengthSq)
-extern "C" double __cdecl Vec3_LengthSq4e298b(const Vec3* v)
+// [FUN_4e298b] Return the dot product of a world vector with itself.
+extern "C" double __cdecl WorldVec3_LengthSquared(const Vec3* v)
 {
-    return Vec3_Dot(v, v);
+    double squared = Vec3_Dot(v, v);
+    // VC6 stores a float copy for its x87 side effects and returns the unrounded value.
+    volatile float rounded = (float)squared;
+    return squared;
 }
 
-extern "C" void __cdecl Matrix_Decompose6(const Mat48* m, double* out)
+// [FUN_4e2f35]
+extern "C" void __cdecl Matrix_WritePositionAndAngles(const Mat48* m, double* out)
 {
     CallC(FUN_5de950, *m, out, out + 1, out + 2, out + 3, out + 4, out + 5);
 }
@@ -110,6 +128,7 @@ extern "C" void __cdecl Matrix_Decompose6F(const Mat48* m, float* a, float* b, f
     *f = (float)v[5];
 }
 
+// [FUN_4e2f7c]
 extern "C" void __cdecl Matrix_Decompose6FArray(const Mat48* m, float* p)
 {
     Matrix_Decompose6F(m, p, p + 1, p + 2, p + 3, p + 4, p + 5);
@@ -124,7 +143,7 @@ extern "C" void* __cdecl World_4e3021(void* out, const int* p)
 // switch v of obj, when obj is a switch (kind 18) with more than v states
 extern "C" void __cdecl Switch_SetChecked(BYTE* obj, int v)
 {
-    if (obj && Obj4eb150_Kind(obj, 0) == 18 && v >= 0 && v < CallVirt<int>(obj, 60))
+    if (obj && SceneObject_GetKind(obj, 0) == 18 && v >= 0 && v < CallVirt<int>(obj, 60))
         Switch_Select(obj, v);
 }
 
@@ -179,7 +198,8 @@ extern "C" int __cdecl Query_4e5415(int skip, void* obj, const Vec3Bits* p, cons
     return Run(obj, 4, q);
 }
 
-extern "C" int __cdecl Query_4e54b0(void* obj, int skip, const Vec3Bits* p, const Vec3Bits* d, float dist,
+// [FUN_4e54b0]
+extern "C" int __cdecl World_QueryObjectWithRadius(void* obj, int skip, const Vec3Bits* p, const Vec3Bits* d, float dist,
                                     BYTE* q)
 {
     if (!obj)
@@ -190,10 +210,11 @@ extern "C" int __cdecl Query_4e54b0(void* obj, int skip, const Vec3Bits* p, cons
     F(int, q, 104) = 0;
     F(float, q, 0) = dist;
     F(int, q, 100) = 0;
-    return Run(obj, dist > 0.0 ? 6 : 4, q);
+    return Run(obj, dist > pointQueryRadius ? 6 : 4, q);
 }
 
-extern "C" int __cdecl Query_4e560a(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q, int dist)
+// [FUN_4e560a]
+extern "C" int __cdecl World_QuerySegment(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q, int dist)
 {
     if (!obj)
         return 0;
@@ -205,13 +226,20 @@ extern "C" int __cdecl Query_4e560a(void* obj, const Vec3Bits* p, const Vec3Bits
     return Run(obj, 6, q);
 }
 
+// The original keeps the hit mask across the transform and preserves its argument slots.
+static __declspec(noinline) int __fastcall TransformQueryHit(int flags, BYTE* q)
+{
+    if (flags & 1)
+        Obj_TransformVecs(q);
+    return flags;
+}
+
 extern "C" int __cdecl Query_4e570f(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     int r = Query_4e52fc(obj, p, d, q);
     if (!(r & 1))
         return 0;
-    Obj_TransformVecs(q);
-    return r;
+    return TransformQueryHit(r, q);
 }
 
 extern "C" int __cdecl Query_4e57e8(int skip, void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
@@ -222,7 +250,8 @@ extern "C" int __cdecl Query_4e57e8(int skip, void* obj, const Vec3Bits* p, cons
     return 1;
 }
 
-extern "C" int __cdecl Query_4e58ca(int skip, void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q, int dist)
+// [FUN_4e58ca]
+extern "C" int __cdecl World_QuerySegmentSkippingObject(int skip, void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q, int dist)
 {
     if (!obj)
         return 0;
@@ -237,21 +266,18 @@ extern "C" int __cdecl Query_4e58ca(int skip, void* obj, const Vec3Bits* p, cons
 
 extern "C" int __cdecl Query_4e5964(int skip, void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q, int dist)
 {
-    int r = Query_4e58ca(skip, obj, p, d, q, dist);
-    if (r & 1)
-        Obj_TransformVecs(q);
-    return r;
+    int r = World_QuerySegmentSkippingObject(skip, obj, p, d, q, dist);
+    return TransformQueryHit(r, q);
 }
 
 extern "C" int __cdecl Query_4e5a45(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q, int dist)
 {
-    int r = Query_4e560a(obj, p, d, q, dist);
-    if (r & 1)
-        Obj_TransformVecs(q);
-    return r;
+    int r = World_QuerySegment(obj, p, d, q, dist);
+    return TransformQueryHit(r, q);
 }
 
-extern "C" int __cdecl Query_4e5b22(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
+// [FUN_4e5b22] Mode zero resolves the segment between the two supplied points.
+extern "C" int __cdecl World_QuerySegmentDestination(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     if (!obj)
         return 0;
@@ -267,7 +293,7 @@ extern "C" void* __cdecl Query_HitObject(void* obj, const Vec3Bits* p, const Vec
 {
     BYTE q[208];
     Node_Init(q, 0);
-    if (Query_4e5b22(obj, p, d, q) & 2)
+    if (World_QuerySegmentDestination(obj, p, d, q) & 2)
         return F(void*, q, 104);
     return obj;
 }
@@ -285,7 +311,8 @@ extern "C" void __cdecl World_ClearHits()
     g_697558 = 0;
 }
 
-extern "C" int __cdecl World_4e634f()
+// [FUN_4e634f]
+extern "C" int __cdecl World_ReturnNoHit()
 {
     return 0;
 }
@@ -303,14 +330,14 @@ extern "C" int __cdecl Query_4e6578(int skip, void* obj, const Vec3Bits* p, cons
     return 1;
 }
 
-extern "C" int __cdecl Query_4e6621(int skip, int a, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
+extern "C" int __cdecl World_TestRoadCollisionSegment(int skip, int a, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     QueryInit(q, p, d);
     F(int, q, 0) = 0;
     F(int, q, 116) = 0;
     F(int, q, 104) = 0;
     F(int, q, 120) = skip;
-    return (Query_Parts2(a, 4, q) & 1) ? 1 : 0;
+    return (World_QueryRoadCollision(a, 4, q) & 1) ? 1 : 0;
 }
 
 // the hit point and normal of the query (+52, +64)
@@ -327,12 +354,12 @@ extern "C" int __cdecl Query_4e6749(int a, const Vec3Bits* p, const Vec3Bits* d,
 {
     BYTE q[208];
     Node_Init(q, 0);
-    return HitResult(Query_4e6621(0, a, p, d, q), q, point, normal);
+    return HitResult(World_TestRoadCollisionSegment(0, a, p, d, q), q, point, normal);
 }
 
 extern "C" int __cdecl Query_4e67d1(int a, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
-    return Query_4e6621(0, a, p, d, q);
+    return World_TestRoadCollisionSegment(0, a, p, d, q);
 }
 
 extern "C" int __cdecl Query_4e67f9(int skip, int a, int dist, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
@@ -342,7 +369,7 @@ extern "C" int __cdecl Query_4e67f9(int skip, int a, int dist, const Vec3Bits* p
     F(int, q, 116) = 0;
     F(int, q, 104) = 0;
     F(int, q, 120) = skip;
-    int r = Query_Parts2(a, 6, q);
+    int r = World_QueryRoadCollision(a, 6, q);
     return (r & 1) ? r : 0;
 }
 
@@ -351,16 +378,17 @@ extern "C" int __cdecl Query_4e6ac4(int a, const Vec3Bits* p, const Vec3Bits* d,
     QueryInit(q, p, d);
     F(int, q, 0) = 0;
     F(int, q, 120) = 0;
-    int r = Query_Parts1(a, 4, q);
+    int r = World_QueryObjectCollision(a, 4, q);
     return (r & 1) ? r : 0;
 }
 
-extern "C" int __cdecl Query_4e6b4d(int skip, int a, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
+// [FUN_4e6b4d]
+extern "C" int __cdecl World_RaycastFirstPartSkippingObject(int skip, int a, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     QueryInit(q, p, d);
     F(int, q, 0) = 0;
     F(int, q, 120) = skip;
-    int r = Query_Parts1(a, 4, q);
+    int r = World_QueryObjectCollision(a, 4, q);
     return (r & 1) ? r : 0;
 }
 
@@ -371,7 +399,7 @@ extern "C" int __cdecl Query_4e6d41(int skip, int a, int dist, const Vec3Bits* p
     F(int, q, 120) = skip;
     F(int, q, 116) = 0;
     F(int, q, 104) = 0;
-    int r = Query_Parts1(a, 6, q);
+    int r = World_QueryObjectCollision(a, 6, q);
     return (r & 1) ? r : 0;
 }
 
@@ -414,7 +442,8 @@ extern "C" void __cdecl WarnLog_Open()
         g_warnLog = fopen(g_strWarnLog, g_strWarnLogMode);
 }
 
-extern "C" void __cdecl VehLogs_Enable()
+// [FUN_4e9d27]
+extern "C" void __cdecl VehicleLogs_Enable()
 {
     g_vehLogsOn = 1;
 }
@@ -437,7 +466,8 @@ extern "C" void __cdecl WarnLog_Close()
     g_warnLog = 0;
 }
 
-extern "C" void __cdecl WarnLog_Flush()
+// [FUN_4e9dc0]
+extern "C" void __cdecl WarningLog_FlushIfOpen()
 {
     if (g_warnLogOn && g_warnLog)
         fflush(g_warnLog);
@@ -474,19 +504,20 @@ extern "C" void __fastcall Arrays_FillLongAgo(BYTE* self, void*)
 // ---------------------------------------------------------------------------
 // medium-sized functions of the unit
 
-extern "C" BYTE* __cdecl Model_FindPart2(BYTE* obj);
-extern "C" void FUN_4e5dce(); KING_ALIAS("_FUN_4e5dce", "_Model_FindPart2")    // an object's first part to query
-extern "C" BYTE* __cdecl Model_FindPart1(BYTE* obj);
-extern "C" void FUN_4e5c77(); KING_ALIAS("_FUN_4e5c77", "_Model_FindPart1")    // an object's other part to query
-extern "C" BYTE* __cdecl Obj_FindPart673d20(BYTE* o);
-extern "C" void FUN_4e5d60(); KING_ALIAS("_FUN_4e5d60", "_Obj_FindPart673d20")
+extern "C" BYTE* __cdecl Model_FindObjectCollision(BYTE* obj);
+extern "C" void FUN_4e5dce(); KING_ALIAS("_FUN_4e5dce", "_Model_FindObjectCollision")    // an object's first part to query
+extern "C" BYTE* __cdecl Model_FindRoadCollision(BYTE* obj);
+extern "C" void FUN_4e5c77(); KING_ALIAS("_FUN_4e5c77", "_Model_FindRoadCollision")    // an object's other part to query
+extern "C" BYTE* __cdecl Model_FindDynamicCollisionChild(BYTE* o);
+extern "C" void FUN_4e5d60(); KING_ALIAS("_FUN_4e5d60", "_Model_FindDynamicCollisionChild")
 extern "C" float* __cdecl Vec3_RejectFrom(float* out, float* a, float* b, float* c);
 extern "C" void FUN_4e6362(); KING_ALIAS("_FUN_4e6362", "_Vec3_RejectFrom")
 extern "C" Vec3* __fastcall Vec3_DivAssign(Vec3* self, void*, Vec3* ret, float s);   // vecmath.cpp
 KING_VAR(double, g_64b658, 64b658)            // 0.001
 
 // the object at a point: a query of mode 0 (r == 0) or 2
-extern "C" int __cdecl World_ObjectAt(void* obj, float r, const Vec3Bits* p, const Vec3Bits* d)
+// [FUN_4e5f87]
+extern "C" int __cdecl World_FindHitObjectAtRadius(void* obj, float r, const Vec3Bits* p, const Vec3Bits* d)
 {
     BYTE q[208];
     Node_Init(q, 0);
@@ -495,22 +526,23 @@ extern "C" int __cdecl World_ObjectAt(void* obj, float r, const Vec3Bits* p, con
     F(int, q, 104) = 0;
     F(float, q, 0) = r;
     F(int, q, 100) = 0;
-    int res = Run(obj, x87_eq(r, 0.0) ? 0 : 2, q);
+    int res = Run(obj, x87_eq(r, pointQueryRadius) ? 0 : 2, q);
     return (res & 2) == 2 ? F(int, q, 104) : 0;
 }
 
-static inline void* Part2(void* o) { return (void*)Model_FindPart1((BYTE*)o); }
-static inline void* Part1(void* o) { return (void*)Model_FindPart2((BYTE*)o); }
+static inline void* RoadCollisionPart(void* o) { return (void*)Model_FindRoadCollision((BYTE*)o); }
+static inline void* ObjectCollisionPart(void* o) { return (void*)Model_FindObjectCollision((BYTE*)o); }
 
 // a query of the object's second part (and its sub-part), else of the object found there
-extern "C" unsigned __cdecl Query_Parts2(int a, int mode, BYTE* q)
+// [FUN_4e6059] Query the model part and its subobject, then retry on the object at the point.
+extern "C" unsigned __cdecl World_QueryRoadCollision(int a, int mode, BYTE* q)
 {
     BYTE saved[208];
     unsigned r = 0;
     memcpy(saved, q, 208);
-    void* p = Part2((void*)a);
+    void* p = RoadCollisionPart((void*)a);
     if (p) {
-        void* s = (void*)Obj_FindPart673d20((BYTE*)p);
+        void* s = (void*)Model_FindDynamicCollisionChild((BYTE*)p);
         if (s) {
             r = Run(s, mode, q);
             if (r & 1) {
@@ -525,9 +557,9 @@ extern "C" unsigned __cdecl Query_Parts2(int a, int mode, BYTE* q)
             return r;
         }
     }
-    int o = World_ObjectAt((void*)a, F(float, q, 0), (const Vec3Bits*)(q + 76), (const Vec3Bits*)(q + 88));
-    if (o && (p = Part2((void*)o)) != 0) {
-        void* s = (void*)Obj_FindPart673d20((BYTE*)p);
+    int o = World_FindHitObjectAtRadius((void*)a, F(float, q, 0), (const Vec3Bits*)(q + 76), (const Vec3Bits*)(q + 88));
+    if (o && (p = RoadCollisionPart((void*)o)) != 0) {
+        void* s = (void*)Model_FindDynamicCollisionChild((BYTE*)p);
         if (s) {
             r = Run(s, mode, q) | 2;
             F(int, q, 104) = o;
@@ -546,12 +578,12 @@ extern "C" unsigned __cdecl Query_Parts2(int a, int mode, BYTE* q)
 }
 
 // a query of the object's first part, else of the object found there
-extern "C" unsigned __cdecl Query_Parts1(int a, int mode, BYTE* q)
+extern "C" unsigned __cdecl World_QueryObjectCollision(int a, int mode, BYTE* q)
 {
     BYTE saved[208];
     unsigned r = 0;
     memcpy(saved, q, 208);
-    void* p = Part1((void*)a);
+    void* p = ObjectCollisionPart((void*)a);
     if (p) {
         r = Run(p, mode, q);
         if (r & 1) {
@@ -559,8 +591,8 @@ extern "C" unsigned __cdecl Query_Parts1(int a, int mode, BYTE* q)
             return r;
         }
     }
-    int o = World_ObjectAt((void*)a, F(float, q, 0), (const Vec3Bits*)(q + 76), (const Vec3Bits*)(q + 88));
-    if (o && (p = Part1((void*)o)) != 0) {
+    int o = World_FindHitObjectAtRadius((void*)a, F(float, q, 0), (const Vec3Bits*)(q + 76), (const Vec3Bits*)(q + 88));
+    if (o && (p = ObjectCollisionPart((void*)o)) != 0) {
         memcpy(q, saved, 208);
         r = Run(p, mode, q) | 2;
         F(int, q, 104) = o;
@@ -571,6 +603,7 @@ extern "C" unsigned __cdecl Query_Parts1(int a, int mode, BYTE* q)
 }
 
 // the point on the line p4..p5 nearest along n to p2 (or FUN_4e6362's when short)
+// [FUN_4e63be]
 extern "C" Vec3* __cdecl Line_Project(Vec3* out, const Vec3* p2, const Vec3* n, const Vec3* p4, const Vec3* p5)
 {
     Vec3 d, t, t2, t3;
@@ -587,14 +620,15 @@ extern "C" Vec3* __cdecl Line_Project(Vec3* out, const Vec3* p2, const Vec3* n, 
     return out;
 }
 
-extern "C" int __cdecl World_Hit(int a, const Vec3Bits* p, const Vec3Bits* d, Vec3Bits* point, Vec3Bits* normal)
+// [FUN_4e69ef]
+extern "C" int __cdecl World_RaycastFirstPartPointAndNormal(int a, const Vec3Bits* p, const Vec3Bits* d, Vec3Bits* point, Vec3Bits* normal)
 {
     BYTE q[208];
     Node_Init(q, 0);
     QueryInit(q, p, d);
     F(int, q, 0) = 0;
     F(int, q, 120) = 0;
-    if (!(Query_Parts1(a, 4, q) & 1))
+    if (!(World_QueryObjectCollision(a, 4, q) & 1))
         return 0;
     *point = F(Vec3Bits, q, 52);
     *normal = F(Vec3Bits, q, 64);
@@ -613,30 +647,31 @@ extern "C" unsigned __cdecl Query_4e7168(int a, int skip, float dist, const Vec3
         memcpy(q, saved, 208);
         return Query_4e6d41(skip, a, *(int*)&dist, p, d, q);
     }
-    r = Query_4e6621(skip, a, p, d, q);
+    r = World_TestRoadCollisionSegment(skip, a, p, d, q);
     if (r & 1)
         return r;
     memcpy(q, saved, 208);
-    return Query_4e6b4d(skip, a, p, d, q);
+    return World_RaycastFirstPartSkippingObject(skip, a, p, d, q);
 }
 
-extern "C" unsigned __cdecl Query_4e72ef(int a, int skip, float dist, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
+// [FUN_4e72ef]
+extern "C" unsigned __cdecl World_QueryFirstPartThenSecond(int a, int skip, float dist, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     BYTE saved[208];
     memcpy(saved, q, 208);
     unsigned r;
-    if (dist > 0.0) {
+    if (dist > pointQueryRadius) {
         r = Query_4e6d41(skip, a, *(int*)&dist, p, d, q);
         if (r & 1)
             return r;
         memcpy(q, saved, 208);
         return Query_4e67f9(skip, a, *(int*)&dist, p, d, q);
     }
-    r = Query_4e6b4d(skip, a, p, d, q);
+    r = World_RaycastFirstPartSkippingObject(skip, a, p, d, q);
     if (r & 1)
         return r;
     memcpy(q, saved, 208);
-    return Query_4e6621(skip, a, p, d, q);
+    return World_TestRoadCollisionSegment(skip, a, p, d, q);
 }
 
 extern "C" unsigned __cdecl Query_4e7476(void* obj, int skip, float dist, const Vec3Bits* p, const Vec3Bits* d,
@@ -660,20 +695,22 @@ extern "C" unsigned __cdecl Query_4e7476(void* obj, int skip, float dist, const 
 // the game's _matherr: acos just outside -1..1 and sqrt of a negative are fixed
 extern "C" int __cdecl World_MathErr(int* e)
 {
-    double arg = F(double, e, 8);
-    if (e[0] == 1 && strcmp((const char*)e[1], "acos") == 0) {
-        if (!(arg >= -1.0) && arg > -1.01) {
+    if (e[0] != 1)
+        return 0;
+    if (strcmp((const char*)e[1], "acos") == 0) {
+        const double& arg = F(double, e, 8);
+        if ((x87_compare_status(arg, -1.0) & 0x0100) && !(x87_compare_status(arg, -1.01) & 0x4100)) {
             e[6] = 0x4d12d84a;      // 3.14159265
             e[7] = 0x400921fb;
             return 1;
         }
-        if (arg > 1.0 && arg < 1.01) {
+        if (!(x87_compare_status(arg, 1.0) & 0x4100) && (x87_compare_status(arg, 1.01) & 0x0100)) {
             e[6] = 0;
             e[7] = 0;
             return 1;
         }
     }
-    if (e[0] == 1 && strcmp((const char*)e[1], "sqrt") == 0) {
+    if (strcmp((const char*)e[1], "sqrt") == 0) {
         e[6] = 0;
         e[7] = 0;
         return 1;
@@ -685,7 +722,7 @@ extern "C" int __cdecl World_MathErr(int* e)
 // Fatal errors with the world state, and checked object accessors.
 extern "C" int __fastcall Fx_Get12(BYTE* s, void*);
 extern "C" void FUN_4cf5e0(); KING_ALIAS("_FUN_4cf5e0", "@Fx_Get12@8")       // an object's name
-extern "C" int __fastcall Obj4eb150_Kind(BYTE* self, void*);
+extern "C" int __fastcall SceneObject_GetKind(BYTE* self, void*);
 extern "C" void FUN_5e19b0(); KING_ALIAS("_FUN_5e19b0", "_Frame_Apply")
 extern "C" void FUN_5e19f0(); KING_ALIAS("_FUN_5e19f0", "_Frame_GetLocal")
 extern "C" BYTE* __cdecl Scene_FindObject(BYTE* scene, const char* name);
@@ -759,7 +796,7 @@ extern "C" void __cdecl World_ObjFatal(BYTE* obj, const char* msg)
         sprintf(text, s_673a30, msg);
     else
     {
-        int kind = Obj4eb150_Kind(obj, 0);
+        int kind = SceneObject_GetKind(obj, 0);
         sprintf(text, s_673a44, (const char*)Fx_Get12(obj, 0), kind, msg);
     }
     World_Fatal(text);
@@ -770,7 +807,7 @@ extern "C" int __cdecl Switch_SelectChecked(BYTE* obj, int idx)
 {
     if (!obj)
         World_ObjFatal(obj, s_673ad4);
-    if (Obj4eb150_Kind(obj, 0) != 18)
+    if (SceneObject_GetKind(obj, 0) != 18)
         World_ObjFatal(obj, s_673ae4);
     if (idx < 0 || idx >= CallVirt<int>(obj, 60))
     {
@@ -787,7 +824,7 @@ extern "C" int __cdecl Frame_ApplyChecked(BYTE* obj, int a, int b)
 {
     if (!obj)
         World_ObjFatal(obj, s_673b30);
-    if (Obj4eb150_Kind(obj, 0) != 6)
+    if (SceneObject_GetKind(obj, 0) != 6)
         World_ObjFatal(obj, s_673b40);
     return CallC<int>(FUN_5e19b0, obj, a, b);
 }
@@ -797,7 +834,7 @@ extern "C" int __cdecl Frame_GetLocalChecked(BYTE* obj, int a)
 {
     if (!obj)
         World_ObjFatal(obj, s_673b94);
-    if (Obj4eb150_Kind(obj, 0) != 6)
+    if (SceneObject_GetKind(obj, 0) != 6)
         World_ObjFatal(obj, s_673ba0);
     return CallC<int>(FUN_5e19f0, obj, a);
 }
@@ -850,13 +887,13 @@ static BYTE* Model_FindCached(BYTE* obj, const char* fmt, const char* shortFmt, 
 }
 
 // [FUN_4e5c77..$L_4e5ced] obj's sub-object named by format 673d18 (cached in 6974f0..)
-extern "C" BYTE* __cdecl Model_FindPart1(BYTE* obj)
+extern "C" BYTE* __cdecl Model_FindRoadCollision(BYTE* obj)
 {
     return Model_FindCached(obj, s_673d18, s_673cc8, &g_6974f0, (BYTE**)&g_6974f4, (char*)&g_6974f8);
 }
 
 // [FUN_4e5dce..$L_4e5e3b] obj's sub-object named by format 673d58 (cached in 697550..)
-extern "C" BYTE* __cdecl Model_FindPart2(BYTE* obj)
+extern "C" BYTE* __cdecl Model_FindObjectCollision(BYTE* obj)
 {
     return Model_FindCached(obj, s_673d58, s_673d2c, &g_697550, (BYTE**)&g_697554, (char*)&g_697558);
 }
@@ -916,11 +953,16 @@ extern "C" void __cdecl Sound_PlayRange3(BYTE* obj, int a, int b, int c)
 // [FUN_4e2821..$L_4e28a9] fatal when the point (z ignored) fails the 4e28b0 check against lim
 extern "C" void __cdecl World_CheckPoint(float* v, const char* name, float lim)
 {
-    float p[3] = { v[0], v[1], 0 };
+    // The argument is a complete three-word record even on the horizontal-only path.
+    const volatile DWORD* bits = reinterpret_cast<const volatile DWORD*>(v);
+    Vec3Bits point = {bits[0], bits[1], bits[2]};
+    point.z = 0;
+    float p[3];
+    memcpy(p, &point, sizeof p);
     if (Vec3_OutOfBox(p, lim))
     {
         char text[1012];
-        sprintf(text, s_6736e4, name, (double)lim, (double)v[0], (double)v[1], (double)v[2]);
+        OldCrt_FormatCoordinates(text, sizeof text, s_6736e4, name, lim, v);
         World_Fatal(text);
     }
 }
@@ -928,7 +970,7 @@ extern "C" void __cdecl World_CheckPoint(float* v, const char* name, float lim)
 // [FUN_4eab58..$L_4eab7b] a history of length/step samples: two arrays, step at +0, rate at +4
 extern "C" BYTE* __fastcall History_Construct(BYTE* self, void*, int a, float length, int c, int d)
 {
-    if (!(length > g_64c264))
+    if (x87_compare_status(length, g_64c264) & (X87_C0 | X87_C3))
         World_Fatal(s_67431c);
     F(int, self, 20) = a;
     F(int, self, 24) = c;
@@ -952,11 +994,11 @@ extern "C" float* __cdecl Vec3_RejectFrom(float* out, float* a, float* b, float*
     return out;
 }
 
-// [FUN_4e6490] the point c + e*t on the plane (a, normal b): t = dot(b, c - a) / dot(b, e)
+// [FUN_4e6490] the point c + e*t on the plane (a, normal b)
 extern "C" float* __cdecl Vec3_PlaneHit(float* out, float* a, float* b, float* c, float* e)
 {
     float t[3], s[3];
-    double n = CallC<double>(FUN_610f00, b, (float*)Vec3_Sub((Vec3*)t, (const Vec3*)c, (const Vec3*)a));
+    double n = CallC<double>(FUN_610f00, b, (float*)Vec3_Sub((Vec3*)t, (const Vec3*)a, (const Vec3*)c));
     double r = n / Vec3_Dot((const Vec3*)b, (const Vec3*)e);
     Vec3_Scaled((Vec3*)s, (const Vec3*)e, (float)r);
     Vec3_Add((Vec3*)out, (const Vec3*)c, (const Vec3*)s);
@@ -967,7 +1009,7 @@ extern "C" float* __cdecl Vec3_PlaneHit(float* out, float* a, float* b, float* c
 extern "C" float* __cdecl Vec3_PlaneHitT(float* out, float* a, float* b, float* c, float* e, double* tOut)
 {
     float t[3], s[3];
-    double n = CallC<double>(FUN_610f00, b, (float*)Vec3_Sub((Vec3*)t, (const Vec3*)c, (const Vec3*)a));
+    double n = CallC<double>(FUN_610f00, b, (float*)Vec3_Sub((Vec3*)t, (const Vec3*)a, (const Vec3*)c));
     *tOut = n / Vec3_Dot((const Vec3*)b, (const Vec3*)e);
     Vec3_Scaled((Vec3*)s, (const Vec3*)e, (float)*tOut);
     Vec3_Add((Vec3*)out, (const Vec3*)c, (const Vec3*)s);
@@ -1021,7 +1063,7 @@ extern "C" Matrix* __cdecl Matrix_Inverse(Matrix* out, const Matrix* m);
 extern "C" Vec3* __cdecl Vec3_MulMatrix(Vec3* out, const Vec3* p, const Matrix* m);
 extern "C" Vec3* __cdecl Vec3_RotateBy(Vec3* out, const Vec3* v, const Matrix* m);
 extern "C" void FUN_5ef5c0(); KING_ALIAS("_FUN_5ef5c0", "@Node_Init@8")
-extern "C" int __cdecl Query_4e5b22(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q);
+extern "C" int __cdecl World_QuerySegmentDestination(void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q);
 extern "C" Matrix* __cdecl Matrix_Translation(Matrix* out, Vec3 t);
 extern "C" Matrix* __cdecl Matrix_RotationZ(Matrix* out, float angle);
 extern "C" Matrix* __cdecl Matrix_RotationX(Matrix* out, float angle);
@@ -1033,7 +1075,7 @@ KING_VAR(AsmLabel, g_wd697528, 697528)
 KING_VAR(AsmLabel, s_wd673d20, 673d20)
 
 // [FUN_4e5d60] the sub-object 673d20 of an object, cached by object and name
-extern "C" BYTE* __cdecl Obj_FindPart673d20(BYTE* o)
+extern "C" BYTE* __cdecl Model_FindDynamicCollisionChild(BYTE* o)
 {
     const char* name = (const char*)Fx_Get12(o, 0);
     if (g_wd697520 == o && !strcmp(g_wd697528, name))
@@ -1054,21 +1096,21 @@ extern "C" void __cdecl Obj_TransformVecs(BYTE* o)
     F(Vec3, o, 64) = *Vec3_RotateBy(&t, (const Vec3*)(o + 64), (const Matrix*)m);
 }
 
-// [FUN_4e5bf5] looks a point up through 4e5b22 when out is empty: flag 2 returns the found object (+104), flag 4 copies its name (+124) to out, else clears out; returns a
-extern "C" int __cdecl Obj_Lookup4e5b22(int a, int b, int c, char* out)
+// [FUN_4e5bf5] Resolve a segment to a scene object or its qualified destination name.
+extern "C" int __cdecl World_ResolveSegmentDestination(int object, int start, int end, char* name)
 {
-    if (*out)
-        return a;
+    if (*name)
+        return object;
     BYTE r[208];
     Node_Init(r, 0);
-    int f = Query_4e5b22((void*)a, (const Vec3Bits*)b, (const Vec3Bits*)c, r);
+    int f = World_QuerySegmentDestination((void*)object, (const Vec3Bits*)start, (const Vec3Bits*)end, r);
     if (f & 2)
         return F(int, r, 104);
     if (f & 4)
-        strcpy(out, (char*)r + 124);
+        strcpy(name, (char*)r + 124);
     else
-        *out = 0;
-    return a;
+        *name = 0;
+    return object;
 }
 
 // [FUN_4e3537] out = translation(p) * (5abfd0(rz) * 5abee0(ry)) * 5ac0c0(rx)
@@ -1255,7 +1297,7 @@ void __cdecl World_ReadMapSymbols()
 }  // extern "C"
 
 // === four unused hit queries (4e6e6a)
-// The world's query runner here (World_4e634f) always answers 0, so they only fill their query.
+// The world's query runner here (World_ReturnNoHit) always answers 0, so they only fill their query.
 
 KING_VAR(AsmLabel, g_wq7025f0, 7025f0)
 
@@ -1279,7 +1321,7 @@ int __cdecl World_HitPoint(void* w, const Vec3Bits* p, const Vec3Bits* d, Vec3Bi
     BYTE q[208];
     Node_Init(q, 0);
     Wq_Fill(q, p, d, 0, 0);
-    if (!(World_4e634f() & 1))
+    if (!(World_ReturnNoHit() & 1))
         return 0;
     memcpy(at, q + 52, 12);
     memcpy(n, q + 64, 12);
@@ -1290,7 +1332,7 @@ int __cdecl World_HitPoint(void* w, const Vec3Bits* p, const Vec3Bits* d, Vec3Bi
 int __cdecl World_Query4(int skip, void* w, int, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     Wq_Fill(q, p, d, 0, skip);
-    int r = World_4e634f();
+    int r = World_ReturnNoHit();
     return r & 1 ? r : 0;
 }
 
@@ -1300,7 +1342,7 @@ int __cdecl World_HitPoint6(void* w, int a, const Vec3Bits* p, const Vec3Bits* d
     BYTE q[208];
     Node_Init(q, 0);
     Wq_Fill(q, p, d, a, 0);
-    if (!(World_4e634f() & 1))
+    if (!(World_ReturnNoHit() & 1))
         return 0;
     memcpy(at, q + 52, 12);
     memcpy(n, q + 64, 12);
@@ -1311,7 +1353,7 @@ int __cdecl World_HitPoint6(void* w, int a, const Vec3Bits* p, const Vec3Bits* d
 int __cdecl World_Query6(int skip, void* w, int a, const Vec3Bits* p, const Vec3Bits* d, BYTE* q)
 {
     Wq_Fill(q, p, d, a, skip);
-    return World_4e634f() & 1 ? 1 : 0;
+    return World_ReturnNoHit() & 1 ? 1 : 0;
 }
 
 } // extern "C"
@@ -1363,12 +1405,12 @@ int __cdecl World_CheckPosition(BYTE* o, BYTE* h, const Vec3* d, const char* tit
         sprintf(s456, &s_cp673734, Cp_Name(hb));
     for (int i = 0; i < CallVirt<int>(o, 60); i++)
         for (BYTE* e = CallVirt<BYTE*>(o, 64, i); e; e = (BYTE*)Obj4eb170_Get8(e, 0)) {
-            if (Obj4eb150_Kind(e, 0) != 14)
+            if (SceneObject_GetKind(e, 0) != 14)
                 continue;
             BYTE* g = (BYTE*)Obj_Get128(e, 0);
             if (!g)
                 continue;
-            if (Obj4eb150_Kind(g, 0) == 15 && (g == ha || g == hb))
+            if (SceneObject_GetKind(g, 0) == 15 && (g == ha || g == hb))
                 door = e;
         }
     s656[0] = 0;
@@ -1619,7 +1661,9 @@ float __fastcall Filter_Value(BYTE* s)
     for (int i = 0; i < F(int, s, 28); i++) {
         float now = (float)F(double, g_6974c4, 2968);
         float x = (F(float*, s, 8)[i] - now) * F(float, s, 4);
-        if (!(x > g_fv64c938) || x > g_fv64b658)
+        const unsigned short belowOrEqual = X87_C0 | X87_C3;
+        if ((x87_compare_status(x, g_fv64c938) & belowOrEqual) ||
+            !(x87_compare_status(static_cast<double>(x), g_fv64b658) & belowOrEqual))
             continue;
         float w = (float)F(Fn, s, 20)(x);
         if (F(Fn, s, 24)) {
@@ -1989,18 +2033,46 @@ void __cdecl Clock_Text(char* out)
 
 extern "C" {
 
-// [FUN_4e28b0] 1 when a component of v lies outside [-lim, lim]
+static unsigned short CompareNegatedCoordinate(const float& left, const float& right)
+{
+    unsigned short status;
+    __asm {
+        mov eax, left
+        fld dword ptr [eax]
+        fchs
+        mov eax, right
+        fcomp dword ptr [eax]
+        fnstsw status
+    }
+    return status;
+}
+
+// Keep comparison temporaries in a separate frame. The 8.1 entry preserves
+// its caller's argument slots, including on the early rejection paths.
+static __declspec(noinline) int CoordinatesOutsideBounds(const float (&coordinates)[3], const float& lim)
+{
+    const unsigned c0 = 0x0100, c3 = 0x4000;
+    for (const float& value : coordinates)
+        if (!(x87_compare_status(value, lim) & (c0 | c3)))
+            return 1;
+    for (const float& value : coordinates)
+        if (x87_compare_status(lim, value) & c0)
+            return 1;
+    for (const float& value : coordinates)
+        if (!(CompareNegatedCoordinate(value, lim) & (c0 | c3)))
+            return 1;
+    for (const float& value : coordinates)
+        if (!(CompareNegatedCoordinate(lim, value) & (c0 | c3)))
+            return 1;
+    return 0;
+}
+
+// [FUN_4e28b0] The second group also rejects unordered comparisons.
 int __cdecl Vec3_OutOfBox(const float* v, float lim)
 {
-    float a = v[0], b = v[1], c = v[2];
-    double nl = -(double)lim;
-    if (a > lim || b > lim || c > lim || lim < a || lim < b || lim < c)
-        return 1;
-    if (-(double)a > lim || -(double)b > lim || -(double)c > lim)
-        return 1;
-    if (nl > a || nl > b || nl > c)
-        return 1;
-    return 0;
+    float coordinates[3];
+    memcpy(coordinates, v, sizeof coordinates);
+    return CoordinatesOutsideBounds(coordinates, lim);
 }
 
 } // extern "C"
@@ -2040,7 +2112,7 @@ void __cdecl Vec3_Soften(float* v)
 
 // === the cars' histories dumped to the log (FUN_53f0c0)
 
-extern "C" void __fastcall Car_History(BYTE* self, void*, int back, int* a, int* b, void* m1, void* v1, void* m2,
+extern "C" void __fastcall Vehicle_ReadHistorySample(BYTE* self, void*, int back, int* a, int* b, void* m1, void* v1, void* m2,
                                        int* c, char* name, void* v2, void* v3, int* d);
 extern "C" void __cdecl SceneObjs_Dump();
 extern "C" void __cdecl VehLog_Value2(int v);
@@ -2117,7 +2189,7 @@ void __cdecl Cars_DumpHistory()
         {
             int id, state;
             float speed, spin;
-            Car_History(c, 0, k, &id, (int*)&speed, &A, v328, &B, &state, name, v316, v340, (int*)&spin);
+            Vehicle_ReadHistorySample(c, 0, k, &id, (int*)&speed, &A, v328, &B, &state, name, v316, v340, (int*)&spin);
             sprintf(buf, &g_hd6795b4, k, id, (double)speed);
             Hd_Out(buf);
             sprintf(buf, &g_hd679458, name);
@@ -2163,18 +2235,18 @@ void __fastcall History_Record(BYTE* h, void*, DWORD v, const char* name)
     int n = F(int, h, 28);
     for (int i = 0; i < n; i++)
     {
-        if (now == times[i])
+        if (x87_compare_status(now, times[i]) & X87_C3)
         {
             vals[i] = v;
             return;
         }
-        if (old > times[i])
+        if (!(x87_compare_status(old, times[i]) & (X87_C0 | X87_C3)))
         {
             times[i] = now;
             vals[i] = v;
             return;
         }
-        if (best > times[i])
+        if (!(x87_compare_status(best, times[i]) & (X87_C0 | X87_C3)))
         {
             best = times[i];
             bi = i;
@@ -2225,10 +2297,10 @@ float __cdecl Angle_F2Pi(float x, const char* name)
         Fp_Fatal(buf);
     }
     if (x < g_fp64c264)
-        while (x < g_fp64d910)
+        while (x87_compare_status(static_cast<double>(x), g_fp64d910) & X87_C0)
             x = (float)(x + g_fp64d908);
     else
-        while (x > g_fp64d900)
+        while (!(x87_compare_status(static_cast<double>(x), g_fp64d900) & (X87_C0 | X87_C3)))
             x = (float)(x - g_fp64d908);
     return x;
 }
@@ -2322,7 +2394,7 @@ extern "C" void __cdecl Sound_PlayPannedCos(BYTE* sound, float vol, const float*
     if (!sound)
         return;
     double len = fabs(dir[0]) + fabs(dir[1]);
-    if (len < wd_64b678 || !(len <= wd_64b6b0)) {
+    if (!(len >= wd_64b678) || len > wd_64b6b0) {
         char buf[256];
         sprintf(buf, wd_s673c5c, len, (double)dir[0], (double)dir[1]);
         World_Fatal(buf);
@@ -2337,9 +2409,9 @@ extern "C" void __cdecl Sound_PlayPannedCos(BYTE* sound, float vol, const float*
     double cr = cos(r / wd_64b660);
     float left = (float)(vol * cl * cl);
     float right = (float)(vol * cr * cr);
-    if (left < wd_64c264)
+    if (!(left >= wd_64c264))
         left = 0;
-    if (right < wd_64c264)
+    if (!(right >= wd_64c264))
         right = 0;
     if (left > wd_64c250)
         left = 1.0f;

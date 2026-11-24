@@ -29,11 +29,13 @@ extern "C" char* __cdecl CopyBytes(const char* first, const char* last, char* to
     return to;
 }
 
-extern "C" void __cdecl E12_Distance(const E12* first, const E12* last, int* n)
+// [FUN_46f810]
+extern "C" void __cdecl OrderEntryIterator_AddDistance(const E12* first, const E12* last, int* n)
 {
     *n += (int)(last - first);
 }
 
+// [FUN_46fb20]
 extern "C" E12* __cdecl E12_CopyBackward(const E12* first, const E12* last, E12* to)
 {
     for (int n = (int)(last - first); n > 0; n--)
@@ -41,6 +43,7 @@ extern "C" E12* __cdecl E12_CopyBackward(const E12* first, const E12* last, E12*
     return to;
 }
 
+// [FUN_46fc50]
 extern "C" void __cdecl E12_Advance(E12** it, int n)
 {
     *it += n;
@@ -53,8 +56,11 @@ extern "C" void __cdecl E12_FillN(E12* to, int n, const E12* v)
             *to = *v;
 }
 
+// [FUN_4707a0] First order entry whose unsigned key is at least the query.
 extern "C" E12* __cdecl E12_LowerBound(E12* first, E12* last, const E12* v)
 {
+    if (last <= first)
+        return first;
     DWORD k = v->key;
     for (int n = (int)(last - first); n > 0;) {
         int half = n >> 1;
@@ -67,8 +73,11 @@ extern "C" E12* __cdecl E12_LowerBound(E12* first, E12* last, const E12* v)
     return first;
 }
 
+// [FUN_470800] First order entry whose unsigned key exceeds the query.
 extern "C" E12* __cdecl E12_UpperBound(E12* first, E12* last, const E12* v)
 {
+    if (last <= first)
+        return first;
     DWORD k = v->key;
     for (int n = (int)(last - first); n > 0;) {
         int half = n >> 1;
@@ -81,6 +90,7 @@ extern "C" E12* __cdecl E12_UpperBound(E12* first, E12* last, const E12* v)
     return first;
 }
 
+// [FUN_470860] Reverse the half-open range of 12-byte records in place.
 extern "C" void __cdecl E12_Reverse(E12* first, E12* last)
 {
     while (first != last && first != --last) {
@@ -90,6 +100,7 @@ extern "C" void __cdecl E12_Reverse(E12* first, E12* last)
     }
 }
 
+// [FUN_4708c0] Exchange the complete 12-byte records during a merge or rotation.
 extern "C" void __cdecl E12_Swap(E12* a, E12* b)
 {
     E12 t = *a;
@@ -130,7 +141,7 @@ extern "C" BYTE* __fastcall Order_Construct(BYTE* self, void*)
     return self;
 }
 
-// the order's value: sqrt(record value * amount) * 10, less the part done
+// [FUN_4713f0] Remaining order value from the cargo coefficient, quantity and fraction.
 extern "C" double __cdecl Order_Value(const int* o)
 {
     double v = x87_sqrt(F(double, g_68ccb8, o[0] * 104 + 40) * F(double, o, 56));
@@ -232,7 +243,7 @@ extern "C" void __cdecl Order_SetPrice(BYTE* pl, int* o, char direct, char urgen
     F(double, o, 64) = r;
 }
 
-// what an order brings above its value; checks both
+// [FUN_471450] Return price minus remaining value and optionally report both components.
 extern "C" double __cdecl Order_Margin(int* o, double done, char bonus, double* price, double* value)
 {
     double v = Order_Value(o);
@@ -668,7 +679,7 @@ void __cdecl Rec12_StableSort(BYTE* first, BYTE* last, int, int, int comp)
 
 // === merging 12-byte records without a buffer, and the merge pass (FUN_46f580, FUN_470110)
 
-extern "C" BYTE* __cdecl Rotate12(BYTE* f, BYTE* m, BYTE* l);                          // ai_containers.cpp
+extern "C" BYTE* __cdecl OrderEntries_RotateRange(BYTE* f, BYTE* m, BYTE* l);                          // ai_containers.cpp
 
 // merge of the sorted runs [f1, l1) and [f2, l2) into out (stable, by key); the end of out
 static E12* E12_Merge(const E12* f1, const E12* l1, const E12* f2, const E12* l2, E12* out)
@@ -704,7 +715,7 @@ void __cdecl Rec12_MergeNoBuffer(E12* first, E12* middle, E12* last, int len1, i
             cut1 = E12_UpperBound(first, middle, cut2);
             len11 = (int)(cut1 - first);
         }
-        Rotate12((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2);
+        OrderEntries_RotateRange((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2);
         E12* mid = cut1 + len22;
         Rec12_MergeNoBuffer(first, cut1, mid, len11, len22, comp);
         first = mid;

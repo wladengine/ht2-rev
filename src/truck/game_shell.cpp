@@ -131,7 +131,7 @@ KING_VAR(AsmLabel, g_strLargeFon, 67622c)     // "large.fon"
 KING_VAR(AsmLabel, g_strMenuFon, 676220)      // "menu.fon"
 KING_VAR(int, g_fontLarge, 6ced28)
 KING_VAR(int, g_fontMenu, 6ced24)
-KING_VAR(int, g_6ced70, 6ced70)
+KING_VAR(int, g_modelDetailLevel, 6ced70)
 KING_VAR(BYTE*, g_6cec6c, 6cec6c)
 typedef char Text[1];
 KING_VAR(Text, g_6ce8b4, 6ce8b4)
@@ -159,7 +159,8 @@ extern "C" int __cdecl Carat_Read3(int a, int b, int c, int d, int e)
     return Carat_Read7ad0(a, b, (int*)c, d, e, 3);
 }
 
-extern "C" int __cdecl Carat_ReadFill(int a, int b, int fill, int c, int d, int n)
+// [FUN_507d30] Read INI floats with one repeated default value.
+extern "C" int __cdecl Ini_ReadFloatsWithDefault(int a, int b, int fill, int c, int d, int n)
 {
     int v[1000];
     for (int i = 0; i < n; i++)
@@ -175,7 +176,7 @@ extern "C" int __cdecl Carat_ReadCopy(int a, int b, const int* src, int c, int d
     return Carat_Read7ad0(a, b, v, c, d, n);
 }
 
-extern "C" int __cdecl Carat_ReadFill2(int a, int b, int fill, int c, int d, int n)
+extern "C" int __cdecl Ini_ReadIntsWithDefault(int a, int b, int fill, int c, int d, int n)
 {
     int v[1000];
     for (int i = 0; i < n; i++)
@@ -196,7 +197,12 @@ static DRow* RowZero(DRow* r)
     return r;
 }
 
-extern "C" double __cdecl Sign(int x) { return (x & 1) ? -1.0 : 1.0; }
+KING_VAR(double, cofactorEvenSign, 64b670)
+KING_VAR(double, cofactorOddSign, 64ca48)
+KING_VAR(double, singularDeterminant, 64b678)
+
+// [FUN_50b600]
+extern "C" double __cdecl DMat_CofactorSign(int index) { return (index & 1) ? cofactorOddSign : cofactorEvenSign; }
 
 // out = v * m
 extern "C" DRow* __cdecl DRow_MulMat(DRow* out, const DRow* v, const DMat4* m)
@@ -214,7 +220,8 @@ extern "C" DRow* __cdecl DRow_MulMat(DRow* out, const DRow* v, const DMat4* m)
 }
 
 // out = m * v
-extern "C" DRow* __cdecl DMat_MulRow(DRow* out, const DMat4* m, const DRow* v)
+// [FUN_50b890]
+extern "C" DRow* __cdecl Matrix4d_MultiplyVector(DRow* out, const DMat4* m, const DRow* v)
 {
     DRow r;
     RowZero(&r);
@@ -243,7 +250,7 @@ struct DMat4Methods : DMat4 {
                     dst[k++] = (float)r[i].v[j];
             dst += 3;
         }
-        double sign = Sign(row + col);
+        double sign = DMat_CofactorSign(row + col);
         return minor.Determinant() * sign;
     }
 };
@@ -252,7 +259,8 @@ extern "C" {
 DRow* __fastcall DRow_Zero(DRow* s, void*) { return RowZero(s); }                                  // [FUN_50b460]
 DRow* __fastcall DRow_Set(DRow* s, void*, DRow v) { *s = v; return s; }                            // [FUN_50b480]
 void __fastcall DRow_Copy(DRow* s, void*, const DRow* v) { *s = *v; }                              // [FUN_50b4c0]
-DMat4* __fastcall DMat_Zero(DMat4* s, void*)                                                        // [FUN_50b4f0]
+// [FUN_50b4f0] Zero all sixteen doubles and return the matrix.
+DMat4* __fastcall DMat_Zero(DMat4* s, void*)
 {
     for (int i = 0; i < 4; i++)
         RowZero(&s->r[i]);
@@ -303,7 +311,8 @@ extern "C" char* __cdecl Str_Trim(char* s)
 
 // cuts a name at the first character that is not a letter, a digit, '-',
 // '_' or a space
-extern "C" char* __cdecl Str_Name(char* s)
+// [FUN_50bc30]
+extern "C" char* __cdecl Save_NormalizeSlotName(char* s)
 {
     if (g_696890 == 1)
         return Str_Trim(s);
@@ -314,7 +323,8 @@ extern "C" char* __cdecl Str_Name(char* s)
     return s;
 }
 
-extern "C" int __cdecl Carat_True() { return 1; }
+// [FUN_50bc80]
+extern "C" int __cdecl CD_SecondaryCheckAlwaysPasses() { return 1; }
 
 extern "C" wchar_t* __cdecl Str_ToWide(const char* s)
 {
@@ -363,7 +373,8 @@ extern "C" void __cdecl Carat_SetScreenSize()
 extern "C" int __cdecl Carat_ScreenFlags() { return g_6cec68 ? 0x3e00 : 0x0e00; }
 extern "C" int __cdecl Carat_HasMovie() { return g_6ce4f4 != 0; }
 
-extern "C" int __cdecl Carat_OpenMovie()
+// [FUN_50bff0]
+extern "C" int __cdecl Screen_EnsureBackdrop()
 {
     if (!g_6ce4f4)
         return CallThis<int>(FUN_50c010, &g_6ce4f4);
@@ -381,7 +392,8 @@ extern "C" int __cdecl Carat_CloseMovie()
     return (int)Messages_Clear1276();
 }
 
-extern "C" void __cdecl Carat_DrawMovie()
+// [FUN_50c130]
+extern "C" void __cdecl Screen_DrawBackdrop()
 {
     if (g_6ce4f4)
         Carat_Draw5b86c0(F(int, g_69684c, 12), 0, 0, (int)g_6ce4f4);
@@ -390,16 +402,19 @@ extern "C" void __cdecl Carat_DrawMovie()
 extern "C" void __cdecl Carat_SetFlag(int i) { g_6cea74[i] = 1; }
 
 // returns the menu font: the original leaves it in EAX and a caller uses it
-extern "C" void* __cdecl Carat_LoadFonts()
+// [FUN_50c900]
+extern "C" void* __cdecl Menu_LoadLargeAndMenuFonts()
 {
     g_fontLarge = Carat_LoadFont(g_strLargeFon);
     g_fontMenu = Carat_LoadFont(g_strMenuFon);
     return (void*)g_fontMenu;
 }
 
-extern "C" int __cdecl Carat_Level3() { return g_6ced70 >= 3; }
+// [FUN_5125a0] Shared detail threshold for high-detail module switches.
+extern "C" int __cdecl Graphics_IsDetailLevelAtLeastThree() { return g_modelDetailLevel >= 3; }
 
-extern "C" void __cdecl Carat_LoadResource103()
+// [FUN_51da80]
+extern "C" void __cdecl Save_WriteQuickSlot()
 {
     if (!F(int, g_6cec6c, 1316))
         Carat_51d8f0(Carat_Resource(103), 0);
@@ -485,7 +500,8 @@ extern "C" int __cdecl Carat_OutOfBox(const unsigned short* size, int x, int y)
     return y < q;
 }
 
-extern "C" void __cdecl Carat_SetView(int a)
+// Hover hook receives (parent, child); FUN_527ea0 uses its second argument.
+extern "C" void __cdecl Carat_SetView(int /*parent*/, int a)
 {
     BYTE* s = g_696848;
     if (!s) {
@@ -714,6 +730,7 @@ extern "C" int __cdecl VehTech_Load()
     return g_6ce370;
 }
 
+// [FUN_50b9b0]
 extern "C" DMat4* __cdecl DMat_Inverse(DMat4* out, const DMat4* m)
 {
     DMat4 t, r;
@@ -723,11 +740,11 @@ extern "C" DMat4* __cdecl DMat_Inverse(DMat4* out, const DMat4* m)
         for (int j = 0; j < 4; j++)
             t.r[j].v[i] = m->r[i].v[j];
     double det = DMat_Determinant((const double*)m, 0);
-    if (x87_eq(det, 0.0)) {
+    if (x87_eq(det, singularDeterminant)) {
         DMat_CopyNew(out, 0, &r);
         return out;
     }
-    double inv = 1.0 / det;
+    double inv = cofactorEvenSign / det;
     for (int i = 0; i < 4; i++)
         for (int j = 0; j < 4; j++)
             r.r[i].v[j] = DMat_Cofactor((DMat4Methods*)&t, 0, i, j) * inv;
@@ -736,7 +753,8 @@ extern "C" DMat4* __cdecl DMat_Inverse(DMat4* out, const DMat4* m)
 }
 
 // the loading picture while the game loads
-extern "C" void __cdecl Loading_Update()
+// [FUN_50c1d0]
+extern "C" void __cdecl LoadingScreen_UpdateBackdrop()
 {
     if (g_69689c) {
         if (!g_6ce4f4) {
@@ -750,8 +768,10 @@ extern "C" void __cdecl Loading_Update()
         if (g_6ce4f4)
             Carat_Draw5b86c0(s, 0, 0, (int)g_6ce4f4);
         if (g_6ced38) {
-            int x = (int)(CallVirt<int>(w, 20) - (unsigned)F(WORD, g_6ced38, 4)) / 2;
-            int y = (int)(CallVirt<int>(w, 24) - (unsigned)F(WORD, g_6ced38, 6)) / 2;
+            unsigned imageWidth = F(WORD, g_6ced38, 4);
+            int x = (int)(CallVirt<int>(w, 20) - imageWidth) / 2;
+            unsigned imageHeight = F(WORD, g_6ced38, 6);
+            int y = (int)(CallVirt<int>(w, 24) - imageHeight) / 2;
             Gfx_DrawImage((CSurface*)s, x, y, g_6ced38, 0);
         }
         g_6ced3c = 1;
@@ -787,7 +807,7 @@ extern "C" int __cdecl CD_Check(void* screen)
         Shell_ShowWithMusic(g_6cecc0, 0, 0);
         return 0;
     }
-    if (!Carat_True()) {
+    if (!CD_SecondaryCheckAlwaysPasses()) {
         if (screen) {
             CallVirt(screen, 32);
             Shell_ShowWithMusic(g_6cecc0, 0, 9);
@@ -842,8 +862,8 @@ extern "C" int __cdecl Controls_SelectPreset(int i);
 extern "C" void __cdecl Sound_Frame();
 extern "C" void FUN_5fd160(); KING_ALIAS("_FUN_5fd160", "_Sound_Frame")
 extern "C" void __cdecl Sound_StopAll();
-extern "C" int __cdecl Obj723d44_Delete();
-extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Obj723d44_Delete")
+extern "C" int __cdecl Music_StopPlaybackThread();
+extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Music_StopPlaybackThread")
 extern "C" void __fastcall Wasm_598d80(BYTE* self, void*);      // wasm.cpp
 KING_VAR(BYTE*, g_6cec90, 6cec90)
 KING_VAR(AsmLabel, g_6d19fa, 6d19fa)
@@ -879,7 +899,7 @@ extern "C" void* __cdecl Model_Load(const char* name, const char* dir)
     strcat(b, ".b3d");
     strcpy(c, dir);
     const char* suf = 0;
-    switch (g_6ced70) {
+    switch (g_modelDetailLevel) {
     case 4: suf = ".res"; break;
     case 3:
     case 2: suf = strcmp(c, "trucks") ? ".res" : "1.res"; break;
@@ -1017,7 +1037,7 @@ extern "C" int __cdecl Movie_Play(const char* name, int mode)
         Sound_Frame();
         Sound_StopAll();
         if (F(int, g_6cec6c, 1344))
-            Obj723d44_Delete();
+            Music_StopPlaybackThread();
     }
     Screen_OpenMovie(g_6cec88, 0, (int)buf, mode);
     return 1;
@@ -1078,8 +1098,8 @@ BYTE* __cdecl Image_ReadStream(BYTE* s, BYTE* hdr)
     return img;
 }
 
-// [FUN_50c930] a new 12-byte record on the object of this name (depends on the mode)
-DWORD* __cdecl Shell_NewObjRef()
+// [FUN_50c930] Creates a cursor reference using the mode-specific cursor mask.
+DWORD* __cdecl Shell_CreateCursorReference()
 {
     int mode = Game_568fd0();
     DWORD* r = (DWORD*)operator new(12);
@@ -1091,12 +1111,12 @@ DWORD* __cdecl Shell_NewObjRef()
     return r;
 }
 
-// [FUN_513680] a new 288-byte screen with four tables
-BYTE* __stdcall Shell_NewScreenA(int a, int b)
+// [FUN_513680] A labeled button with four shell styles and a fixed width of 180.
+BYTE* __stdcall Shell_CreateFixedWidthButton(int label, int id)
 {
     BYTE* o = (BYTE*)operator new(288);
     if (o) {
-        Button_ConstructId(o, 0, a, 4096, b);
+        Button_ConstructId(o, 0, label, 4096, id);
         F(void*, o, 0) = g_vtbl64dc1c;
     }
     Style_Assign((DWORD*)(o + 68), 0, (const DWORD*)((void*)g_6ce408));
@@ -1109,7 +1129,7 @@ BYTE* __stdcall Shell_NewScreenA(int a, int b)
 }
 
 // [FUN_517e00]
-BYTE* __cdecl Shell_NewScreenB(int a)
+BYTE* __cdecl Shell_CreateUniformStyleButton(int a)
 {
     BYTE* o = (BYTE*)operator new(288);
     if (o) {
@@ -1448,7 +1468,7 @@ KING_VAR(char, g_music696750, 696750)
 KING_VAR(char, g_6f68b0s, 6f68b0)
 extern "C" float __cdecl Sound_SetVolume(float v);
 extern "C" void FUN_5fcd40(); KING_ALIAS("_FUN_5fcd40", "_Sound_SetVolume")
-extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Obj723d44_Delete")
+extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Music_StopPlaybackThread")
 extern "C" void FUN_5b6bf0(); KING_ALIAS("_FUN_5b6bf0", "@Surface_Prepare@4")
 extern "C" void __fastcall Window_Show(BYTE* self, void*, int i);
 extern "C" void FUN_5d8630(); KING_ALIAS("_FUN_5d8630", "@Window_Show@12")
@@ -1555,9 +1575,12 @@ KING_VAR(int, g_noVehicle68b990s, 68b990)
 // [FUN_520000] applies a player's 19 vehicle settings to the vehicle
 extern "C" void __cdecl Car_ApplyPlayerSettings(BYTE* car)
 {
-    struct Rec { int value, pad; double x; } r[19];
+    struct Rec { int value, pad; DWORD scaleLow, scaleHigh; } r[19];
     for (int i = 0; i < 19; i++) {
-        r[i].x = 1.0;
+        // The default binary64 scale is initialized with integer stores.
+        // Loading 1.0 through the x87 stack clears the caller's rounding flag.
+        r[i].scaleLow = 0;
+        r[i].scaleHigh = 0x3ff00000;
         r[i].value = 0;
     }
     int id = F(int, car, 20636);
@@ -1854,7 +1877,7 @@ extern "C" void __cdecl Save_FindRecord103()
     Rec_Close(g_696ca0, 0);
     F(int, g_696ca0, 3024) = 1;
     if (F(int, g_6cec6c, 1344))
-        Obj723d44_Delete();
+        Music_StopPlaybackThread();
 }
 
 // [FUN_515270..$L_51532b] binds key to the control being assigned (+516) unless that key is taken by another control; returns -1 bound, -2 refused, or the clashing control
@@ -2540,7 +2563,8 @@ static void Gs_DrawItem(BYTE* s, BYTE* list, void (*find)(), int px, int py, int
         Bitmap_Draw((BYTE*)(F(int, s, -52)), px, py, pic);
         CallVirt(pic, 0, 1);
     }
-    CallC(Gs_sprintf, buf, (const char*)s_gamshe6772b0, rec[2], rec[3], rec[5], rec[6]);
+    // A real variadic call promotes each BYTE to int (original masks with 0xff).
+    sprintf(buf, (const char*)s_gamshe6772b0, rec[2], rec[3], rec[5], rec[6]);
     if (textFirst)
         Bitmap_Draw((BYTE*)(F(int, s, -52)), px, py, pic);
     Text_Draw(F(int, s, -52), tx, ty, (BYTE*)(F(int, g_gamshe696ca0, 2864)), buf, 5, 0);
@@ -2573,15 +2597,15 @@ extern "C" void FUN_51d0e0(); KING_ALIAS("_FUN_51d0e0", "_Save_ListEntries")
 extern "C" void __fastcall Wnd5d8b90_Notify(BYTE* s, void*);
 extern "C" int* __cdecl Player_CarId(int* out);
 extern "C" void FUN_568f60(); KING_ALIAS("_FUN_568f60", "_Player_CarId")
-extern "C" double __cdecl Player_Value136(BYTE* id);
-extern "C" void FUN_43f760(); KING_ALIAS("_FUN_43f760", "_Player_Value136")
+extern "C" double __cdecl Player_GetBalance(BYTE* id);
+extern "C" void FUN_43f760(); KING_ALIAS("_FUN_43f760", "_Player_GetBalance")
 extern "C" void FUN_5ef3d0(); KING_ALIAS("_FUN_5ef3d0", "_Objects_Find")
 extern "C" void __fastcall Sound_Restart(BYTE* s, void*, float vol, float pitch);
 extern "C" void FUN_5fdaf0(); KING_ALIAS("_FUN_5fdaf0", "@Sound_Restart@16")
 extern "C" void FUN_5fcd40(); KING_ALIAS("_FUN_5fcd40", "_Sound_SetVolume")
 extern "C" void FUN_5ffc30(); KING_ALIAS("_FUN_5ffc30", "_Set683c58")
 extern "C" int __cdecl Music_Start();
-extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Obj723d44_Delete")
+extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Music_StopPlaybackThread")
 extern "C" BYTE* __fastcall Windows_SetActive(BYTE* self, void*, BYTE* w);
 extern "C" void FUN_5e4250(); KING_ALIAS("_FUN_5e4250", "@Windows_SetActive@12")
 extern "C" void FUN_603c70(); KING_ALIAS("_FUN_603c70", "_Ini_WriteInt")
@@ -2750,7 +2774,7 @@ extern "C" void __fastcall Shell_Refuel(BYTE* s, void*, int cmd)
     }
     DWORD tmp;
     Player_CarId((int*)&tmp);
-    double money = Player_Value136((BYTE*)tmp);
+    double money = Player_GetBalance((BYTE*)tmp);
     if (F(double, s, 304) + F(double, s, 304) > money)
         F(double, s, 304) = money * g_gs64b6e0 - g_gs64b670;
     if (!(F(double, s, 304) >= g_gs64b678)) {
@@ -2815,7 +2839,7 @@ extern "C" void __fastcall Shell_SoundPage(BYTE* s, void*, int cmd)
             F(short, s, 328) = 1;
         }
         if (F(short, s, 320) < 5 && F(short, s, 328)) {
-            Obj723d44_Delete();
+            Music_StopPlaybackThread();
             F(short, s, 328) = 0;
         }
         return;
@@ -2941,7 +2965,8 @@ KING_VAR(AsmLabel, s_q21_676408, 676408)
 
 // a 36-byte image style (0.5 at +24) copied from proto, its texture (+28) the object named by the format
 struct ShellImg { DWORD d[9]; };
-static void Shell_Img(ShellImg& r, void* proto, const char* fmt, int a, int b = 0)
+template<class FirstArgument>
+static void Shell_Img(ShellImg& r, void* proto, const char* fmt, FirstArgument a, int b = 0)
 {
     char buf[128];
     sprintf(buf, fmt, a, b);
@@ -3050,14 +3075,14 @@ extern "C" BYTE* __cdecl Shell_ButtonC(int n, int id, int x, int y, int flag)
         F(int, m, 284) |= 2;
     return m;
 }
-// [FUN_50f650] (n, id, x, y): images by mode, the pressed one sharing the lit texture
-extern "C" BYTE* __cdecl Shell_ButtonD(int n, int id, int x, int y)
+// [FUN_50f650] The main menu button uses the texture set for the current display mode.
+extern "C" __declspec(noinline) BYTE* __cdecl Shell_CreateMainMenuButton(const char* textureName, int id, int x, int y)
 {
     bool m2 = Game_568fd0() == 2;
     ShellImg a, b, c, d;
-    Shell_Img(a, g_6ce3b8, m2 ? (const char*)s_q21_676460 : (const char*)s_q21_67642c, n);
-    Shell_Img(b, g_6ce408, m2 ? (const char*)s_q21_676450 : (const char*)s_q21_67641c, n);
-    Shell_Img(c, g_6ce988, m2 ? (const char*)s_q21_67643c : (const char*)s_q21_676408, n);
+    Shell_Img(a, g_6ce3b8, m2 ? (const char*)s_q21_676460 : (const char*)s_q21_67642c, textureName);
+    Shell_Img(b, g_6ce408, m2 ? (const char*)s_q21_676450 : (const char*)s_q21_67641c, textureName);
+    Shell_Img(c, g_6ce988, m2 ? (const char*)s_q21_67643c : (const char*)s_q21_676408, textureName);
     memset(&d, 0, sizeof d);
     d.d[6] = 0x3f000000;
     Style_Assign((DWORD*)&d, 0, (const DWORD*)((void*)g_6ceb38));
@@ -3178,7 +3203,7 @@ extern "C" BYTE* __fastcall ShellScreen5228e0_Construct(BYTE* s, void*, BYTE* pa
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q29_64e848;
     F(void*, s, 64) = g_q29_64e808;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p = Shell_NewPanel(4);
@@ -3220,7 +3245,7 @@ extern "C" BYTE* __fastcall ShellDialog525b50_Construct(BYTE* s, void*, BYTE* pa
         F(int, s, 380 + k * 4) = g_q30_68b990;
     F(void*, s, 0) = g_q30_64e9e8;
     F(void*, s, 64) = g_q30_64e9a8;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p1 = Shell_NewPanel(0);
@@ -3263,7 +3288,7 @@ extern "C" BYTE* __fastcall ShellScreen51e9a0_Construct(BYTE* s, void*, BYTE* pa
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q30_64e620;
     F(void*, s, 64) = g_q30_64e5e0;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p1 = Shell_NewPanel(4);
@@ -3318,7 +3343,7 @@ extern "C" BYTE* __fastcall ShellScreen520240_Construct(BYTE* s, void*, BYTE* pa
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q31_64e730;
     F(void*, s, 64) = g_q31_64e6f0;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p1 = Shell_NewPanel(4);
@@ -3372,7 +3397,7 @@ extern "C" BYTE* __fastcall ShellScreen51e340_Construct(BYTE* s, void*, BYTE* pa
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, g_q31_6ced2c);
     F(void*, s, 0) = g_q31_64e598;
     F(void*, s, 64) = g_q31_64e558;
-    F(DWORD*, s, 48) = Shell_NewObjRef();
+    F(DWORD*, s, 48) = Shell_CreateCursorReference();
     BYTE* p = Shell_NewPanel(4);
     Shell_PlainStyles(p + 68, Game_568fd0() == 2 ? (const char*)s_q31_6777fc : (const char*)s_q31_6777e4);
     BYTE* b = Shell_ModeButtonC((int)(const char*)s_q31_6777a4, 172);
@@ -3459,7 +3484,7 @@ extern "C" BYTE* __fastcall ShellSliders516ea0_Construct(BYTE* s, void*, BYTE* p
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q32_64df80;
     F(void*, s, 64) = g_q32_64df40;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     F(int, s, 368) = 0;
@@ -3513,7 +3538,7 @@ extern "C" BYTE* __fastcall ShellSave51dab0_Construct(BYTE* s, void*, BYTE* pare
     F(void*, s, 0) = g_q33_64e510;
     F(void*, s, 64) = g_q33_64e4d0;
     DWORD st[9] = {0, 5, 0, 0, 0, 0, 0x3f000000, 0, 0};
-    F(DWORD*, s, 48) = Shell_NewObjRef();
+    F(DWORD*, s, 48) = Shell_CreateCursorReference();
     BYTE* p = Shell_NewPanel(4);
     Shell_PlainStyles(p + 68, Game_568fd0() == 2 ? (const char*)s_q33_6777c4 : (const char*)s_q33_6777ac);
     BYTE* b = Shell_ModeButtonC((int)(const char*)s_q31_6777a4, 172);
@@ -3590,7 +3615,7 @@ extern "C" BYTE* __fastcall ShellDialog522cf0_Construct(BYTE* s, void*, BYTE* pa
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q34_64e8d0;
     F(void*, s, 64) = g_q34_64e890;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p = Shell_NewPanel(8);
@@ -3649,7 +3674,7 @@ extern "C" BYTE* __fastcall ShellSound517530_Construct(BYTE* s, void*, BYTE* par
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q34_64e008;
     F(void*, s, 64) = g_q34_64dfc8;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     F(int, s, 368) = 0;
@@ -3724,7 +3749,7 @@ extern "C" BYTE* __fastcall ShellViewer51eea0_Construct(BYTE* s, void*, int pare
     ControlWindow_Construct(s, 0, parent, g_q28_720938, g_q28_72093c, g_q28_720940, g_q28_720944, 4, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q35_64e6a8;
     F(void*, s, 64) = g_q35_64e668;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p = Shell_NewPanel(4);
@@ -3804,7 +3829,7 @@ extern "C" BYTE* __fastcall ShellColumns520e30_Construct(BYTE* s, void*, BYTE* p
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, 0);
     F(void*, s, 0) = g_q36_64e7c0;
     F(void*, s, 64) = g_q36_64e780;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p = Shell_NewPanel(4);
@@ -4237,7 +4262,7 @@ extern "C" BYTE* __fastcall ShellScreen526470_Construct(BYTE* s, void*, BYTE* pa
     ControlWindow_Construct(s, 0, (int)parent, q[0], q[1], q[2], q[3], 0, g_q28_6ced24, g_q31_6ced2c);
     F(void*, s, 0) = g_q40_64ea70;
     F(void*, s, 64) = g_q40_64ea30;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     BYTE* p = Shell_NewPanel(4);
@@ -4490,7 +4515,7 @@ extern "C" BYTE* __fastcall ShellControls513b30_Construct(BYTE* s, void*, int pa
         {26, 1020}, {65, 1043}, {29, 1038}, {30, 1021}, {64, 1040}, {62, 1023}, {63, 1041}, {35, 1006},
         {36, 1005}, {37, 1022}, {38, 1003}, {39, 1000}, {40, 1002}, {41, 1001}};
     for (int k = 0; k < 22; k++)
-        Ctl_AddChild(rows, 0, Shell_NewScreenA(Table71e858_Get(row[k][0]), row[k][1]), 0);
+        Ctl_AddChild(rows, 0, Shell_CreateFixedWidthButton(Table71e858_Get(row[k][0]), row[k][1]), 0);
     Panel_GridLayout(rows, 0, 2, -180, -20);
     Shell_MoveCtl(rows, 221, 199);
     Ctl_AddChild(p, 0, rows, 0);
@@ -4626,7 +4651,7 @@ extern "C" BYTE* __fastcall ShellRace523270_Construct(BYTE* s, void*, BYTE* pare
     F(void*, s, 64) = g_q43_64e920;
     F(int, s, 392) = 0;
     F(int, s, 368) = variant;
-    DWORD* o = Shell_NewObjRef();
+    DWORD* o = Shell_CreateCursorReference();
     F(DWORD*, s, 52) = o;
     F(DWORD*, s, 48) = o;
     F(int, s, 404) = 0;
@@ -5462,7 +5487,7 @@ extern "C" void __cdecl Shell_MusicSlider(void)
         o = (BYTE*)g_q67_6cec78;
     }
     if (F(short, o, 384) < 5 && F(short, o, 392)) {
-        Obj723d44_Delete();
+        Music_StopPlaybackThread();
         F(short, (BYTE*)g_q67_6cec78, 392) = 0;
     }
 }
@@ -5518,7 +5543,7 @@ extern "C" void __cdecl Game_Leave(void)
     }
     App_CheckThread();
     if (g_q68_6cec6c && F(int, g_q68_6cec6c, 1344)) {
-        Obj723d44_Delete();
+        Music_StopPlaybackThread();
         Music_Clear();
     }
     AI_FreeList68b99c();
@@ -5531,6 +5556,8 @@ extern "C" void __cdecl Game_Leave(void)
 
 extern "C" void FUN_5b73a0(); KING_ALIAS("_FUN_5b73a0", "_Window_DrawLine")
 extern "C" void FUN_5b6210(); KING_ALIAS("_FUN_5b6210", "_Pixel_Pack")
+extern "C" DWORD __cdecl Pixel_Pack(int r, int g, int b);
+extern "C" void __cdecl Window_DrawLine(BYTE*, int, int, int, int, DWORD, int);
 // [FUN_5290d0] draws the line of box s (doubles x0, y0, x1, y1) scaled by sx, sy and moved by dx, dy on surface
 // d in green; with clip set nothing is drawn when an end lies outside d
 extern "C" void __fastcall Map_DrawLine(double* s, void*, BYTE* d, double sx, double sy, double dx, double dy,
@@ -5542,7 +5569,8 @@ extern "C" void __fastcall Map_DrawLine(double* s, void*, BYTE* d, double sx, do
     int y1 = (int)(sy * s[3] + dy);
     if (clip && (Carat_OutOfBox((const unsigned short*)d, x0, y0) || Carat_OutOfBox((const unsigned short*)d, x1, y1)))
         return;
-    CallC(FUN_5b73a0, d, x0, y0, x1, y1, CallC<int>(FUN_5b6210, 0, 255, 120, 1));
+    // rgb belongs to Window_DrawLine, not to the three-argument Pixel_Pack.
+    Window_DrawLine(d, x0, y0, x1, y1, Pixel_Pack(0, 255, 120), 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -5784,7 +5812,7 @@ extern "C" void __fastcall Stats_Draw(BYTE* s, void*, int a)
     Hud_DrawLights((BYTE*)a, g_q86_6ced14 - 362, g_q86_6ced18 - 233, 1);
     int id;
     Player_CarId(&id);
-    sprintf(buf, "$%d", (int)Player_Value136((BYTE*)id));
+    sprintf(buf, "$%d", (int)Player_GetBalance((BYTE*)id));
     Text_Draw((int)dst, g_q86_6ced14 - 140, g_q86_6ced18 + 764, g_q86_6ced24, buf, 5, 0);
     sprintf(buf, "$%d", F(int, s, 312));
     Text_Draw((int)(F(BYTE*, s, -52)), g_q86_6ced14 + 40, g_q86_6ced18 + 764, g_q86_6ced24, buf, 5, 0);
@@ -5957,7 +5985,7 @@ extern "C" void __fastcall Shell_SetMode(BYTE* s, void*, int m)
     Sound_StopAll();
     Joy_ForceFeedback(0);
     if (F(int, g_q88_6cec6c, 1344))
-        Obj723d44_Delete();
+        Music_StopPlaybackThread();
     F(double, s, 408) = Tsc_Now();
     int mode = F(int, s, 404);
     if (F(int, g_q88_6cec6c, 1316) && mode && mode != 5) {
@@ -6557,7 +6585,7 @@ static int Gs122_PlayerId()
 extern "C" void __cdecl Shell_PayRepair(double cost, int msg)
 {
     char buf[128];
-    double money = Player_Value136((BYTE*)(Gs122_PlayerId()));
+    double money = Player_GetBalance((BYTE*)(Gs122_PlayerId()));
     BYTE* car = g_q122_6d2078;
     double health = CallVirt<double>(F(BYTE*, car, 616), 84);
     BYTE* ramp = F(BYTE*, F(BYTE*, g_q122_6d2078, 616), 21600) + 16112;
@@ -7145,7 +7173,7 @@ extern "C" void __fastcall Music_WaitNetwork(BYTE* m, void*, const char* name, c
 extern "C" int __fastcall Net_HostReply(BYTE* self, void*, void* out, void* size);
 extern "C" int __fastcall Net_CheckSession(BYTE* s, void*);
 extern "C" void FUN_5c3ac0(); KING_ALIAS("_FUN_5c3ac0", "@Net_CheckSession@8")    // net: whether the session is open
-extern "C" void __fastcall Chat_Receive(BYTE* s, void*, int a, int, int);
+extern "C" void __fastcall Chat_Receive(BYTE* s, void*, const char* hostName, int, int);
 extern "C" void FUN_5ea1b0(); KING_ALIAS("_FUN_5ea1b0", "_Font_DrawText")    // text in a width (surface, x, y, width, font, text, align, -)
 
 static const char* Nd_Str(int id)
@@ -7241,7 +7269,7 @@ void __fastcall NetDialog_Draw(BYTE* self, void*, BYTE* surface)
             ((int*)(char*)g_ndFlags6cea74)[i] = 1;
             return;
         }
-        Chat_Receive((BYTE*)g_ndNet696750, 0, (int)(g_nd6cecd8 + 632), 0, 0);
+        Chat_Receive((BYTE*)g_ndNet696750, nullptr, (const char*)(g_nd6cecd8 + 632), 0, 0);
         Nd_Text(self, 260, 292, Nd_Str(76));
         int n = g_ndNames;
         int cols = (n + 1) / 2;
@@ -7472,7 +7500,7 @@ extern "C" void FUN_5fd160(); KING_ALIAS("_FUN_5fd160", "_Sound_Frame")
 extern "C" void** __fastcall Vec_Construct(void** self, void*, int);
 extern "C" const char* __cdecl Carat_TypeName(int a, int b);
 extern "C" int __cdecl Ai_PrepareVehicleOrder(int player, int dealer, const char* model, BYTE* r);
-extern "C" int __cdecl Player_PlaceField20(BYTE* id);
+extern "C" int __cdecl Ai_GetPlayerImage(BYTE* id);
 extern "C" void __cdecl Ai_PoolFree(void* p, unsigned size);
 
 static __declspec(noinline) int Vd_Int(double d)
@@ -7615,7 +7643,7 @@ void __fastcall Dealer_Draw(BYTE* self, void*, BYTE* surface)
     if (!dealer) {
         Vd_Image(self, x + 149, y + 90, F(BYTE*, self, k_car[i]));
         int car;
-        int place = Player_PlaceField20((BYTE*)(*Player_CarId(&car)));
+        int place = Ai_GetPlayerImage((BYTE*)(*Player_CarId(&car)));
         Vd_Image(self, x + 155, y + 96, Vd_PlaceImage(place, 368));
     } else {
         Vd_Image(self, x + 19, y + 20, F(BYTE*, self, k_dealer[i]));
@@ -7623,7 +7651,7 @@ void __fastcall Dealer_Draw(BYTE* self, void*, BYTE* surface)
         if (late)
             img = F(BYTE*, g_vdImages, 668);
         else
-            img = Vd_PlaceImage(Player_PlaceField20((BYTE*)(F(int, self, 360))), mode == 0 ? 604 : 572);
+            img = Vd_PlaceImage(Ai_GetPlayerImage((BYTE*)(F(int, self, 360))), mode == 0 ? 604 : 572);
         Vd_Image(self, x + 25, y + 26, img);
     }
     Sound_Frame();
@@ -7638,7 +7666,7 @@ KING_VAR(BYTE*, g_sbShell, 6cec6c)
 KING_VAR(AsmLabel, s_sb67320c, 67320c)
 KING_VAR(double, g_sb64b5b8, 64b5b8)
 extern "C" void FUN_43f620(); KING_ALIAS("_FUN_43f620", "_Player_Flags")
-extern "C" void FUN_43f760(); KING_ALIAS("_FUN_43f760", "_Player_Value136")
+extern "C" void FUN_43f760(); KING_ALIAS("_FUN_43f760", "_Player_GetBalance")
 extern "C" void FUN_43f7c0(); KING_ALIAS("_FUN_43f7c0", "_Player_Set136")
 extern "C" int __cdecl Vehicle_SetTable516(BYTE* o, const BYTE* src);
 extern "C" void FUN_477300(); KING_ALIAS("_FUN_477300", "_Player_ClearFlags")
@@ -7745,7 +7773,7 @@ void __fastcall ServiceScreen_Command(BYTE* self, void*, int id)
     if ((F(DWORD, all, 284) & 2) && ((DWORD)Player_Flags((BYTE*)(Sb_Car())) & 0x2000000))
         extra = Ss_Int(CallC<double>(FUN_477310, Sb_Car()));
     int cost = F(int, self, 312) + extra;
-    if ((double)cost > Player_Value136((BYTE*)(Sb_Car()))) {
+    if ((double)cost > Player_GetBalance((BYTE*)(Sb_Car()))) {
         Messages_Add((const char*)Table71e858_Get(12));
         return;
     }
@@ -7771,7 +7799,7 @@ void __fastcall ServiceScreen_Command(BYTE* self, void*, int id)
         if ((F(DWORD, ctl, 284) & 2) && j < 7)
             CallVirt(F(BYTE*, g_ssGame, 616), k_sbRefill[j], &amount);
     }
-    double money = Player_Value136((BYTE*)(Sb_Car()));
+    double money = Player_GetBalance((BYTE*)(Sb_Car()));
     CallVirt(F(BYTE*, g_ssGame, 616), 116);
     CallVirt(F(BYTE*, g_ssGame, 616), 120);
     if ((DWORD)Player_Flags((BYTE*)(Sb_Car())) & 0x2000000) {
@@ -7999,7 +8027,7 @@ extern "C" void FUN_569710(); KING_ALIAS("_FUN_569710", "_Messages_Clear1276")
 extern "C" void FUN_51f380(); KING_ALIAS("_FUN_51f380", "@Shell_SetMode@12")
 extern "C" void __fastcall Screen_Set372(void* s, void*, int a);
 extern "C" void FUN_51ed10(); KING_ALIAS("_FUN_51ed10", "@Screen_Set372@12")
-extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Obj723d44_Delete")
+extern "C" void FUN_5ffb20(); KING_ALIAS("_FUN_5ffb20", "_Music_StopPlaybackThread")
 extern "C" void FUN_511820(); KING_ALIAS("_FUN_511820", "_Shell_LeaveRace")
 extern "C" void FUN_51e070(); KING_ALIAS("_FUN_51e070", "@Screen_SetPlayer@12")
 extern "C" void __fastcall Shell51e7a0_Apply(BYTE* self, void*);
@@ -8038,7 +8066,7 @@ static void Gm_Send952(BYTE b0)
     Msg_Write120(msg, 0, 952, data, 3);
     Dp_Send((int)(F(BYTE*, msg, 4)), F(BYTE*, msg, 8) - F(BYTE*, msg, 4));
     if (F(int, g_gmShell, 1344))
-        Obj723d44_Delete();
+        Music_StopPlaybackThread();
     MsgBuf_Destroy(msg, 0);
 }
 
@@ -8079,7 +8107,7 @@ int __fastcall GameMenu_Command(BYTE* self, void*, int id)
         if (id == 163)
             Shell_LeaveRace();
         if (F(int, g_gmShell, 1344))
-            Obj723d44_Delete();
+            Music_StopPlaybackThread();
         if (id == 169)
             g_gm6968a4 = 1;
         return 1;
@@ -8105,7 +8133,7 @@ int __fastcall GameMenu_Command(BYTE* self, void*, int id)
             F(int, self, 3024) = 1;
             Gm_Resume();
             if (F(int, g_gmShell, 1344))
-                Obj723d44_Delete();
+                Music_StopPlaybackThread();
         } else if (mode == 1) {
             Gm_CloseScreen();
             Shell_SetMode(g_gm6ceca8, 0, 3);
@@ -8472,7 +8500,7 @@ void __fastcall Dealer_Open(BYTE* self, void*, int id)
         F(int, ctl, 40) = disabled;
     }
     if (F(int, self, 368) > 1) {
-        int place = Player_PlaceField20((BYTE*)(F(int, self, 424)));
+        int place = Ai_GetPlayerImage((BYTE*)(F(int, self, 424)));
         Surface_Copy16(F(BYTE*, F(BYTE*, g_vdImages, 668), 72), F(BYTE*, F(BYTE*, g_vdImages, place * 4 + 368), 72), 2);
     }
 }
@@ -8593,14 +8621,14 @@ KING_VAR(AsmLabel, s_ks677268, 677268)
 KING_VAR(AsmLabel, s_ks676f1c, 676f1c)
 KING_VAR(AsmLabel, g_ksVtbl64e090, 64e090)
 KING_VAR(AsmLabel, g_ksVtbl64e050, 64e050)
-extern "C" void FUN_517e00(); KING_ALIAS("_FUN_517e00", "_Shell_NewScreenB")
+extern "C" void FUN_517e00(); KING_ALIAS("_FUN_517e00", "_Shell_CreateUniformStyleButton")
 extern "C" void FUN_5bf820(); KING_ALIAS("_FUN_5bf820", "@Button_ConstructId@20")
 extern "C" void FUN_5be130(); KING_ALIAS("_FUN_5be130", "@Ctl_LayoutRow@12")
 extern "C" void FUN_5bdee0(); KING_ALIAS("_FUN_5bdee0", "@Ctl_LayoutColumn@12")
 static const char* const k_ksCol1[] = {s_ks677250, s_ks677238, s_ks677220, s_ks677208, s_ks6771f0, s_ks6771d8, s_ks6771c0, s_ks6771a8, s_ks677190, s_ks677178, s_ks677160, s_ks677148, s_ks677130, s_ks677118, s_ks677100, s_ks6770e8, };
 static const char* const k_ksCol2[] = {s_ks6770cc, s_ks6770b0, s_ks677094, s_ks677078, s_ks67705c, s_ks677040, s_ks677024, s_ks677008, s_ks676fec, s_ks676fd0, s_ks676fb4, s_ks676f98, s_ks676f7c, s_ks676f60, s_ks676f44, s_ks676f28, };
 
-// a column of rows made by Shell_NewScreenB for names
+// a column of rows made by Shell_CreateUniformStyleButton for names
 static BYTE* Ks_Column(const char* const* names, int n)
 {
     BYTE* c = Vw_Panel(0);
@@ -8684,9 +8712,8 @@ KING_VAR(AsmLabel, s_mm6765e0, 6765e0)
 KING_VAR(AsmLabel, s_mm6765d0, 6765d0)
 KING_VAR(AsmLabel, g_mmVtbl64dd2c, 64dd2c)
 KING_VAR(AsmLabel, g_mmVtbl64dcec, 64dcec)
-extern "C" DWORD* __cdecl Shell_NewObjRef();
-extern "C" void FUN_50c930(); KING_ALIAS("_FUN_50c930", "_Shell_NewObjRef")
-extern "C" void FUN_50f650(); KING_ALIAS("_FUN_50f650", "_Shell_ButtonD")
+extern "C" DWORD* __cdecl Shell_CreateCursorReference();
+extern "C" void FUN_50c930(); KING_ALIAS("_FUN_50c930", "_Shell_CreateCursorReference")
 static const char* const k_mmPics2[11] = {s_mm6765c0, s_mm6765b0, s_mm6765a0, s_mm676590, s_mm676580, s_mm676570, s_mm676560, s_mm676550, s_mm676540, s_mm676530, s_mm676520, };
 static const char* const k_mmPics[11] = {s_mm676510, s_mm676500, s_mm6764f0, s_mm6764e0, s_mm6764d0, s_mm6764c0, s_mm6764b0, s_mm6764a0, s_mm676490, s_mm676480, s_mm676470, };
 KING_VAR(AsmLabel, s_mm6729a8, 6729a8)
@@ -8722,7 +8749,7 @@ BYTE* __fastcall MainMenu_Construct(BYTE* self, void*)
     Style_Assign(s2, 0, (const DWORD*)((void*)g_vwStyle6ce408));
     Style_Assign(s3, 0, (const DWORD*)((void*)g_vwStyle6ce988));
     Style_Assign(s4, 0, (const DWORD*)((void*)g_vwStyle6ceb38));
-    BYTE* o = (BYTE*)Shell_NewObjRef();
+    BYTE* o = (BYTE*)Shell_CreateCursorReference();
     F(BYTE*, self, 52) = o;
     F(BYTE*, self, 48) = o;
     BYTE* bar = Vw_Panel(8);
@@ -8735,8 +8762,7 @@ BYTE* __fastcall MainMenu_Construct(BYTE* self, void*)
     Style_Assign((DWORD*)(bar + 176), 0, (const DWORD*)((void*)s2));
     BYTE* row = Vw_Panel(0);
     for (int i = 0; i < 9; i++)
-        Vw_Add(row, CallC<BYTE*>(FUN_50f650, k_mmButtons[i].name, k_mmButtons[i].id, k_mmButtons[i].x,
-                                 k_mmButtons[i].y));
+        Vw_Add(row, Shell_CreateMainMenuButton(k_mmButtons[i].name, k_mmButtons[i].id, k_mmButtons[i].x, k_mmButtons[i].y));
     Vw_Add(bar, row);
     int x = F(WORD, F(BYTE*, self, 12), 0) - 400;
     if (x < 0)
@@ -8768,7 +8794,7 @@ KING_VAR(AsmLabel, s_ve677a74, 677a74)
 KING_VAR(AsmLabel, s_ve66c8cc, 66c8cc)
 extern "C" void FUN_5c0c00(); KING_ALIAS("_FUN_5c0c00", "@List_IndexOf300@8")
 extern "C" int __fastcall List_IndexOf336(BYTE* self, void*);
-extern "C" void FUN_43f760(); KING_ALIAS("_FUN_43f760", "_Player_Value136")
+extern "C" void FUN_43f760(); KING_ALIAS("_FUN_43f760", "_Player_GetBalance")
 extern "C" DWORD* __cdecl Player_FirstEntry(DWORD* out, BYTE* p);
 extern "C" DWORD* __cdecl Player_NextEntry(DWORD* out, BYTE* p);
 extern "C" void FUN_569740(); KING_ALIAS("_FUN_569740", "_Messages_Get1288")
@@ -8783,7 +8809,7 @@ static int Ve_Car()
 
 static double Ve_Money()
 {
-    return Player_Value136((BYTE*)(Ve_Car()));
+    return Player_GetBalance((BYTE*)(Ve_Car()));
 }
 
 static bool Ve_Class(int t)
@@ -8874,7 +8900,7 @@ void __fastcall Exchange_Draw(BYTE* self, void*, BYTE* surface)
     }
     if (chosen == g_veNone68b990)
         return;
-    int place = Player_PlaceField20((BYTE*)chosen);
+    int place = Ai_GetPlayerImage((BYTE*)chosen);
     Surface_Copy16(F(BYTE*, F(BYTE*, self, 612), 72), F(BYTE*, F(BYTE*, self, 304 + place * 4), 72), 6);
     Bitmap_Draw(s, 33, g_veY6ced10 + 761, F(BYTE*, self, 612));
 }
@@ -9287,7 +9313,8 @@ void __fastcall CbRadio_Open(BYTE* s)
                 int id = F(int, (BYTE*)Obj541960_Self(it, 0), 20636);
                 int t;
                 Int_Copy(&t, 0, &id);
-                BYTE data[176];
+                // Ai_GetPlayerData writes a double at +176 and an int at +184.
+                BYTE data[192];
                 Ai_GetPlayerData((BYTE*)t, data);
                 int kind = F(int, data, 8), cls;
                 if (kind == 5)
@@ -9577,7 +9604,7 @@ void __fastcall LeaveDialog_Command(BYTE* s, void*, int cmd)
 
 extern "C" double __cdecl AI_BaseFactor(float x, float y, float z);
 extern "C" void __cdecl Player_Set136(BYTE* id, DWORD lo, DWORD hi);
-extern "C" int __cdecl Messages_Get1292();
+extern "C" BYTE* __cdecl Messages_GetIconFont();
 extern "C" void Fs_SetValue(); KING_ALIAS("_Fs_SetValue", "@Ramp_SetValue@12")
 KING_VAR(int, g_fs6ced14, 6ced14)
 KING_VAR(int, g_fs6ced18, 6ced18)
@@ -9622,7 +9649,7 @@ extern "C" {
 // into +328, and when done fills the cab's tank (+16112), charges the player and closes the panel
 void __fastcall Station_Draw(BYTE* s, void*, int a)
 {
-    BYTE* font = (BYTE*)Messages_Get1292();
+    BYTE* font = Messages_GetIconFont();
     BYTE* surf = F(BYTE*, s, -52);
     int rc[4];
     rc[0] = g_fs6ced14 + 40;
@@ -9667,7 +9694,7 @@ void __fastcall Station_Draw(BYTE* s, void*, int a)
     float full = (float)(F(double, s, 328) + F(double, s, 312));
     CallThis(Fs_SetValue, cab + 16112, *(DWORD*)&full);
     int id;
-    double money = Player_Value136((BYTE*)*Player_CarId(&id));
+    double money = Player_GetBalance((BYTE*)*Player_CarId(&id));
     double left = money - AI_BaseFactor(pos.x, pos.y, pos.z) * F(double, s, 328);
     Player_Set136((BYTE*)*Player_CarId(&id), ((DWORD*)&left)[0], ((DWORD*)&left)[1]);
     CallVirt(s - 64, 32);
@@ -10175,18 +10202,18 @@ void __cdecl CarTypes_Read(const char* path, int unused)
             sprintf(buf, &s_ct674f0c, ini, sec, got);
             Setup_Fatal(buf);
         }
-        Carat_ReadFill((int)sec, (int)&s_ct674f00, 0x3E99999A, (int)(T + 748), (int)ini, 8);
+        Ini_ReadFloatsWithDefault((int)sec, (int)&s_ct674f00, 0x3E99999A, (int)(T + 748), (int)ini, 8);
         memset(T + 716, 0, 32);
-        Carat_ReadFill((int)sec, (int)&s_ct674efc, 0x46435000, (int)(T + 780), (int)ini, 8);
-        Carat_ReadFill((int)sec, (int)&s_ct674ef8, 0x3F800000, (int)(T + 812), (int)ini, 8);
+        Ini_ReadFloatsWithDefault((int)sec, (int)&s_ct674efc, 0x46435000, (int)(T + 780), (int)ini, 8);
+        Ini_ReadFloatsWithDefault((int)sec, (int)&s_ct674ef8, 0x3F800000, (int)(T + 812), (int)ini, 8);
         Ini_GetFloat(sec, &s_ct674ee0, 0.5, CT_F(864), ini);
         if (*CT_F(864) < g_ct64c264 || *CT_F(864) > g_ct64c250)
             F(DWORD, T, 864) = 0x3E4CCCCD;
         Ini_GetFloat(sec, &s_ct674ec8, 0.5, CT_F(868), ini);
         if (*CT_F(868) < g_ct64c264 || *CT_F(868) > g_ct64c250)
             F(DWORD, T, 868) = 0x3F000000;
-        Carat_ReadFill2((int)sec, (int)&s_ct674eb8, 1, (int)(T + 300), (int)ini, 8);
-        Carat_ReadFill2((int)sec, (int)&s_ct674ea0, 1, (int)(T + 364), (int)ini, 8);
+        Ini_ReadIntsWithDefault((int)sec, (int)&s_ct674eb8, 1, (int)(T + 300), (int)ini, 8);
+        Ini_ReadIntsWithDefault((int)sec, (int)&s_ct674ea0, 1, (int)(T + 364), (int)ini, 8);
         int flags[8] = {1, 1, 0, 0, 0, 0, 0, 0};
         Ini_ReadInts(sec, &s_ct674e90, flags, (int*)(T + 332), ini, 8);
         memcpy(T, &g_ct7025f0, 48);
@@ -10274,7 +10301,7 @@ void __cdecl CarTypes_Read(const char* path, int unused)
         for (int k = 0; k < 20; k++) {
             sprintf(buf, &s_ct674d34, k);
             float* pl = CT_F(1448 + k * 16);
-            if (!Carat_ReadFill((int)sec, (int)buf, 0x3F800000, (int)pl, (int)ini, 4))
+            if (!Ini_ReadFloatsWithDefault((int)sec, (int)buf, 0x3F800000, (int)pl, (int)ini, 4))
                 break;
             float w = -pl[3];
             float d[3] = {pl[0] * w - *CT_F(848), pl[1] * w - *CT_F(852), pl[2] * w - *CT_F(856)};
@@ -10567,7 +10594,7 @@ void __cdecl ObjTypes_Read(const char* path, int edit)
             for (int k = 0; k < 20; k++) {
                 sprintf(key, &s_ct674d34, k);
                 float* pl = OT_F(536 + k * 16);
-                if (!Carat_ReadFill((int)sec, (int)key, 0x3F800000, (int)pl, (int)path, 4))
+                if (!Ini_ReadFloatsWithDefault((int)sec, (int)key, 0x3F800000, (int)pl, (int)path, 4))
                     break;
                 float w = -pl[3];
                 float d[3] = {pl[0] * w - *OT_F(180), pl[1] * w - *OT_F(184), pl[2] * w - *OT_F(188)};
@@ -10772,7 +10799,7 @@ void __fastcall Map_BuildRoads(BYTE* s, void*)
 // === a 4x4 determinant (FUN_50b620)
 
 extern "C" double __fastcall Matrix_Cofactor(const Matrix* self, void*, int row, int col);
-extern "C" double __cdecl Sign(int x);
+extern "C" double __cdecl DMat_CofactorSign(int x);
 KING_VAR(float, g_dtIdentity, 7025f0)
 
 extern "C" {
@@ -10798,7 +10825,7 @@ double __fastcall DMat_Determinant(const double* s, void*)
         double c1 = Matrix_Cofactor((const Matrix*)m, 0, 0, 1);
         double c2 = Matrix_Cofactor((const Matrix*)m, 0, 0, 2);
         double det = m[2] * c2 + m[1] * c1 + m[0] * c0;
-        sum = Sign(k) * s[k] * det + sum;
+        sum = DMat_CofactorSign(k) * s[k] * det + sum;
     }
     return sum;
 }
@@ -10813,9 +10840,9 @@ extern "C" MpPos32* __cdecl Mp_PositionId(MpPos32* out, void* player); KING_ALIA
 extern "C" void Mp_M1(); KING_ALIAS("_Mp_M1", "@SceneObj_Matrix1@12")
 extern "C" void __cdecl Device_BeginScene();
 extern "C" void __cdecl Device_WaitIdle();
-extern "C" void** __cdecl List68cf6c_First(void** out);
-extern "C" void** __cdecl List68cf6c_Next(void** out, void** it);
-extern "C" int __cdecl Rec_Field8(BYTE* id);
+extern "C" void** __cdecl Presents_First(void** out);
+extern "C" void** __cdecl Presents_Next(void** out, void** it);
+extern "C" int __cdecl Ai_GetPresentFlags(BYTE* id);
 extern "C" void __stdcall Array_ForEach(BYTE* p, int size, int count, void (*fn)());
 extern "C" void Mp_ZeroThis(); KING_ALIAS("_Mp_ZeroThis", "@Vec3_ZeroThis@8")
 extern "C" BYTE* __fastcall Fx_InitState(BYTE* s, void*);
@@ -10829,15 +10856,15 @@ extern "C" DWORD __cdecl Pixel_Pack(int r, int g, int b);
 extern "C" int __cdecl Ai_GetPlayerOrderInfo(BYTE* p, unsigned idx, BYTE* oi);
 extern "C" int* __cdecl Town_FirstId(int* out);
 extern "C" int* __cdecl Town_NextId(int* out, int i);
-extern "C" void* __cdecl Town_Get440390(void* out, int town);
-extern "C" DWORD __cdecl Town_Flags(int town);
-extern "C" int __cdecl Town_Field12(int town);
+extern "C" void* __cdecl Town_GetCoordinatesByIndex(void* out, int town);
+extern "C" DWORD __cdecl Town_GetMapFlags(int town);
+extern "C" const char* __cdecl Town_MapLabel(int town);
 extern "C" DWORD* __cdecl Ai_GetNameCoordinates(DWORD* out, int town, int mapRes, int screenRes);
-extern "C" int* __cdecl List68cc18_FirstId(int* out);
-extern "C" int* __cdecl List68cc18_NextId(int* out, int i);
+extern "C" int* __cdecl Obstacle_FirstId(int* out);
+extern "C" int* __cdecl Obstacle_NextId(int* out, int i);
 extern "C" int __cdecl Ai_GetObstacleInfo(int id, BYTE* out);
-extern "C" int* __cdecl Node_FirstId(int* out);
-extern "C" int* __cdecl Node_NextId(int* out, int i);
+extern "C" int* __cdecl RoadNode_FirstId(int* out);
+extern "C" int* __cdecl RoadNode_NextId(int* out, int i);
 extern "C" void Mp_NodePos(); KING_ALIAS("_Mp_NodePos", "_Node_Position")
 extern "C" const char* __cdecl Node_Name(int node);
 extern "C" void** __cdecl Players_First(void** out);
@@ -10975,7 +11002,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
     Device_WaitIdle();
     // presents
     void* it;
-    List68cf6c_First(&it);
+    Presents_First(&it);
     while (it != mp_68cf6c)
     {
         __declspec(align(8)) BYTE P[288];
@@ -11000,7 +11027,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
         }
         else
         {
-            int fl = Rec_Field8((BYTE*)it);
+            int fl = Ai_GetPresentFlags((BYTE*)it);
             if ((fl & 64) && (fl & 32))
                 Mp_Icon(v, x, y, mp_6f3268);
             else if (fl & 64)
@@ -11016,7 +11043,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
         VecB_FreeStorage((BYTE**)(P + 144), 0);
         VecB_FreeStorage((BYTE**)(P + 132), 0);
         void* nx;
-        it = *List68cf6c_Next(&nx, (void**)it);
+        it = *Presents_Next(&nx, (void**)it);
     }
     // the towns of the player's orders
     int order[4] = {-1, -1, -1, -1};
@@ -11034,7 +11061,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
     for (Town_FirstId(&id); id != -1; id = *Town_NextId(&id, id))
     {
         float p[3];
-        Town_Get440390(p, id);
+        Town_GetCoordinatesByIndex(p, id);
         int x, y;
         Mp_At(v, p, x, y);
         if (Mp_Off(v, x, y))
@@ -11044,7 +11071,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
             k++;
         if (k < orders)
             continue;
-        DWORD tf = Town_Flags(id);
+        DWORD tf = Town_GetMapFlags(id);
         if (tf & 1)
             Mp_Icon(v, x - 5, y - 5, mp_6f3380);
         else if (tf & 2)
@@ -11056,7 +11083,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
             Mp_Icon(v, x - 5, y - 5, mp_6f2de4);
     }
     // obstacles
-    for (List68cc18_FirstId(&id); id != -1; id = *List68cc18_NextId(&id, id))
+    for (Obstacle_FirstId(&id); id != -1; id = *Obstacle_NextId(&id, id))
     {
         BYTE O[16] = {0};
         Ai_GetObstacleInfo(id, O);
@@ -11077,7 +11104,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
         }
     }
     // service nodes
-    for (Node_FirstId(&id); id != -1; id = *Node_NextId(&id, id))
+    for (RoadNode_FirstId(&id); id != -1; id = *RoadNode_NextId(&id, id))
     {
         if (!(F(BYTE, mp_68cf00[id], 12) & 8))
             continue;
@@ -11105,10 +11132,10 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
         Mp_At(v, q, x, y);
         if (Mp_Off(v, x, y))
             continue;
-        DWORD tf = Town_Flags(id);
+        DWORD tf = Town_GetMapFlags(id);
         if ((tf & 1) || ((tf & 2) && !mode))
             continue;
-        Mp_Label(v, x - 20, y - 5, (const char*)Town_Field12(id));
+        Mp_Label(v, x - 20, y - 5, Town_MapLabel(id));
     }
     // players
     __declspec(align(8)) BYTE PD[256];
@@ -11171,7 +11198,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
     for (Town_FirstId(&id); id != -1; id = *Town_NextId(&id, id))
     {
         float p[3];
-        Town_Get440390(p, id);
+        Town_GetCoordinatesByIndex(p, id);
         int x, y;
         Mp_At(v, p, x, y);
         if (Mp_Off(v, x, y))
@@ -11181,7 +11208,7 @@ void __fastcall Map_Draw(BYTE* m, void*, BYTE* surf, int mode)
             k++;
         if (k >= orders)
             continue;
-        DWORD tf = Town_Flags(id);
+        DWORD tf = Town_GetMapFlags(id);
         if (tf & 1)
             Mp_Icon(v, x - 5, y - 5, mp_6f3380);
         else if (tf & 2)
@@ -11214,7 +11241,7 @@ extern "C" void __cdecl World_ClearHits();
 extern "C" int __cdecl Player_SwapVehicles(BYTE* a, BYTE* b, int flags);
 extern "C" void __cdecl Net_SendObjectMessage(int a, int b, const char* name1, const char* name2, DWORD d0, DWORD d1, DWORD d2, DWORD d3, DWORD d4, DWORD d5, DWORD d6, DWORD d7, DWORD d8, DWORD d9, DWORD d10, DWORD d11);
 extern "C" void __fastcall Engine_SetKeys(BYTE* self, void*, int a, int b);
-extern "C" int __cdecl Obj6f3498_Get212();
+extern "C" int __cdecl Wipers_GetSwitchState();
 extern "C" void __fastcall Player_DetachCar(BYTE* self, void*);
 extern "C" void __cdecl Car_Launch(BYTE* c, int p, int* flags, int mark);
 extern "C" BYTE* __fastcall Scenes_Find(BYTE* self, void*, const char* name);
@@ -11306,7 +11333,7 @@ void __fastcall Garage_Message(BYTE* g, void*, int msg)
     F(int, F(BYTE*, car, 21600), 10080) = 0;
     F(short, F(BYTE*, car, 21600), 10008) = 0;
     F(int, car, 20636) = found;
-    Obj6f3498_Get212();
+    Wipers_GetSwitchState();
     int keep = F(int, car, 20920);
     Player_DetachCar(g_gv6d2078, 0);
     F(int, F(BYTE*, rec, 24), 296) = me;
@@ -11439,7 +11466,7 @@ void __cdecl Save_WriteGame(BYTE* st, int shot)
     BYTE* cab = F(BYTE*, car, 21600);
     v[0] = cab && F(int, cab, 15440) ? 1 : 0;
     v[1] = F(int, car, 20920);
-    v[2] = Obj6f3498_Get212();
+    v[2] = Wipers_GetSwitchState();
     v[3] = g_sv6f33b8;
     v[4] = g_sv6f33bc;
     v[5] = F(int, g_sv6cec6c, 1304);
@@ -11590,7 +11617,7 @@ int __fastcall Net_CheckSession(BYTE* s, void*)
 
 // === the save screen's commands ($L_51e140 with its pieces up to $L_51e2d3)
 
-extern "C" char* __cdecl Sc_Name(char* s); KING_ALIAS("_Sc_Name", "_Str_Name")
+extern "C" char* __cdecl Sc_Name(char* s); KING_ALIAS("_Sc_Name", "_Save_NormalizeSlotName")
 extern "C" void __cdecl Sc_Write(const char* name, int a); KING_ALIAS("_Sc_Write", "_Save_WriteEntry")
 extern "C" void __cdecl Sc_Delete(const char* name); KING_ALIAS("_Sc_Delete", "_Save_DeleteEntry")
 extern "C" void __fastcall Sc_ListRemove(BYTE* self, void*, const char* name); KING_ALIAS("@Sc_ListRemove@12", "@List_RemoveName@12")
@@ -11670,7 +11697,7 @@ void __fastcall SaveScreen_Command(BYTE* s, void*, int cmd)
 // === the replay viewer's keys ($L_5101c0, a window vtable entry)
 
 extern "C" void __cdecl Shell_LeaveGameScreens();
-extern "C" void __fastcall Wasm_598ce0(BYTE* self, void*, int mode);
+extern "C" void __fastcall WorldObject_ResetActiveState(BYTE* self, void*, int mode);
 extern "C" int __cdecl fclose(FILE* f);
 KING_VAR(BYTE*, g_rk696ca0, 696ca0)
 KING_VAR(BYTE*, g_rk6cec80, 6cec80)
@@ -11712,9 +11739,9 @@ void __fastcall ReplayWnd_Key(BYTE* s, void*, int k)
         CGameApp_DestroyWindowNow((CGameApp*)&g_rk696750, 0, (CWindow*)g_rk6cec84);
         g_rk6cec84 = 0;
         Shell_LeaveGameScreens();
-        Wasm_598ce0((BYTE*)&g_rk6f68b0, 0, 2);
+        WorldObject_ResetActiveState((BYTE*)&g_rk6f68b0, 0, 2);
         if (F(int, g_rk6cec6c, 1344))
-            Obj723d44_Delete();
+            Music_StopPlaybackThread();
         break;
     case 215:
         F(int, p, 3024) = 1;

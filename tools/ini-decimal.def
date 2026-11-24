@@ -1,0 +1,4 @@
+LIBRARY msvcrt.dll
+EXPORTS
+    IniDecimalRead EXPORTAS atof
+    IniDecimalPrint EXPORTAS _snprintf

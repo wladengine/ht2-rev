@@ -1,0 +1,17 @@
+{
+  "entry": "0x5bd5a0",
+  "result": "eax",
+  "args": [
+    "0x100012c"
+  ],
+  "description": "Copy a nine-word UI style one word towards the beginning of the same array. Compare the returned word, all writes and the guard words.",
+  "ecx": "0x1000128",
+  "objects": [
+    {
+      "offset": "0x100",
+      "hex": "0302010006040200090603000c0804000f0a0500120c0600150e0700181008001b1209001e140a0021160b0024180c00271a0d002a1c0e002d1e0f00302010003322110036241200392613003c2814003f2a1500422c1600452e1700483018004b3219004e341a0051361b0054381c00573a1d005a3c1e005d3e1f0060402000"
+    }
+  ],
+  "observe_store_order": true,
+  "symbol": "@Style_Assign@12"
+}

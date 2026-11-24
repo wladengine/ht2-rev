@@ -70,7 +70,7 @@ struct AiSwitch {
 extern "C" {
 double __cdecl AI_Time();
 void* __cdecl AI_483a50();
-void __cdecl updateSwitch(const char* moduleName, const char* switchName, int v);
+void __cdecl Ai_SetModuleSwitchByName(const char* moduleName, const char* switchName, int v);
 void __cdecl AI_UpdateSwitch(const AiSwitch* s);
 void __cdecl displayScreenMessage(const char* message);
 void __cdecl AI_AddToBanner(double value);

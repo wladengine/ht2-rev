@@ -1,0 +1,452 @@
+{
+  "original_sha256": "31fbd1dbbe7706183f09a3688482791255db2bfb557c02675374b96796ce2ebd",
+  "original_va": "4a52e0",
+  "symbol": "_Sch_ErrorCode",
+  "result": "eax",
+  "stack": 4,
+  "services": {
+    "message": {
+      "original_va": "4a5380",
+      "symbol": "_Sch_ErrorText"
+    },
+    "allocate": {
+      "original_va": "632643",
+      "symbol": "??2@YAPAXI@Z"
+    },
+    "format": {
+      "original_va": "61cca9",
+      "symbol": "_sprintf"
+    },
+    "notify": {
+      "callback_offset": 816
+    },
+    "free": {
+      "original_va": "63266c",
+      "symbol": "??3@YAXPAX@Z"
+    }
+  },
+  "initial": [
+    [
+      {
+        "global": "670b04"
+      },
+      "I",
+      [
+        0
+      ]
+    ],
+    [
+      {
+        "global": "69224c"
+      },
+      "I",
+      [
+        51381040
+      ]
+    ],
+    [
+      {
+        "global": "692244"
+      },
+      "2I",
+      [
+        147,
+        274
+      ]
+    ]
+  ],
+  "cases": [
+    {
+      "name": "handler for 'failed'",
+      "args": [
+        3,
+        256
+      ],
+      "initial": [
+        [
+          {
+            "global": "691dc8"
+          },
+          "I",
+          [
+            0
+          ]
+        ],
+        [
+          20480,
+          "7B",
+          [
+            102,
+            97,
+            105,
+            108,
+            101,
+            100,
+            0
+          ]
+        ]
+      ],
+      "calls": [
+        {
+          "service": "message",
+          "args": [
+            3,
+            256
+          ],
+          "return": {
+            "at": 20480
+          }
+        },
+        {
+          "service": "allocate",
+          "args": [
+            26
+          ],
+          "return": {
+            "at": 24576
+          }
+        },
+        {
+          "service": "format",
+          "args": [
+            {
+              "at": 24576
+            },
+            {
+              "at": 20480
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "6661696c656400"
+            ]
+          ],
+          "return": 6
+        },
+        {
+          "service": "notify",
+          "args": [
+            3,
+            256,
+            {
+              "at": 24576
+            }
+          ]
+        },
+        {
+          "service": "free",
+          "args": [
+            {
+              "at": 24576
+            }
+          ]
+        }
+      ],
+      "expect_result": 256,
+      "expect": [
+        [
+          {
+            "global": "692244"
+          },
+          "2I",
+          [
+            3,
+            256
+          ]
+        ],
+        [
+          24576,
+          "7B",
+          [
+            102,
+            97,
+            105,
+            108,
+            101,
+            100,
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "handler for 'Second message'",
+      "args": [
+        3,
+        512
+      ],
+      "initial": [
+        [
+          {
+            "global": "691dc8"
+          },
+          "I",
+          [
+            0
+          ]
+        ],
+        [
+          20480,
+          "15B",
+          [
+            83,
+            101,
+            99,
+            111,
+            110,
+            100,
+            32,
+            109,
+            101,
+            115,
+            115,
+            97,
+            103,
+            101,
+            0
+          ]
+        ]
+      ],
+      "calls": [
+        {
+          "service": "message",
+          "args": [
+            3,
+            512
+          ],
+          "return": {
+            "at": 20480
+          }
+        },
+        {
+          "service": "allocate",
+          "args": [
+            34
+          ],
+          "return": {
+            "at": 24576
+          }
+        },
+        {
+          "service": "format",
+          "args": [
+            {
+              "at": 24576
+            },
+            {
+              "at": 20480
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "5365636f6e64206d65737361676500"
+            ]
+          ],
+          "return": 14
+        },
+        {
+          "service": "notify",
+          "args": [
+            3,
+            512,
+            {
+              "at": 24576
+            }
+          ]
+        },
+        {
+          "service": "free",
+          "args": [
+            {
+              "at": 24576
+            }
+          ]
+        }
+      ],
+      "expect_result": 512,
+      "expect": [
+        [
+          {
+            "global": "692244"
+          },
+          "2I",
+          [
+            3,
+            512
+          ]
+        ],
+        [
+          24576,
+          "15B",
+          [
+            83,
+            101,
+            99,
+            111,
+            110,
+            100,
+            32,
+            109,
+            101,
+            115,
+            115,
+            97,
+            103,
+            101,
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "handler for ''",
+      "args": [
+        3,
+        768
+      ],
+      "initial": [
+        [
+          {
+            "global": "691dc8"
+          },
+          "I",
+          [
+            0
+          ]
+        ],
+        [
+          20480,
+          "1B",
+          [
+            0
+          ]
+        ]
+      ],
+      "calls": [
+        {
+          "service": "message",
+          "args": [
+            3,
+            768
+          ],
+          "return": {
+            "at": 20480
+          }
+        },
+        {
+          "service": "allocate",
+          "args": [
+            20
+          ],
+          "return": {
+            "at": 24576
+          }
+        },
+        {
+          "service": "format",
+          "args": [
+            {
+              "at": 24576
+            },
+            {
+              "at": 20480
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "00"
+            ]
+          ],
+          "return": 0
+        },
+        {
+          "service": "notify",
+          "args": [
+            3,
+            768,
+            {
+              "at": 24576
+            }
+          ]
+        },
+        {
+          "service": "free",
+          "args": [
+            {
+              "at": 24576
+            }
+          ]
+        }
+      ],
+      "expect_result": 768,
+      "expect": [
+        [
+          {
+            "global": "692244"
+          },
+          "2I",
+          [
+            3,
+            768
+          ]
+        ],
+        [
+          24576,
+          "1B",
+          [
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "muted",
+      "args": [
+        3,
+        1
+      ],
+      "initial": [
+        [
+          {
+            "global": "691dc8"
+          },
+          "I",
+          [
+            4
+          ]
+        ],
+        [
+          20480,
+          "8B",
+          [
+            105,
+            103,
+            110,
+            111,
+            114,
+            101,
+            100,
+            0
+          ]
+        ]
+      ],
+      "calls": [],
+      "expect_result": 4,
+      "expect": [
+        [
+          {
+            "global": "692244"
+          },
+          "2I",
+          [
+            147,
+            274
+          ]
+        ]
+      ]
+    }
+  ]
+}

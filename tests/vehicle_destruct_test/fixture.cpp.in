@@ -1,0 +1,78 @@
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+#include <new>
+#define F(T,p,o) (*(T*)((BYTE*)(p)+(o)))
+struct Vec3 { float v[3]; };
+typedef void (__cdecl* Vd_Callback)(int);
+static BYTE world[704+303*4], scene[32], object[32], cls[64];
+static BYTE g_vd64f654[8],g_vd64f51c[8],g_vd64f518[8],g_vd64f568[8];
+static BYTE g_vd6d24e0[8],g_vd6d24bc[32],*g_vd6ef204;
+static BYTE* g_vd6ef1fc=world;
+static int g_vd6ef1f0;
+static char s_vd679f54;
+static char room[]="room_aq_008", model[]="fixture_model", module[]="aq";
+static int expected, observed, calls, binds, returned, bases, callbacks, failed;
+static void check(bool ok,const char* label) { if(!ok){printf("FAIL %s\n",label);failed++;} }
+static BYTE* Car_InList(void*) { return 0; }
+static int SceneObj_Get800(BYTE* p,void*) {
+    // Prove the numeric ID was captured before subsequent object lookups.
+    F(int,p-16,20948)=999;
+    return (int)scene;
+}
+static void Vec3_ZeroThis(Vec3* p,void*) { memset(p,0,12); }
+static void FUN_5e48f0() {}
+template<class Fn> static void CallThis(Fn f,BYTE*) { f(); }
+static void CallVirt(BYTE*,int) {}
+static void Arrays_Free(BYTE*,int) {}
+static void Body58b870_Destroy(BYTE*,int) { bases++; }
+static void Linked592cf0_Destruct(BYTE*,void*) { bases++; }
+static void callback(int) { callbacks++; }
+static int Resources_Bind(BYTE*,void*,const char* a,BYTE*) {
+    check(a==module,"binding name preserved");binds++;return 0;
+}
+// PRODUCTION_RESOURCES
+static int Resources_SetData(BYTE** s,void* unused,int id,int a,unsigned size,const void* data) {
+    observed=id;calls++;
+    check(id==expected,"numeric resource ID (not scene string pointer)");
+    check(size==160,"record size");
+    check(!strcmp((const char*)data+96,room),"scene name preserved");
+    check(!strcmp((const char*)data+128,model),"object name preserved");
+    check(F(int,data,0)==123,"model field preserved");
+    // Old implementation fails above without an out-of-bounds fixture access.
+    returned=id==expected ? Actual_Resources_SetData(s,unused,id,a,size,data) : -999;
+    return returned;
+}
+// PRODUCTION_VEHICLE
+int main() {
+    static_assert(sizeof(void*)==4,"x86 fixture required");
+    for(int mode=0;mode<4;mode++) {
+        BYTE car[22000]={}, rec[32]={}; BYTE* page[1000]={};
+        memset(world,0,sizeof world);
+        int number=mode==3 ? 1007 : 2;expected=300000+number;
+        observed=calls=binds=bases=callbacks=0;returned=99;g_vd6ef1f0=2;
+        F(int,car,9548)=5;F(int,car,20948)=number;
+        F(int,car,9544)=987; // deliberately different from the correct field
+        F(int,car,10420)=123;F(Vd_Callback,car,20956)=callback;
+        F(BYTE*,car,336)=object;F(BYTE*,car,308)=cls;
+        F(char*,object,12)=model;F(char*,scene,12)=room;F(char*,cls,60)=module;
+        if(mode!=1) ((BYTE**)(world+704))[expected/1000]=(BYTE*)page;
+        if(mode!=2) page[expected%1000]=rec;
+        if(mode==0||mode==3) F(void*,rec,24)=operator new(8);
+        Vehicle_Destruct(car);
+        check(calls==1 && callbacks==1 && bases==2,"call sequence completes");
+        check(g_vd6ef1f0==1,"use count");
+        if(mode==0||mode==3) {
+            check(returned==0 && binds==1,"existing resource updated");
+            check(F(int,rec,0)==2 && F(int,rec,20)==160,"record metadata");
+            if(F(void*,rec,24)) {
+                if(returned==0) check(!strcmp((char*)F(void*,rec,24)+96,room),"copied record name");
+                operator delete(F(void*,rec,24));
+            }
+        } else check(returned==-1 && binds==0,"missing page/entry returns -1");
+        printf("case=%d expected=%d observed=%d result=%d\n",mode,expected,observed,returned);
+    }
+    check(Actual_Resources_SetData((BYTE**)(world+704),0,-1,0,0,0)==-1,"negative ID unchanged");
+    printf("%s vehicle resource-ID contract\n",failed?"FAIL":"PASS");
+    return failed?1:0;
+}

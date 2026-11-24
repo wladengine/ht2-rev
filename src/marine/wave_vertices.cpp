@@ -23,13 +23,13 @@ KING_VAR(float, g_mv_foamOffset5, 64c320)
 KING_VAR(float, g_mv_foamOffset6, 64c2fc)
 KING_VAR(float, g_mv_foamOffset7, 64d350)
 KING_VAR(float, g_mv_foamOffset8, 64c490)
-extern "C" double __cdecl MarineAngle_Sine(float);
-extern "C" double __cdecl MarineAngle_Cosine(float);
+extern "C" double __cdecl MarineAngle_SignedCosine(float);
+extern "C" double __cdecl MarineAngle_SineOfMagnitude(float);
 extern "C" Vec3* __cdecl Vec3_DivBy(Vec3*,const Vec3*,float);
 extern "C" double __cdecl Vec3_LengthSq(const Vec3*);
 extern "C" double __fastcall MarineGrid_MapX(BYTE*,void*,const DWORD*);
 extern "C" double __fastcall MarineGrid_MapY(BYTE*,void*,const DWORD*);
-extern "C" void __fastcall MarineGrid_Unmap(BYTE*,void*,const DWORD*,float*,float*);
+extern "C" void __fastcall MarineGrid_ComputeGridUV(BYTE*,void*,const DWORD*,float*,float*);
 extern "C" void __fastcall MarineGrid_ReflectionUV(BYTE*,void*,float,float,float,const Vec3*,float*,float*);
 extern "C" BYTE* __fastcall MarineGrid_WriteVertex(BYTE*,void*,const DWORD*,const DWORD*,DWORD,DWORD,DWORD,DWORD,DWORD,DWORD);
 extern "C" DWORD __fastcall MarineParticlePool_CanAdd(BYTE*,void*);
@@ -59,7 +59,8 @@ static void MarineVertex_Reflection(const Vec3& position,float* u,float* v,BYTE*
     *u=(float)((double)reflection.x*g_mv_uvScale/denominator+g_mv_half);
     *v=(float)((double)reflection.y*g_mv_uvScale/denominator+g_mv_half);
 }
-extern "C" void __fastcall MarineGrid_UpdateVertex(BYTE* self,void*,const DWORD* point,DWORD id,DWORD)
+// [FUN_611530]
+extern "C" void __fastcall MarineGrid_UpdateWaveVertex(BYTE* self,void*,const DWORD* point,DWORD id,DWORD)
 {
     float x=(float)MarineGrid_MapX(self,0,point);
     double unroundedY=MarineGrid_MapY(self,0,point);
@@ -67,19 +68,19 @@ extern "C" void __fastcall MarineGrid_UpdateVertex(BYTE* self,void*,const DWORD*
     float rotatedX=(float)(unroundedY*F(float,self,80)+(double)x*F(float,self,84));
     double rotatedY=(double)y*F(float,self,84)-(double)x*F(float,self,80);
     float phase=(float)(MarineVertex_Unsigned(F(DWORD,self,40))/F(float,self,68)+rotatedY/F(float,self,60));
-    float sine=(float)MarineAngle_Sine(phase);
+    float sine=(float)MarineAngle_SignedCosine(phase);
     phase=(float)(MarineVertex_Unsigned(F(DWORD,self,40))/F(float,self,64)+(double)rotatedX/F(float,self,56));
-    float height=(float)(MarineAngle_Cosine(phase)*sine);
+    float height=(float)(MarineAngle_SineOfMagnitude(phase)*sine);
     rotatedX=(float)((double)y*F(float,self,80)+(double)x*F(float,self,84));
     float roundedY=(float)((double)y*F(float,self,84)-(double)x*F(float,self,80));
     phase=(float)(MarineVertex_Unsigned(F(DWORD,self,40))/F(float,self,68)+(double)roundedY/F(float,self,60));
-    sine=(float)MarineAngle_Sine(phase);
+    sine=(float)MarineAngle_SignedCosine(phase);
     phase=(float)(MarineVertex_Unsigned(F(DWORD,self,40))/F(float,self,64)+(double)rotatedX/F(float,self,56));
-    float derivative=(float)(MarineAngle_Sine(phase)*sine*F(float,self,72));
+    float derivative=(float)(MarineAngle_SignedCosine(phase)*sine*F(float,self,72));
     phase=(float)(MarineVertex_Unsigned(F(DWORD,self,40))/F(float,self,68)+(double)roundedY/F(float,self,60));
-    float cosine=(float)MarineAngle_Cosine(phase);
+    float cosine=(float)MarineAngle_SineOfMagnitude(phase);
     phase=(float)(MarineVertex_Unsigned(F(DWORD,self,40))/F(float,self,64)+(double)rotatedX/F(float,self,56));
-    double other=MarineAngle_Cosine(phase)*cosine*F(float,self,72);
+    double other=MarineAngle_SineOfMagnitude(phase)*cosine*F(float,self,72);
     Vec3 rawNormal;
     rawNormal.x=(float)(-(other*F(float,self,80)+(double)derivative*F(float,self,84)));
     rawNormal.y=(float)(-((double)derivative*F(float,self,80)-other*F(float,self,84)));
@@ -128,9 +129,9 @@ extern "C" DWORD __fastcall MarineGrid_EmitTriangle(BYTE* self,void*,DWORD a,DWO
         BYTE* entry=F(BYTE*,self,124)+offset;
         if(!MarineVertex_IsPending(entry)) continue;
         DWORD point[2]={(DWORD)(__int64)(double)F(float,entry,4),(DWORD)(__int64)(double)F(float,entry,8)};
-        if(depth>7) {MarineGrid_UpdateVertex(self,0,point,ids[i],depth);continue;}
+        if(depth>7) {MarineGrid_UpdateWaveVertex(self,0,point,ids[i],depth);continue;}
         float x=(float)MarineGrid_MapX(self,0,point),y=(float)MarineGrid_MapY(self,0,point);
-        float gridU,gridV;MarineGrid_Unmap(self,0,point,&gridU,&gridV);
+        float gridU,gridV;MarineGrid_ComputeGridUV(self,0,point,&gridU,&gridV);
         float textureU=(float)((double)gridU/g_mv_textureWidth),textureV=(float)((double)gridV/g_mv_textureHeight),reflectionU,reflectionV;
         MarineGrid_ReflectionUV(self,0,x,y,0,&g_mv_flatNormal,&reflectionU,&reflectionV);
         Vec3 position={(float)MarineGrid_MapX(self,0,point),(float)MarineGrid_MapY(self,0,point),0};

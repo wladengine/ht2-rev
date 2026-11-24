@@ -1,0 +1,9 @@
+{
+  "description": "No contacts in the initialized zero-wheel boundary case. The return value is the contact count.",
+  "entry": "0x504d30",
+  "result": "eax",
+  "ecx": "0x1000100",
+  "args": [],
+  "objects": [],
+  "symbol": "@Wheels_FindGround@4"
+}

@@ -17,13 +17,14 @@ KING_VAR(DWORD, g_constructNormalZ, 652e5c)
 KING_VAR(float, g_constructResolution, 653118)
 KING_VAR(float, g_constructHalf, 64c258)
 extern "C" void FUN_60aad0(); KING_ALIAS("_FUN_60aad0", "_Grd_ReportError")
-extern "C" int __fastcall MarineGreed_Allocate(BYTE*,void*,unsigned,unsigned);
-extern "C" void __fastcall MarineGreed_Init(BYTE*,void*);
-extern "C" void __fastcall MarineGreed_Update(BYTE*,void*);
+extern "C" int __fastcall MarineMesh_AllocateBuffers(BYTE*,void*,unsigned,unsigned);
+extern "C" void __fastcall MarineMesh_InitPriorityQueues(BYTE*,void*);
+extern "C" void __fastcall MarineMesh_ScoreAndRefineNodes(BYTE*,void*);
 extern "C" DWORD __fastcall MarineQueue_InsertNode(BYTE*,void*,BYTE*);
 extern "C" void __cdecl MarineGrid_BuildRandomDirections(DWORD);
 extern "C" void __fastcall MarineGrid_Trim(BYTE*,void*,DWORD);
 
+// [FUN_607090]
 extern "C" BYTE* __fastcall MarineGrid_ConstructBase(BYTE* self,void*)
 {
     F(void*,self,0)=g_constructBaseVtable;
@@ -44,6 +45,7 @@ static BYTE* ConstructBranch()
     if(p) for(unsigned i=0;i<16;i+=4) F(DWORD,p,i)=0;
     return p;
 }
+// [FUN_605840]
 extern "C" DWORD __fastcall MarineMesh_SetCellTriangles(BYTE* self,void*,BYTE* first,BYTE* second)
 {
     F(DWORD,self,8)=F(DWORD,self,12)=F(DWORD,self,16)=0;
@@ -80,8 +82,12 @@ static void ConstructError(DWORD code,DWORD line)
     CallC(FUN_60aad0,code,g_constructError,g_constructFile,line,g_constructDate);
 }
 X87 double ConstructUnsigned(DWORD n) { volatile __int64 wide=(unsigned __int64)n; return (double)wide; }
-extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE* self,void*,const DWORD* center,float width,float height,DWORD trim)
+// [FUN_60fee0]
+extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE* self,void*,const DWORD* center,DWORD widthBits,DWORD heightBits,DWORD trim)
 {
+    // The caller forwards the encoded dimensions before the grid performs any x87 arithmetic.
+    const float width = F(float, &widthBits, 0);
+    const float height = F(float, &heightBits, 0);
     DWORD nx=(DWORD)(__int64)ceil((double)width*g_constructResolution);
     DWORD ny=(DWORD)(__int64)ceil((double)height*g_constructResolution);
     DWORD cells=nx*ny,vertices=(nx+1)*(ny+1),triangles=cells*2;
@@ -93,7 +99,7 @@ extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE* self,void*,const DWOR
         for(unsigned i=0;i<8;++i) F(DWORD,grid,zero[i])=0;
         MarineGrid_BuildRandomDirections(timeGetTime()); F(DWORD,grid,200)=0;
     }
-    F(float,grid,160)=width; F(float,grid,164)=height;
+    F(DWORD,grid,160)=widthBits; F(DWORD,grid,164)=heightBits;
     F(DWORD,grid,168)=center[0]; F(DWORD,grid,172)=center[1];
     double halfWidth=(double)width*g_constructHalf;
     F(float,grid,176)=(float)(F(float,grid,168)-halfWidth);
@@ -107,7 +113,7 @@ extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE* self,void*,const DWOR
     CallVirt(grid,20,sx,sy);
     F(BYTE*,self,4)=grid;
     DWORD count=CallVirt<DWORD>(grid,12);
-    MarineGreed_Allocate(self,0,count,cells); MarineGreed_Init(self,0);
+    MarineMesh_AllocateBuffers(self,0,count,cells); MarineMesh_InitPriorityQueues(self,0);
     for(DWORD i=0;i<cells;++i) {
         BYTE* cell=ConstructBranch(); F(BYTE**,self,8)[i]=cell;
         if(!cell) return 0;
@@ -166,6 +172,6 @@ extern "C" DWORD __fastcall MarineMesh_ConstructGrid(BYTE* self,void*,const DWOR
     }
     MarineGrid_Trim(self,0,trim);
     grid=F(BYTE*,self,4); CallVirt(grid,4,self+56,self+68);
-    F(DWORD,self,24)=F(DWORD,self,20)=1; MarineGreed_Update(self,0);
+    F(DWORD,self,24)=F(DWORD,self,20)=1; MarineMesh_ScoreAndRefineNodes(self,0);
     free(points); free(faces); return 1;
 }

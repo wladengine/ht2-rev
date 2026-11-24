@@ -81,9 +81,10 @@ KING_VAR(int, g_6ef264, 6ef264)
 KING_VAR(int, g_6ef268, 6ef268)
 KING_VAR(int, g_6ef270, 6ef270)
 KING_VAR(BYTE*, g_6ef1fc, 6ef1fc)             // +2968: the time (double)
-KING_VAR(Ints, g_flash695fb0, 695fb0)         // 32 steps of a flashing light
-KING_VAR(Ints, g_flash695328, 695328)
-KING_VAR(Ints, g_flash695e30, 695e30)
+typedef int FlashColorSteps[32];
+KING_VAR(FlashColorSteps, g_flash695fb0, 695fb0)         // 32 steps of a flashing light
+KING_VAR(FlashColorSteps, g_flash695328, 695328)
+KING_VAR(FlashColorSteps, g_flash695e30, 695e30)
 KING_VAR(AsmLabel, g_undefinedModule, 66d638) // "UNDEFINED_MODULE"
 KING_VAR(AsmLabel, g_undefinedRoom, 66d628)   // "UNDEFINED_ROOM"
 KING_VAR(AsmLabel, g_str68d1c0, 68d1c0)
@@ -96,12 +97,16 @@ static double GameTime() { return Game_Time(); }
 // ---------------------------------------------------------------------------
 // Sounds, the control bindings
 
+KING_VAR(double, soundPercentScale, 64b5a0)
+KING_VAR(double, soundDefaultScale, 64b670)
+
 // plays s at v times the sound volume of the options
-extern "C" void __cdecl Sound_PlayVolume(Sound* s, float v)
+// [FUN_52fa20]
+extern "C" void __cdecl Sound_RestartScaledByOption386(Sound* s, float v)
 {
     if (!s)
         return;
-    double k = g_6cec78 ? F(short, g_6cec78, 386) * 0.01 : 1.0;
+    double k = g_6cec78 ? F(short, g_6cec78, 386) * soundPercentScale : soundDefaultScale;
     float x = (float)(v * k);
     s->Play(x, x);
 }
@@ -113,7 +118,7 @@ extern "C" void* __fastcall Obj52fd90_Reset(BYTE* self, void*)
     return self;
 }
 
-// the state byte of action i: its first key's if that is down, else its
+// [FUN_530070] The state byte of action i: its first key's if that is down, else its
 // second key's (+264 and +452: pointers into the control states)
 extern "C" int __fastcall Controls_ActionState(BYTE* self, void*, int i)
 {
@@ -142,14 +147,16 @@ extern "C" double __fastcall Controls_Axis(BYTE* self, void*, int i)
     return 0.0f;
 }
 
-extern "C" int __fastcall Controls_530100(BYTE* self, void*, int x)
+// [FUN_530100]
+extern "C" int __fastcall Controls_ShouldSelectNeutral(BYTE* self, void*, int x)
 {
     if (F(int, self, 692) != 1)
         return 0;
     return x == 0;
 }
 
-extern "C" float __fastcall Obj_Float200(BYTE* self, void*)
+// [FUN_532320]
+extern "C" float __fastcall CabView_GetFreeLookPitch(BYTE* self, void*)
 {
     return F(float, self, 200);
 }
@@ -174,7 +181,8 @@ extern "C" int __cdecl Road_IsPlace(const Position* pos)
 // ---------------------------------------------------------------------------
 // The game object at $L_6d2078 (+616: the player's vehicle)
 
-extern "C" void __fastcall King_53b130(BYTE* self, void*)
+// [FUN_53b130]
+extern "C" void __fastcall Player_ApplyEngineControlFlags(BYTE* self, void*)
 {
     BYTE* car = F(BYTE*, self, 616);
     if (!car)
@@ -189,7 +197,7 @@ extern "C" int __fastcall King_53b3c0(BYTE* self, void*, int a)
 {
     if (!F(BYTE*, self, 616))
         return 0;
-    Sound_PlayVolume(g_sound6d1d2c, 0.4f);
+    Sound_RestartScaledByOption386(g_sound6d1d2c, 0.4f);
     return CallVirt<int>(F(BYTE*, self, 616), 80, a);
 }
 
@@ -226,6 +234,7 @@ extern "C" BYTE* __cdecl Car_InList(void* car)
 }
 
 // the same for the vehicle whose part at +16 is p
+// [FUN_53f780] Resolve the vehicle subobject at +16 against the vehicle list.
 extern "C" BYTE* __cdecl Car_InListFrom16(BYTE* p)
 {
     if (p)
@@ -286,11 +295,14 @@ extern "C" void* __fastcall Obj542440_Construct(BYTE* self, void*)
     return self;
 }
 
+KING_VAR(float, vehicleStateMagnitudeBase, 64c264)
+
 // sum of |state[i]| * weight[i] over the 9 values at state[0] and the 27 at
 // state[14] (the state of Car_GetState, the weights at +10432 of the vehicle)
-extern "C" double __fastcall Weights_Sum(const float* self, void*, const float* state)
+// [FUN_542530]
+extern "C" double __fastcall VehicleState_WeightedMagnitude(const float* self, void*, const float* state)
 {
-    double s = 0.0f;
+    double s = vehicleStateMagnitudeBase;
     for (int i = 0; i < 9; i++)
         s = s + x87_fabs(state[i]) * self[i];
     for (int i = 0; i < 27; i++)
@@ -366,7 +378,7 @@ extern "C" void __cdecl Switches_Apply(BYTE* s, int n)
     }
 }
 
-// the 49 floats Weights_Sum weighs; returns how many were written
+// the 49 floats VehicleState_WeightedMagnitude weighs; returns how many were written
 extern "C" int __fastcall Car_GetState(BYTE* self, void*, float* out)
 {
     for (int i = 0; i < 9; i++)
@@ -421,6 +433,7 @@ extern "C" void* __fastcall Obj548e70_Construct(BYTE* self, void*)
 // A flashing light: +0 the light, +4 its default range, +8 the time of the
 // last step, +12 the step (0..31) through the tables of the flash
 
+// [FUN_54a2f0]
 extern "C" void __fastcall Flasher_SetPos(BYTE* self, void*, const int* pos)
 {
     BYTE* o = F(BYTE*, self, 0);
@@ -429,18 +442,21 @@ extern "C" void __fastcall Flasher_SetPos(BYTE* self, void*, const int* pos)
     F(int, o, 68) = pos[2];
 }
 
-// steps the flash every 0.1 s; range < 0 (or NaN) is the default range
+KING_VAR(float, flashStepInterval, 64f4b8)
+KING_VAR(float, flashRangeThreshold, 64c264)
+
+// [FUN_54a260] Update the light range and copy the current RGB table entries.
 extern "C" void __fastcall Flasher_Step(BYTE* self, void*, float range)
 {
     double now = F(double, g_6ef1fc, 2968);
-    if (!(0.1f >= now - F(float, self, 8))) {
+    if (!(flashStepInterval >= now - F(float, self, 8))) {
         F(float, self, 8) = (float)now;
         unsigned n = F(unsigned, self, 12) + 1;
         F(unsigned, self, 12) = n;
         if (n >= 32)
             F(unsigned, self, 12) = 0;
     }
-    if (!(range >= 0.0f))
+    if (!(range >= flashRangeThreshold))
         range = F(float, self, 4);
     F(float, F(BYTE*, self, 0), 96) = range;
     F(int, F(BYTE*, self, 0), 108) = g_flash695fb0[F(int, self, 12)];
@@ -448,7 +464,8 @@ extern "C" void __fastcall Flasher_Step(BYTE* self, void*, float range)
     F(int, F(BYTE*, self, 0), 116) = g_flash695e30[F(int, self, 12)];
 }
 
-extern "C" void __fastcall Flasher_Update(BYTE* self, void*, const int* pos, float range)
+// [FUN_54a240]
+extern "C" void __fastcall Flasher_SetPositionAndAdvance(BYTE* self, void*, const int* pos, float range)
 {
     Flasher_SetPos(self, 0, pos);
     Flasher_Step(self, 0, range);
@@ -487,19 +504,27 @@ extern "C" void* __fastcall Obj549890_Construct(BYTE* self, void*)
     return self;
 }
 
-extern "C" int __fastcall Obj549bf0_Get(BYTE* self, void*)
+extern "C" int __fastcall CarEffect_GetState(BYTE* self, void*)
 {
     return F(int, F(BYTE*, self, 20), 12);
 }
 
-// 0.3 below 5, rising to 1 at 20
-extern "C" double __cdecl Ramp_54a330(float x)
+KING_VAR(float, contactScaleLowSpeed, 64c320)
+KING_VAR(float, contactScaleHighSpeed, 64c32c)
+KING_VAR(float, contactScaleBelowRange, 64c338)
+KING_VAR(float, contactScaleAboveRange, 64c250)
+KING_VAR(double, contactScaleSlope, 64d9b0)
+KING_VAR(double, contactScaleIntercept, 64d0f0)
+
+// The low-speed plateau is a float. The linear branch starts at a double.
+// [FUN_54a330]
+extern "C" double __cdecl WheelContact_SpeedScale(float x)
 {
-    if (!(x >= 5.0f))
-        return 0.3f;
-    if (x > 20.0f)
-        return 1.0f;
-    return ((double)x - 5.0f) * 0.04666666666666666 + 0.3;
+    if (!(x >= contactScaleLowSpeed))
+        return contactScaleBelowRange;
+    if (x > contactScaleHighSpeed)
+        return contactScaleAboveRange;
+    return ((double)x - contactScaleLowSpeed) * contactScaleSlope + contactScaleIntercept;
 }
 
 extern "C" void __fastcall Car_54ef20(BYTE* self, void*, int a)
@@ -513,9 +538,10 @@ extern "C" void __fastcall Car_54ef20(BYTE* self, void*, int a)
     CallVirt(self + 16, 80, t, a);
 }
 
-extern "C" int __cdecl Veh_54ef90(int unused, int a, int b)
+// [FUN_54ef90]
+extern "C" int __cdecl Vehicle_EmitTypeOneSkidEffect(int unused, const void* point, const void* velocity)
 {
-    return Fx_Skid1((const void*)a, (const void*)b, 1);
+    return Fx_Skid1(point, velocity, 1);
 }
 
 extern "C" int __cdecl Veh_54efb0(int a, int b)
@@ -523,7 +549,8 @@ extern "C" int __cdecl Veh_54efb0(int a, int b)
     return Fx_Skid2((const void*)a, (const void*)b, 1);
 }
 
-extern "C" int __fastcall Car_54efd0(BYTE* self, void*, int* a, int* b)
+// [FUN_54efd0]
+extern "C" int __fastcall Vehicle_ReadTrafficViolation(BYTE* self, void*, int* a, int* b)
 {
     *a = F(int, self, 20596);
     *b = F(int, self, 20628);
@@ -543,7 +570,8 @@ extern "C" int __fastcall Car_54f000(BYTE* self, void*, int* a, int* b)
     return F(int, self, 20632);
 }
 
-extern "C" void* __fastcall Obj5518d0_Construct(BYTE* self, void*)
+// [FUN_5518d0]
+extern "C" void* __fastcall Beacon_ConstructTransformNode(BYTE* self, void*)
 {
     NodeN_Construct(self, 0, (const char*)g_str68d1c0, 6, 1);
     for (int i = 0; i < 4; i++) {       // the Vec3 rows of the matrix at +64
@@ -558,7 +586,8 @@ extern "C" void* __fastcall Obj5518d0_Construct(BYTE* self, void*)
     return self;
 }
 
-extern "C" void* __fastcall Obj551920_Construct(BYTE* self, void*, int a, BYTE* parent)
+// [FUN_551920]
+extern "C" void* __fastcall Beacon_ConstructLampNode(BYTE* self, void*, int a, BYTE* parent)
 {
     Node_Construct(self, 0, (const char*)a, 17);
     F(int, self, 48) = 0;
@@ -576,16 +605,19 @@ extern "C" void* __fastcall Obj551920_Construct(BYTE* self, void*, int a, BYTE* 
     return self;
 }
 
-extern "C" double __fastcall Car_555500(BYTE* self, void*)
+extern "C" double __fastcall Car_GetWeightedStateMagnitude(BYTE* self, void*)
 {
     float state[49];
     if (!F(BYTE*, self, 21600))
         return 0.0f;
     Car_GetState(self, 0, state);
-    return Weights_Sum((const float*)(self + 10432), 0, state);
+    return VehicleState_WeightedMagnitude((const float*)(self + 10432), 0, state);
 }
 
-extern "C" void __fastcall Car_556040(BYTE* self, void*, int mode)
+KING_VAR(float, cargoInitialLoadFraction, 64d490)
+
+// [FUN_556040]
+extern "C" void __fastcall CargoHold_SetInitialLoad(BYTE* self, void*, int mode)
 {
     int type = F(int, self, 10420);
     if (type < g_typeClass1 || type >= g_typeClass3)
@@ -593,7 +625,7 @@ extern "C" void __fastcall Car_556040(BYTE* self, void*, int mode)
     if (mode == 1) {
         if (!F(int, self, 9600))
             Car_ApplyTypeVec(self, 0);
-        float v = F(float, self, 9572) * 0.14285715f;
+        float v = F(float, self, 9572) * cargoInitialLoadFraction;
         F(float, self, 9584) = v;
         F(float, self, 9588) = v;
         Car_LoadCargo(self, 0, (int)(self + 9592), (int)(self + 9580));
@@ -604,7 +636,8 @@ extern "C" void __fastcall Car_556040(BYTE* self, void*, int mode)
     }
 }
 
-extern "C" float __fastcall Car_556650(BYTE* self, void*)
+// [FUN_556650]
+extern "C" float __fastcall Car_GetActiveCabHeightOffset(BYTE* self, void*)
 {
     if (F(int, self, 20904))
         return F(float, self, 20296);
@@ -640,7 +673,8 @@ extern "C" void* __fastcall Obj556670_Init(BYTE* self, void*, int type)
     return self;
 }
 
-extern "C" void __fastcall Obj556a30_Clear(BYTE* self, void*)
+// [FUN_556a30]
+extern "C" void __fastcall CargoHold_ClearPendingAmounts(BYTE* self, void*)
 {
     F(int, self, 24) = 0;
     F(int, self, 40) = 0;
@@ -651,7 +685,7 @@ extern "C" void __fastcall Obj556a30_Clear(BYTE* self, void*)
 extern "C" void __fastcall Obj556740_Stop(BYTE* self, void*)
 {
     if (F(float, self, 24) > 0.0f)
-        Obj556a30_Clear(self, 0);
+        CargoHold_ClearPendingAmounts(self, 0);
     F(int, self, 44) = 0;
     F(int, self, 48) = 0;
     F(int, self, 52) = 0;
@@ -691,23 +725,29 @@ extern "C" void __fastcall Obj5569c0_Take(BYTE* self, void*, float t, float* a, 
         F(float, self, 32) = (float)(F(float, self, 28) - left);
 }
 
-extern "C" float __fastcall Car_557000(BYTE* self, void*)
+KING_VAR(float, vehicleWearDefault, 64c250)
+KING_VAR(double, vehicleFrameThreshold, 64b6e0)
+KING_VAR(float, vehicleFactorFloor, 64c264)
+
+// [FUN_557000]
+extern "C" float __fastcall Vehicle_GetOrientationAndWearFactor(BYTE* self, void*)
 {
+    // The original reads the fallback even when the body provides its wear factor.
+    double v = static_cast<const volatile float&>(vehicleWearDefault);
     float f = F(float, self, 548);
     float lim = 1.0f;
-    if (!(f >= 0.5)) {
-        if (!(f >= 0.0f))
+    if (!(f >= vehicleFrameThreshold)) {
+        if (!(f >= vehicleFactorFloor))
             lim = 0.0f;
         else
             lim = (float)((double)f + f);
     }
-    double v = 1.0f;
     if (F(BYTE*, self, 21600))
         v = Car_MinWearFactor(F(BYTE*, self, 21600), 0);
     if (!(v >= lim))
         lim = (float)v;
-    if (!(lim >= 0.0f))
-        return 0.0f;
+    if (!(lim >= vehicleFactorFloor))
+        return vehicleFactorFloor;
     return lim;
 }
 
@@ -757,7 +797,8 @@ static bool NameIs(const BYTE* a, const BYTE* b)
 }
 
 // a node of the list at $L_6d20dc by kind, x, y and name; else a free one
-extern "C" int __cdecl Node530c40_Find(const BYTE* name, int unused, int kind, int unused2,
+// [FUN_530c40]
+extern "C" int __cdecl Controls_FindSavedDevicePreset(const BYTE* name, int unused, int kind, int unused2,
                                        int x, int y, BYTE** out)
 {
     if (!kind || !g_list6d20dc)
@@ -788,7 +829,8 @@ extern "C" int __cdecl Node530c40_Find(const BYTE* name, int unused, int kind, i
 }
 
 // the dashboard's lamps and gauges of the vehicle type
-extern "C" void __fastcall Dash_Setup(BYTE* self, void*, BYTE* car)
+// [FUN_531ac0]
+extern "C" void __fastcall Dashboard_BindVehicleInstruments(BYTE* self, void*, BYTE* car)
 {
     int type = F(int, car, 10420);
     BYTE* t = (BYTE*)g_6d2410 + type * 1488;
@@ -1204,17 +1246,18 @@ extern "C" void __fastcall MovingItem_Frame(BYTE* s);
 extern "C" void __fastcall Vehicle_RecordState(BYTE* self, void*);
 extern "C" void FUN_546240(); KING_ALIAS("_FUN_546240", "@Vehicle_RecordState@8")
 extern "C" void FUN_501b90(); KING_ALIAS("_FUN_501b90", "@Control_Move@20")
-extern "C" void __fastcall Body_ClearMode(BYTE* self, void*);              // carphys.cpp
-extern "C" void __fastcall Progress_SetStep(BYTE* self, void*, int step);  // movingb.cpp
+extern "C" void __fastcall Body_ClearPhysicsMode(BYTE* self, void*);              // carphys.cpp
+extern "C" void __fastcall Progress_SetStepAndFraction(BYTE* self, void*, int step);  // movingb.cpp
 KING_VAR(AsmLabel, g_strSetVehinMode, 67a2b0)  // "_Vehicle::set_vehin_mode#2"
 KING_VAR(float, g_quarterPi674408, 674408)
 KING_VAR(double, g_64f4c8, 64f4c8)            // 1/127
 
 // the mode of the vehicle: 1 a passenger in it, 2 ...
+// [FUN_54ca60] Transition vehicle mode and initialize or clear body state as required.
 extern "C" void __fastcall Car_SetInMode(BYTE* self, void*, int mode)
 {
     if (F(int, self, 10924) == 1 && mode != 1)
-        Body_ClearMode(F(BYTE*, self, 21600), 0);
+        Body_ClearPhysicsMode(F(BYTE*, self, 21600), 0);
     if (mode == 1) {
         int m = F(int, self, 10924);
         if (m != 1 && (!F(int, self, 20908) || F(int, self, 3992) == 3)) {
@@ -1279,7 +1322,8 @@ static inline void Copy3(void* to, const void* from)
 }
 
 // the state of the vehicle `back` steps ago (of the last 50)
-extern "C" void __fastcall Car_History(BYTE* self, void*, int back, int* a, int* b, void* m1,
+// [FUN_554a90]
+extern "C" void __fastcall Vehicle_ReadHistorySample(BYTE* self, void*, int back, int* a, int* b, void* m1,
                                        void* v1, void* m2, int* c, char* name, void* v2, void* v3,
                                        int* d)
 {
@@ -1300,8 +1344,9 @@ extern "C" void __fastcall Car_History(BYTE* self, void*, int back, int* a, int*
     *d = F(int, self, 11340 + i * 4);
 }
 
-// the progress shown for the trailer's load; redoes the cargo on changes
-extern "C" void __fastcall Car_UpdateCargo(BYTE* self, void*)
+// Refresh the progress step and record the old and new vehicle state when a field changes.
+// [FUN_5553e0]
+extern "C" void __fastcall Vehicle_UpdateProgressAndRecordChanges(BYTE* self, void*)
 {
     if (!(F(BYTE, self, 20900) & 0x80))
         return;
@@ -1317,7 +1362,7 @@ extern "C" void __fastcall Car_UpdateCargo(BYTE* self, void*)
         step = 1;
     else
         step = F(int, c, 24) > 0 ? 3 : 0;
-    Progress_SetStep(c, 0, step);
+    Progress_SetStepAndFraction(c, 0, step);
     for (int i = 0; i < 9; i++)
         if (F(int, self, 21052 + i * 4) != F(int, F(BYTE*, self, 9536), 4 + i * 20)) {
             F(int, self, 20304) = 1;
@@ -1368,9 +1413,10 @@ extern "C" int __fastcall Car_SetLights(BYTE* self, void*, float* level)
 
 extern "C" double __fastcall Trailer_SaddleLoad(BYTE* s, void*, const float* dir);
 extern "C" void FUN_4eec80(); KING_ALIAS("_FUN_4eec80", "@Trailer_SaddleLoad@12")    // engine: the angle of a direction (&vec)
-extern "C" void __fastcall Engine_4eead0(BYTE* self, void*, int a);   // carphys.cpp
+extern "C" void __fastcall Body_ApplySaddleLoad(BYTE* self, void*, float load);   // carphys.cpp
 
-extern "C" void __fastcall Vehicle_AttachCar(BYTE* self, void*, BYTE* car)
+// [FUN_558850]
+extern "C" void __fastcall Tractor_AttachTrailerAndApplySaddleLoad(BYTE* self, void*, BYTE* car)
 {
     F(int, self, 20936) = 0;
     F(BYTE*, self, 21880) = car;
@@ -1378,7 +1424,7 @@ extern "C" void __fastcall Vehicle_AttachCar(BYTE* self, void*, BYTE* car)
     F(int, F(BYTE*, self, 21600), 10096) = 1;
     float d[3] = {-g_702630, -g_702634, -g_702638};
     float a = CallThis<float>(FUN_4eec80, F(BYTE*, car, 21600), d);
-    Engine_4eead0(F(BYTE*, self, 21600), 0, F(int, &a, 0));
+    Body_ApplySaddleLoad(F(BYTE*, self, 21600), 0, a);
     F(int, self, 21888) = 0;
     F(int, self, 21892) = -1;
     F(DWORD, F(BYTE*, self, 21600), 10124) = F(DWORD, F(BYTE*, self, 21880), 3284);
@@ -1410,7 +1456,7 @@ extern "C" void __cdecl Car_ClearGlobals6ef2b8()
 }
 
 // ---------------------------------------------------------------------------
-extern "C" void FUN_589410(); KING_ALIAS("_FUN_589410", "@Progress_SetPart@12")
+extern "C" void FUN_589410(); KING_ALIAS("_FUN_589410", "@Progress_SetFractionAndStep@12")
 extern "C" void __fastcall Ramp_SetPosition(BYTE* self, void*, float p);
 extern "C" void FUN_4eb6a0(); KING_ALIAS("_FUN_4eb6a0", "@Ramp_SetPosition@12")
 extern "C" int __fastcall Cab_ReadSettings(BYTE* s, void*, const float* v);
@@ -1549,7 +1595,7 @@ extern "C" int __cdecl Action1() { return Controls_ActionState((BYTE*)g_controls
 // [FUN_53b480] control action 2 is on
 extern "C" int __cdecl Action2() { return Controls_ActionState((BYTE*)g_controls6d1db8, 0, 2) != 0; }
 // [FUN_53b4b0] control axis 0
-extern "C" int __cdecl Axis0() { return CallThis<int>(FUN_5300b0, g_controls6d1db8, 0); }
+extern "C" double __cdecl Axis0() { return CallThis<double>(FUN_5300b0, g_controls6d1db8, 0); }
 
 // [FUN_557400] vtbl+144 of the part at +16 with (x, 67a3dc)
 extern "C" int __fastcall Car_Part16Call(BYTE* self, void*, DWORD x)
@@ -1811,8 +1857,8 @@ extern "C" void __fastcall Car_ApplyZero(BYTE* self, void*);
 extern "C" void FUN_5560e0(); KING_ALIAS("_FUN_5560e0", "@Car_ApplyZero@8")
 extern "C" int __fastcall Car_SumAbs9(BYTE* self, void*);
 extern "C" void FUN_555eb0(); KING_ALIAS("_FUN_555eb0", "@Car_SumAbs9@8")
-extern "C" double __fastcall Car_555500(BYTE* self, void*);
-extern "C" void FUN_555500(); KING_ALIAS("_FUN_555500", "@Car_555500@8")
+extern "C" double __fastcall Car_GetWeightedStateMagnitude(BYTE* self, void*);
+extern "C" void FUN_555500(); KING_ALIAS("_FUN_555500", "@Car_GetWeightedStateMagnitude@8")
 extern "C" void FUN_555e10(); KING_ALIAS("_FUN_555e10", "@Car_ControlSum4@4")
 extern "C" void FUN_555d80(); KING_ALIAS("_FUN_555d80", "@Car_Level3@8")
 extern "C" void FUN_555d10(); KING_ALIAS("_FUN_555d10", "@Car_WheelSum@4")
@@ -1829,7 +1875,7 @@ extern "C" double __fastcall Car_Get9596(BYTE* s) { return F(float, s, 9596); }
 extern "C" void __fastcall Car_Set9596(BYTE* s, void*, DWORD v) { F(DWORD, s, 9596) = v; }
 
 // [$L_53b4a0]
-extern "C" int __cdecl Car_ControlsAxis2() { return CallThis<int>(FUN_5300b0, g_controls6d1db8, 2); }
+extern "C" double __cdecl Car_ControlsAxis2() { return CallThis<double>(FUN_5300b0, g_controls6d1db8, 2); }
 
 // [$L_55edf0] full (1.0) setting of the record at +21584, then FUN_556a70
 extern "C" void __fastcall Car_55edf0(BYTE* s)
@@ -1968,10 +2014,10 @@ extern "C" double __fastcall Car_Sum60(BYTE* s) { return Car_PlusTrailer(s, FUN_
 // [$L_55e4b0] FUN_555500 of the car plus that of the trailer
 extern "C" double __fastcall Car_Sum555500(BYTE* s)
 {
-    float v = (float)Car_555500(s, 0);
+    float v = (float)Car_GetWeightedStateMagnitude(s, 0);
     BYTE* t = F(BYTE*, s, 21880);
     if (t)
-        return Car_555500(t, 0) + v;
+        return Car_GetWeightedStateMagnitude(t, 0) + v;
     return v;
 }
 
@@ -2783,13 +2829,12 @@ extern "C" double __fastcall Car_ControlSum9(BYTE* s)
 }
 
 // [FUN_542250] x clamped to -lim..lim
-extern "C" double __cdecl Clamp542250(float x, float lim)
+extern "C" double __cdecl Vehicle_ClampPacketComponent(float x, float lim)
 {
-    if (x < -lim)
-        return -lim;
-    if (x <= lim)
-        return x;
-    return lim;
+    const float lower = -lim;
+    if (x87_compare_status(x, lower) & X87_C0)
+        return lower;
+    return (x87_compare_status(x, lim) & (X87_C0 | X87_C3)) ? x : lim;
 }
 
 // ---------------------------------------------------------------------------
@@ -2800,8 +2845,8 @@ extern "C" void FUN_5494c0(); KING_ALIAS("_FUN_5494c0", "@CarEffect_End@12")
 extern "C" void __fastcall Ramp_Down(BYTE* self, void*, float dt);
 extern "C" void FUN_4eb6e0(); KING_ALIAS("_FUN_4eb6e0", "@Ramp_Down@12")
 extern "C" void FUN_4eb720(); KING_ALIAS("_FUN_4eb720", "@Ramp_FromTop@12")
-extern "C" int __fastcall Obj549bf0_Get(BYTE* self, void*);
-extern "C" void FUN_549bf0(); KING_ALIAS("_FUN_549bf0", "@Obj549bf0_Get@8")
+extern "C" int __fastcall CarEffect_GetState(BYTE* self, void*);
+extern "C" void FUN_549bf0(); KING_ALIAS("_FUN_549bf0", "@CarEffect_GetState@8")
 KING_VAR(double, g_q169_64b840, 64b840)
 // [FUN_555a70] resets car s with a: the body's setting (+10468), its ramp (body +15520: 0/1 from the top, 2 down
 // by 0.6), the +21568 state 1 or 2 restarted (5494c0), the +21596 time from the controls' +32
@@ -2814,7 +2859,7 @@ extern "C" void __fastcall Car_ResetControls(BYTE* s, void*, int a)
         CallThis(FUN_4eb720, b + 16060, 0);
     else if (st == 2)
         CallThis(FUN_4eb6e0, b + 16060, 0xbf19999a);
-    if (Obj549bf0_Get(s + 21568, 0) == 1 || Obj549bf0_Get(s + 21568, 0) == 2)
+    if (CarEffect_GetState(s + 21568, 0) == 1 || CarEffect_GetState(s + 21568, 0) == 2)
         CarEffect_End(s, 0, 1);
     F(float, s, 21596) = (float)(F(float, F(BYTE*, s, 9536), 32) + g_q169_64b840);
 }
@@ -2833,8 +2878,8 @@ KING_VAR(int, g_q170_6ef260, 6ef260)
 extern "C" void __fastcall CarEffect_End(BYTE* s, void*, int keep)
 {
     int use = keep == 0;
-    int st = Obj549bf0_Get(s + 21568, 0);
-    if (st != 1 && Obj549bf0_Get(s + 21568, 0) != 2)
+    int st = CarEffect_GetState(s + 21568, 0);
+    if (st != 1 && CarEffect_GetState(s + 21568, 0) != 2)
         return;
     if (use) {
         if (!F(int, s, 21400))
@@ -2979,7 +3024,7 @@ extern "C" float __fastcall Car_HoldValue2(BYTE* s)
 
 extern "C" BYTE* __fastcall Node_Init(BYTE* self, void*);
 extern "C" void FUN_5ef5c0(); KING_ALIAS("_FUN_5ef5c0", "@Node_Init@8")
-extern "C" unsigned __cdecl Query_Parts1(int a, int mode, BYTE* q);
+extern "C" unsigned __cdecl World_QueryObjectCollision(int a, int mode, BYTE* q);
 extern "C" int __fastcall Object_QueryShape(BYTE* o, void*, BYTE* h);
 // [$L_54c6d0] the car's world query (kind 6) into the 208-byte record out: a query from the car's position +584
 // and direction +536 against its body (+804), through the parts list when the model (+21584) has one (+9992) or the
@@ -3004,7 +3049,7 @@ extern "C" int __fastcall Car_Query(BYTE* s, void*, BYTE* out)
     F(int, q, 0) = F(int, s, 40);
     int r;
     if (F(WORD, m, 9992)) {
-        r = (int)Query_Parts1((int)(F(BYTE*, s, 804)), 6, q);
+        r = (int)World_QueryObjectCollision((int)(F(BYTE*, s, 804)), 6, q);
     } else {
         r = CallVirt<int>(F(BYTE*, s, 804), 52, 6, q);
         if ((r & 2) && !F(int, q, 104)) {
@@ -3567,6 +3612,8 @@ void __fastcall Vehicle_Destruct(BYTE* s)
     if (Vd_Callback cb = F(Vd_Callback, s, 20956))
         cb(0);
     if (F(int, s, 9548) == 5) {
+        // Original FUN_544df0 captures the numeric key separately from the scene name.
+        int resourceNumber = F(int, s, 20948);
         int kind = 3, other = 0;
         DWORD speed = 1142292480;
         if (BYTE* t = F(BYTE*, s, 21604)) {
@@ -3592,7 +3639,7 @@ void __fastcall Vehicle_Destruct(BYTE* s)
         F(DWORD, r, 92) = speed;
         strncpy((char*)r + 96, (const char*)name, 31);
         strncpy((char*)r + 128, (const char*)obj, 31);
-        Resources_SetData((BYTE**)(g_vd6ef1fc + 704), 0, name + 300000, F(int, F(BYTE*, s, 308), 60), 160, r);
+        Resources_SetData((BYTE**)(g_vd6ef1fc + 704), 0, resourceNumber + 300000, F(int, F(BYTE*, s, 308), 60), 160, r);
         if (BYTE* t = F(BYTE*, s, 21604)) {
             CallThis(FUN_5e48f0, t);
             operator delete(t);
@@ -3655,13 +3702,13 @@ static float Pk_F(DWORD u)
 }
 
 // a byte from v clamped to +-lim and scaled
-static BYTE Pk_Byte(float v, float lim, double scale) { return (BYTE)(int)(Clamp542250(v, lim) * scale); }
+static BYTE Pk_Byte(float v, float lim, double scale) { return (BYTE)(int)(Vehicle_ClampPacketComponent(v, lim) * scale); }
 
 // an angle checked (where), clamped to +-lim
 static double Pk_Angle(float a, const char* where, float lim)
 {
     float t = (float)(double)Angle_F2Pi(a, where);
-    return Clamp542250(t, lim);
+    return Vehicle_ClampPacketComponent(t, lim);
 }
 
 extern "C" {
@@ -3690,7 +3737,7 @@ void __fastcall Vehicle_PackState(BYTE* p)
         int v = (int)(a * g_pk64f508 * g_pk64f500) & 1023;
         b[at++] = (BYTE)v;
         b[at] = (BYTE)(v >> 8);
-        int w = (int)(Clamp542250(F(float, p, 140 + i * 4), Pk_F(1060320051)) * g_pk64b780);
+        int w = (int)(Vehicle_ClampPacketComponent(F(float, p, 140 + i * 4), Pk_F(1060320051)) * g_pk64b780);
         b[at] |= (BYTE)(w << 2);
         at++;
     }
@@ -3750,8 +3797,8 @@ extern "C" void FUN_4eb6e0(); KING_ALIAS("_FUN_4eb6e0", "@Ramp_Down@12")
 extern "C" void FUN_4eb720(); KING_ALIAS("_FUN_4eb720", "@Ramp_FromTop@12")
 extern "C" void FUN_501b90(); KING_ALIAS("_FUN_501b90", "@Control_Move@20")
 extern "C" void FUN_5494c0(); KING_ALIAS("_FUN_5494c0", "@CarEffect_End@12")
-extern "C" void FUN_549bf0(); KING_ALIAS("_FUN_549bf0", "@Obj549bf0_Get@8")
-extern "C" void FUN_555500(); KING_ALIAS("_FUN_555500", "@Car_555500@8")
+extern "C" void FUN_549bf0(); KING_ALIAS("_FUN_549bf0", "@CarEffect_GetState@8")
+extern "C" void FUN_555500(); KING_ALIAS("_FUN_555500", "@Car_GetWeightedStateMagnitude@8")
 extern "C" int __fastcall Car_SetLights(BYTE* self, void*, float* level);
 extern "C" void FUN_589490(); KING_ALIAS("_FUN_589490", "@BodyLevel_Step@16")
 
@@ -3792,10 +3839,10 @@ int __fastcall Vehicle_LowerStep(BYTE* car, void*, float x)
         }
         return x == g_lw64c264 ? 0 : 1;
     }
-    int st = Obj549bf0_Get(car + 21568, 0);
-    if (st == 1 || Obj549bf0_Get(car + 21568, 0) == 2)
+    int st = CarEffect_GetState(car + 21568, 0);
+    if (st == 1 || CarEffect_GetState(car + 21568, 0) == 2)
         CarEffect_End(car, 0, 1);
-    Car_555500(car, 0);
+    Car_GetWeightedStateMagnitude(car, 0);
     BYTE* cab = F(BYTE*, car, 21600);
     if (cab) {
         Lw_Cab(car, 0, &x, F(int, car, 10468));
@@ -4580,7 +4627,7 @@ double __fastcall Car_WorkingOrder(BYTE* s)
     if (F(float, s, 548) < g_wo64b6e0)
         x = F(float, s, 548) < g_wo64c264 ? 0 : (float)((double)F(float, s, 548) + F(float, s, 548));
     float y = 1.0f;
-    if (Obj549bf0_Get(s + 21568, 0))
+    if (CarEffect_GetState(s + 21568, 0))
         y = 0;
     float m = y < x ? y : x;
     const BYTE* c = F(BYTE*, s, 9536);
@@ -4635,7 +4682,7 @@ void __cdecl Controls_ListPresets()
         BYTE* d = (BYTE*)g_clDevices + i * 568;
         const char* name = (const char*)d + 308;
         BYTE* found = 0;
-        Node530c40_Find((const BYTE*)name, F(int, d, 0), F(WORD, d, 40), F(WORD, d, 42), F(WORD, d, 44), F(WORD, d, 46),
+        Controls_FindSavedDevicePreset((const BYTE*)name, F(int, d, 0), F(WORD, d, 40), F(WORD, d, 42), F(WORD, d, 44), F(WORD, d, 46),
                         &found);
         BYTE* p = (BYTE*)g_cp6cf4d8 + g_cp6d207c * 696;
         if (found) {
@@ -4662,7 +4709,7 @@ void __cdecl Controls_ListPresets()
 
 // === the room object of a point (FUN_533340)
 
-extern "C" void* __cdecl AI_Make449c40(void* out, void* x);
+extern "C" void* __cdecl Room_FindIdByName(void* out, void* x);
 extern "C" int* __cdecl Ai_GetPositionIdV(int* out, float x, float y, float z);
 extern "C" int* __cdecl Ai_GetPositionIdRV(int* out, int room, float x, float y, float z);
 KING_VAR(double, g_ro64b678, 64b678)
@@ -4686,7 +4733,7 @@ extern "C" {
 
 // [FUN_533340] the room object (*obj) at point v: by its position on room id's roads (*pos), else, when anywhere
 // is allowed, by its nearest position; 1 or 2 when found that way, else 0
-int __cdecl Room_ObjectAt(void* id, const float* v, void** obj, Position* pos, int anywhere)
+int __cdecl World_FindRoadRoomObjectAt(void* id, const float* v, void** obj, Position* pos, int anywhere)
 {
     *obj = 0;
     int res = 0;
@@ -4696,7 +4743,7 @@ int __cdecl Room_ObjectAt(void* id, const float* v, void** obj, Position* pos, i
     ri.m_36 = -1;
     ri.m_40 = -1;
     void* r = id;
-    AI_Make449c40(&r, id);
+    Room_FindIdByName(&r, id);
     if ((int)r != -1) {
         int t[8];
         memcpy(pos, Ai_GetPositionIdRV(t, (int)r, v[0], v[1], v[2]), 32);
@@ -4962,7 +5009,7 @@ extern "C" void __fastcall Car_Centre(BYTE* s)
 
 // === whether a car can fall asleep (FUN_556c60)
 
-extern "C" double __cdecl Vec3_LengthSq4e298b(const Vec3* v);
+extern "C" double __cdecl WorldVec3_LengthSquared(const Vec3* v);
 extern "C" void Cs_Len(); KING_ALIAS("_Cs_Len", "_Vec3_Length")
 KING_VAR(double, g_cs64b658, 64b658)
 KING_VAR(double, g_cs64f7b8, 64f7b8)
@@ -4971,7 +5018,7 @@ KING_VAR(double, g_cs64f7b8, 64f7b8)
 static double Cs_DiffSq(const BYTE* s, int a, int b)
 {
     float d[3] = {F(float, s, a) - F(float, s, b), F(float, s, a + 4) - F(float, s, b + 4), F(float, s, a + 8) - F(float, s, b + 8)};
-    return Vec3_LengthSq4e298b((const Vec3*)d);
+    return WorldVec3_LengthSquared((const Vec3*)d);
 }
 
 extern "C" {
@@ -4993,7 +5040,7 @@ int __fastcall Car_CanSleep(BYTE* s)
     }
     if (Cs_DiffSq(s, 20548, 20676) > g_cs64b658 || Cs_DiffSq(s, 20560, 552) > g_cs64b658
         || Cs_DiffSq(s, 20572, 432) > g_sl64b5a0 || Cs_DiffSq(s, 20584, 444) > g_cs64f7b8
-        || Vec3_LengthSq4e298b((const Vec3*)(s + 432)) > g_sl64b5a0)
+        || WorldVec3_LengthSquared((const Vec3*)(s + 432)) > g_sl64b5a0)
         return 0;
     for (int i = 0; i < 6; i++) {
         BYTE* o = F(BYTE*, s, 3524 + i * 4);
@@ -5017,7 +5064,7 @@ int __fastcall Car_CanSleep(BYTE* s)
 // === the cab view's needle and sway (FUN_5354d0)
 
 extern "C" int __cdecl rand(void);
-extern "C" float __fastcall Car_556650(BYTE* self, void*);
+extern "C" float __fastcall Car_GetActiveCabHeightOffset(BYTE* self, void*);
 KING_VAR(float, g_cv64f380, 64f380)
 KING_VAR(double, g_cv64b6d0, 64b6d0)
 KING_VAR(double, g_cv64f378, 64f378)
@@ -5126,7 +5173,7 @@ void __fastcall CabView_Update(BYTE* s)
         tx = (int)(v.x / v.z * g_cv64d980);
         ty = (float)(v.y / v.z * g_cv64f338);
     }
-    double f = Car_556650(F(BYTE*, s, 616), 0) * (double)g_cv64c664 + ty;
+    double f = Car_GetActiveCabHeightOffset(F(BYTE*, s, 616), 0) * (double)g_cv64c664 + ty;
     int cy = F(int, s, 1380);
     int ny;
     if (x87_fabs((double)cy) > x87_fabs(f))
@@ -5326,7 +5373,7 @@ void __fastcall Cab_FeltGravity(BYTE* s)
 
 // === a car's flasher light (FUN_549c00)
 
-extern "C" void Fl_Update(); KING_ALIAS("_Fl_Update", "@Flasher_Update@16")
+extern "C" void Fl_Update(); KING_ALIAS("_Fl_Update", "@Flasher_SetPositionAndAdvance@16")
 KING_VAR(float, g_fl6796c4, 6796c4)
 KING_VAR(float, g_fl64c320, 64c320)
 
@@ -6618,7 +6665,7 @@ extern "C" void __fastcall Render_PushMatrix(BYTE* s, void*, const BYTE* m, int 
 extern "C" void __fastcall Clip_Pop(BYTE* self, void*);
 extern "C" void FUN_556c60(); KING_ALIAS("_FUN_556c60", "@Car_CanSleep@4")
 extern "C" void __fastcall Copter_UpdateLights(BYTE* self, void*);
-extern "C" int __fastcall SceneNode5f98c0_Draw(BYTE* s, void*, int flags, BYTE* b);
+extern "C" int __fastcall ShadedReference_Draw(BYTE* s, void*, int flags, BYTE* b);
 extern "C" void __fastcall Vehicle_SetLightSwitches(BYTE* c);
 extern "C" void FUN_546d10(); KING_ALIAS("_FUN_546d10", "@Vehicle_SetLightSwitches@4")
 extern "C" void __cdecl Frame_Apply(BYTE* node, int mode, const void* m);
@@ -6726,7 +6773,7 @@ int __fastcall Car_Draw(BYTE* s, void*, int a, BYTE* ctx)
     {
         if (F(BYTE*, s, 21332))
             Copter_UpdateLights(F(BYTE*, s, 21332), 0);
-        return SceneNode5f98c0_Draw(s, 0, a, ctx);
+        return ShadedReference_Draw(s, 0, a, ctx);
     }
     F(int, F(BYTE*, s, -224), 84) = F(int, s, 20124);
     Vehicle_SetLightSwitches(s - 272);
@@ -6831,7 +6878,7 @@ int __fastcall Car_Draw(BYTE* s, void*, int a, BYTE* ctx)
         Position pos = {{(DWORD)-1, (DWORD)-1, 0, 0, 0, 0, 0, (DWORD)-1}};
         void* found;
         BYTE* so = (BYTE*)SceneObj_Get800(s - 256, 0);
-        Room_ObjectAt(F(void*, so, 12), (const float*)(s + 280), &found, &pos, 0);
+        World_FindRoadRoomObjectAt(F(void*, so, 12), (const float*)(s + 280), &found, &pos, 0);
         if (!found)
             goto done;
         float r[3];
@@ -7003,7 +7050,7 @@ extern "C" void FUN_4bac90(); KING_ALIAS("_FUN_4bac90", "_Effect_New59c420")
 extern "C" void FUN_4bb050(); KING_ALIAS("_FUN_4bb050", "_Fx_WheelDust")
 extern "C" void FUN_4ba660(); KING_ALIAS("_FUN_4ba660", "_Fx_SparksByStrength")
 extern "C" void FUN_4baf90(); KING_ALIAS("_FUN_4baf90", "_Effect_NewVapor")
-extern "C" void FUN_549bf0(); KING_ALIAS("_FUN_549bf0", "@Obj549bf0_Get@8")
+extern "C" void FUN_549bf0(); KING_ALIAS("_FUN_549bf0", "@CarEffect_GetState@8")
 extern "C" double __fastcall CarEffect_Curve(BYTE* s, void*, float* a, float* b);
 extern "C" void FUN_549ff0(); KING_ALIAS("_FUN_549ff0", "@CarEffect_Curve@16")
 extern "C" Vec3* __fastcall Vec3_AddAssign(Vec3* self, void*, Vec3* ret, const Vec3* v);
@@ -7124,7 +7171,7 @@ void __fastcall Car_Effects(BYTE* s, void*)
         }
     }
     BYTE* body = s + 21568;
-    int st = Obj549bf0_Get(body, 0);
+    int st = CarEffect_GetState(body, 0);
     if (st >= 1 && st <= 4)
     {
         float amp, out;
@@ -7143,7 +7190,7 @@ void __fastcall Car_Effects(BYTE* s, void*)
                 clamp = 0;
             }
             float strength = (float)(out * g_fx64d318 + g_fx64ca78);
-            st = Obj549bf0_Get(body, 0);
+            st = CarEffect_GetState(body, 0);
             if ((st == 1 || st == 2) && strength > g_fx64b7a8)
                 Lamp_Flash((int*)body, 0, 1);
             Vec3 hiV = F(Vec3, T, 1276), loV = F(Vec3, T, 1288);
@@ -7367,7 +7414,7 @@ int __fastcall Car_Step(BYTE* s, void*, DWORD* out)
     {
         BYTE* body = s + 21568;
         Flasher_StepLight(body);
-        int st = Obj549bf0_Get(body, 0);
+        int st = CarEffect_GetState(body, 0);
         if (st != 1 && st != 2)
         {
             BYTE* hit = 0;
@@ -7381,7 +7428,7 @@ int __fastcall Car_Step(BYTE* s, void*, DWORD* out)
                     break;
                 if (!c)
                     continue;
-                int cs = Obj549bf0_Get(c + 21568, 0);
+                int cs = CarEffect_GetState(c + 21568, 0);
                 if (cs != 1 && cs != 2)
                     continue;
                 BYTE tmp[48];
@@ -7506,7 +7553,7 @@ int __fastcall Car_Step(BYTE* s, void*, DWORD* out)
     {
         Position pos = {{(DWORD)-1, (DWORD)-1, 0, 0, 0, 0, 0, (DWORD)-1}};
         void* found = 0;
-        Room_ObjectAt(F(void*, F(BYTE*, s, 816), 12), (const float*)(s + 552), &found, &pos, 0);
+        World_FindRoadRoomObjectAt(F(void*, F(BYTE*, s, 816), 12), (const float*)(s + 552), &found, &pos, 0);
         if (!found)
             F(int, s, 20316) = 0;
         else
@@ -7641,7 +7688,7 @@ void __fastcall Car_TakeContacts(BYTE* s, void*, BYTE* out, BYTE* w)
         int mean = 0;
         Vec3 a = {}, b = {};
         if (F(int, s, 10424) > F(int, s, 10428))
-            mean = Wheels_Mean(w, cnt, &a, &b);
+            mean = Wheels_Mean(w, F(int, s, 10428), &a, &b);
         const float* m = (const float*)w;
         for (int j = 0; j < F(int, s, 10424) - F(int, s, 10428); j++)
         {
@@ -7863,8 +7910,9 @@ int __fastcall Car_AddMass(BYTE* s, void*, float m, const Vec3* v)
         Body_SetMass(F(BYTE*, s, 21600), 0, total, (const Matrix*)(s + 756), (const Vec3*)(s + 420));
     Matrix m288;
     Matrix_Multiply(&m288, (const Matrix*)(s + 756), &m192);
-    float hit[3];
-    BYTE* q = CallC<BYTE*>(FUN_4e5ba7, F(BYTE*, s, 816), s + 552, hit);
+    // Original 0x545bc8 queries the position of the newly composed frame.
+    // The third argument is an input endpoint, not a hit-output buffer.
+    BYTE* q = CallC<BYTE*>(FUN_4e5ba7, F(BYTE*, s, 816), s + 552, &m288.m[9]);
     if (!q)
     {
         q = F(BYTE*, s, 816);
@@ -7954,7 +8002,7 @@ void __fastcall Car_Hit(BYTE* s, void*, const Vec3* p, const Vec3* dir)
     float k = 1.0f;
     BYTE* B = (BYTE*)g_carTypes697914 - 76 + F(int, s, 10404) * 2416;
     if (F(int, B, 2280) == 3)
-        k = F(int, s, 1028) ? 0.1f : 0.3f;
+        k = F(int, s, 1028) ? 0.1f : 0.2f; // Steam 8.1, 0x554d7a
     if ((F(DWORD, s, 20884) & 0x100) && F(int, s, 892) && !F(int, s, 1028))
     {
         if ((double)k * g_vh64f7b0 < Lf || ((double)k * g_vh64c32c < Lf && F(float, s, 532) < g_vh64d0f0))
@@ -8486,7 +8534,7 @@ extern "C" void __fastcall Copter_UpdateAll(BYTE* self, void*);
 extern "C" void __fastcall MovingItem_Fly(BYTE* s);
 extern "C" int __fastcall Body_CheckUpright(BYTE* self, void*);
 extern "C" void Vs_GroundStep(); KING_ALIAS("_Vs_GroundStep", "@Body_GroundStep@12")
-extern "C" void Vs_GetVec9012(); KING_ALIAS("_Vs_GetVec9012", "@Body_GetVec9012@12")
+extern "C" void Vs_GetVec9012(); KING_ALIAS("_Vs_GetVec9012", "@Body_CopyLinearMomentum@12")
 extern "C" void Vs_AddContact(); KING_ALIAS("_Vs_AddContact", "@Engine_AddContact@20")
 extern "C" void __fastcall Car_FollowLeader(BYTE* s);
 extern "C" void __fastcall Car_TakeContacts(BYTE* s, void*, BYTE* out, BYTE* w);
@@ -8822,7 +8870,7 @@ void __fastcall Vehicle_FrameStep(BYTE* s, void*)
             s[10256] = (BYTE)g;
             F(float, s, 20968) = F(float, s, 10252) = F(float, B, 15416);
             F(float, s, 20972) = F(float, s, 10364) = (float)(double)Ramp_Position(F(BYTE*, s, 21584) + 16112, 0);
-            F(float, s, 20976) = F(float, s, 10400) = (float)Car_555500(s - 16, 0);
+            F(float, s, 20976) = F(float, s, 10400) = (float)Car_GetWeightedStateMagnitude(s - 16, 0);
             B = F(BYTE*, s, 21584);
             F(int, s, 20992) = F(int, s, 10372) = F(int, B, 15492);
             F(int, s, 20988) = F(int, s, 10368) = F(int, B, 15496);
@@ -8865,7 +8913,7 @@ void __fastcall Vehicle_FrameStep(BYTE* s, void*)
                         sum += (double)Ak[c] * Cf[c] * g_vs64d0f0;
                     }
                     float fs = (float)sum;
-                    double t = Ramp_54a330(F(float, B, 13104)) * fs;
+                    double t = WheelContact_SpeedScale(F(float, B, 13104)) * fs;
                     double p = (double)Ak[1] * Ak[0] * g_vs64f3d8 + Ak[3] * g_vs64b840 + Ak[2] * g_vs64d0f0;
                     t = t + p * g_vs64b788 + (double)(Bk[3] + Bk[2] + Bk[1] + Bk[0]) * g_vs64b838 + fs;
                     float total = (float)t;
@@ -9116,11 +9164,11 @@ void __fastcall Vehicle_FrameStep(BYTE* s, void*)
 
 extern "C" void __cdecl Hc_ToAngles(Matrix m, double* a, double* b, double* c, double* d, double* e, double* f);
 KING_ALIAS("_Hc_ToAngles", "_Matrix_ToAngles")
-extern "C" void Hc_GetVec9012(); KING_ALIAS("_Hc_GetVec9012", "@Body_GetVec9012@12")
+extern "C" void Hc_GetVec9012(); KING_ALIAS("_Hc_GetVec9012", "@Body_CopyLinearMomentum@12")
 extern "C" void Hc_GetVec9024(); KING_ALIAS("_Hc_GetVec9024", "@Body_GetVec9024@12")
-extern "C" void Hc_GetVec9048(); KING_ALIAS("_Hc_GetVec9048", "@Body_GetVec9048@12")
+extern "C" void Hc_GetVec9048(); KING_ALIAS("_Hc_GetVec9048", "@Body_CopyLocalAngularVelocity@12")
 extern "C" void __fastcall Hc_SetVec9012(BYTE* body, void*, Vec3 v); KING_ALIAS("@Hc_SetVec9012@20", "@Body_SetVec9012@20")
-extern "C" void __fastcall Hc_SetSpin(BYTE* body, void*, Vec3 v); KING_ALIAS("@Hc_SetSpin@20", "@Body_SetSpinScaled@20")
+extern "C" void __fastcall Hc_SetSpin(BYTE* body, void*, Vec3 v); KING_ALIAS("@Hc_SetSpin@20", "@Body_SetLocalAngularVelocity@20")
 KING_VAR(char, g_hc67a534, 67a534)
 KING_VAR(char, g_hc67a51c, 67a51c)
 KING_VAR(char, g_hc67a504, 67a504)
@@ -9452,7 +9500,7 @@ static void Dd_Lines(BYTE* s, int surf, int color, int W, char (*txt)[52], int y
 
 extern "C" {
 
-// [FUN_53d9d0] dashboard s's overlays: the road sign text of the car (Car_54efd0, 696c64), the debug lines
+// [FUN_53d9d0] dashboard s's overlays: the traffic violation reported by the car (Vehicle_ReadTrafficViolation, 696c64), the debug lines
 // (696bec / 696be8), then without 6cec68 the frames around the view (+1400 cab view: above and below the window
 // +32, flag 128 the gauges; else flag 8 the dash image of mode +1396 and the frames around it) and with flag 32
 // the debug lines (+1404 flags)
@@ -9464,7 +9512,7 @@ void __fastcall Dash_DrawOverlays(BYTE* s, void*)
     {
         int k;
         float v;
-        if (Car_54efd0(F(BYTE*, g_dd6d2078, 616), 0, &k, (int*)&v) && k)
+        if (Vehicle_ReadTrafficViolation(F(BYTE*, g_dd6d2078, 616), 0, &k, (int*)&v) && k)
         {
             int color = F(int, g_dd696ca0, 2864);
             buf[0] = 0;
@@ -9552,16 +9600,16 @@ void __fastcall Dash_DrawOverlays(BYTE* s, void*)
 
 // === the vehicle's sounds and force feedback (FUN_538370)
 
-extern "C" void __cdecl Vn_Play388(void* s, float v); KING_ALIAS("_Vn_Play388", "_Sound_Play388")
-extern "C" void __cdecl Vn_Play3_388(void* s, float v); KING_ALIAS("_Vn_Play3_388", "_Sound_Play3_388")
-extern "C" void __cdecl Vn_Play3_388Pos(void* s, float v, float w); KING_ALIAS("_Vn_Play3_388Pos", "_Sound_Play3_388Pos")
-extern "C" void __cdecl Vn_Start388(void* s, float a, float v, const void* p); KING_ALIAS("_Vn_Start388", "_Sound_Start388")
+extern "C" void __cdecl Vn_Play388(void* s, float v); KING_ALIAS("_Vn_Play388", "_Sound_RestartScaledByOption388")
+extern "C" void __cdecl Vn_Play3_388(void* s, float v); KING_ALIAS("_Vn_Play3_388", "_Sound_PlayScaledByOption388")
+extern "C" void __cdecl Vn_Play3_388Pos(void* s, float v, float w); KING_ALIAS("_Vn_Play3_388Pos", "_Sound_PlayScaledByOption388WithPitch")
+extern "C" void __cdecl Vn_Start388(void* s, float a, float v, const void* p); KING_ALIAS("_Vn_Start388", "_Sound_StartRangeScaledByOption388")
 extern "C" void __cdecl Vn_Start388Pos(void* s, float a, float v, float w, const void* p);
-KING_ALIAS("_Vn_Start388Pos", "_Sound_Start388Pos")
+KING_ALIAS("_Vn_Start388Pos", "_Sound_StartScaledWithPitch")
 extern "C" void __cdecl Vn_Loop388(void* s, float a, float v, const void* p); KING_ALIAS("_Vn_Loop388", "_Sound_Loop388")
-extern "C" void __cdecl Vn_Play390If(void* s, DWORD a, DWORD b, const void* p); KING_ALIAS("_Vn_Play390If", "_Sound_Play390If")
+extern "C" void __cdecl Vn_Play390If(void* s, DWORD a, DWORD b, const void* p); KING_ALIAS("_Vn_Play390If", "_Sound_PlayPannedThenStereoFromEvent")
 extern "C" void __cdecl Vn_Play3_386(void* s, float v); KING_ALIAS("_Vn_Play3_386", "_Sound_Play3_386")
-extern "C" void __cdecl Vn_Start386(void* s, float a, float v, const void* p); KING_ALIAS("_Vn_Start386", "_Sound_Start386")
+extern "C" void __cdecl Vn_Start386(void* s, float a, float v, const void* p); KING_ALIAS("_Vn_Start386", "_Sound_StartRangeScaledByOption386")
 extern "C" void __cdecl Vn_Loop386(void* s, DWORD a, DWORD v, const void* p); KING_ALIAS("_Vn_Loop386", "_Sound_Loop386")
 extern "C" void __cdecl Vn_PlayRange3(void* s, float a, float v, const void* p); KING_ALIAS("_Vn_PlayRange3", "_Sound_PlayRange3")
 extern "C" void __cdecl VehLog_Value(int v);
@@ -9577,7 +9625,7 @@ extern "C" void __fastcall FfEffect_SetCondition(DWORD* fx, void*, float a, floa
 extern "C" void __fastcall FfEffect_Restart(DWORD* fx, void*, float a, float b);
 extern "C" int __cdecl Joy_SendCommand(int command);
 extern "C" Matrix* __fastcall SceneObj_Matrix548(BYTE* self, void*, Matrix* out);
-extern "C" Matrix* __fastcall SceneObj_Matrix644(BYTE* self, void*, Matrix* out);
+extern "C" Matrix* __fastcall SceneObj_CopyPreviousInverseTransform(BYTE* self, void*, Matrix* out);
 extern "C" void FUN_4eacce(); KING_ALIAS("_FUN_4eacce", "@History_Record@16")
 KING_VAR(BYTE*, g_vn696ca0, 696ca0)
 KING_VAR(int, g_vn696c74, 696c74)                 // the force feedback log
@@ -10117,7 +10165,7 @@ void __fastcall Vehicle_Sounds(BYTE* s, void*, int, int)
                 Vec3_NormalizeThis(&v, 0);
                 SceneObj_Matrix1(co, 0, &M);
                 Vec3 Av = {0, 0, 0}, Bv = {0, 0, 0};
-                Matrix_Multiply(&MN, &M, SceneObj_Matrix644(co, 0, &N));
+                Matrix_Multiply(&MN, &M, SceneObj_CopyPreviousInverseTransform(co, 0, &N));
                 CallC(Vn_Decompose, &MN, &Av.x, &Av.y, &Av.z, &Bv.z, &Bv.x, &Bv.y);
                 const Matrix* Tm = SceneObj_Matrix548(co, 0, &T);
                 float ddx = (float)((double)M.m[9] - Tm->m[9]);
@@ -10555,7 +10603,7 @@ bangs:
 
 extern "C" int __cdecl Trailer_HitchCheck(BYTE* c, BYTE* t);
 extern "C" void __fastcall Vehicle_Attach55ec70(BYTE* self, void*, BYTE* p);
-extern "C" void __fastcall Vehicle_AttachCar(BYTE* self, void*, BYTE* car);
+extern "C" void __fastcall Tractor_AttachTrailerAndApplySaddleLoad(BYTE* self, void*, BYTE* car);
 extern "C" void __fastcall Car_Set54c880(BYTE* self, void*, int a, int b);
 extern "C" void At_HitObject(); KING_ALIAS("_At_HitObject", "_Query_HitObject")
 extern "C" Matrix* __cdecl At_FromPose(Matrix* out, double a, double b, double c, double yaw, double pitch, int e, int f);
@@ -10573,7 +10621,7 @@ int __cdecl Truck_HitchTrailer(BYTE* s, BYTE* t, int put)
     if (Trailer_HitchCheck(s, t))
         return 0;
     Vehicle_Attach55ec70(t, 0, s);
-    Vehicle_AttachCar(s, 0, t);
+    Tractor_AttachTrailerAndApplySaddleLoad(s, 0, t);
     BYTE* rs = (BYTE*)&g_hc697f9c + F(int, s, 10420) * 2416;
     BYTE* rt = (BYTE*)&g_hc697f9c + F(int, t, 10420) * 2416;
     Vec3 H1 = Hc_Through(&F(float, s, 708), (const float*)(rs + 156));
@@ -10731,11 +10779,11 @@ void __cdecl Cars_DumpToLog()
 
 // === the car's light shadows and lamps (FUN_552940)
 
-extern "C" void __cdecl Fx_Shadow(int a, int b, int c, int d, int tree);
-extern "C" int __cdecl Fx_PlaySound(int a, int b, int c, int d, int alt);
+extern "C" void __cdecl Shadow_SubmitVehiclePolygon(int a, int b, int c, int d, int tree);
+extern "C" int __cdecl Shadow_SubmitWithMaterial(int a, int b, int c, int d, int tree);
 extern "C" void Lt_ListLight(); KING_ALIAS("_Lt_ListLight", "_EffectList_AddLight")
-extern "C" void Lt_Decal(); KING_ALIAS("_Lt_Decal", "_Fx_AddDecal")
-extern "C" void __cdecl Fx_AddLight(int kind, const Vec3* pos, const Vec3* color, int a, int b);
+extern "C" void Lt_Decal(); KING_ALIAS("_Lt_Decal", "_VehicleLight_QueueProjectedMark")
+extern "C" void __cdecl VehicleLight_QueueLamp(BYTE* vehicle, const Vec3* pos, const Vec3* direction, int lampIndex, int flags);
 extern "C" void Lt_HitObject(); KING_ALIAS("_Lt_HitObject", "_Query_HitObject")
 extern "C" void Lt_Query(); KING_ALIAS("_Lt_Query", "_Query_4e6578")
 KING_VAR(BYTE*, g_lt6cec6c, 6cec6c)
@@ -10859,7 +10907,7 @@ void __fastcall Car_LampShadows(BYTE* s, void*)
                 F(Vec3, nodes[i], 64) = Lt_F(Lt_Mul(s + 516, b.x, b.y, b.z, false));
                 cnt++;
             }
-            Fx_PlaySound((int)nodes, cnt, (int)pts, F(int, tbl, 8), 0);
+            Shadow_SubmitWithMaterial((int)nodes, cnt, (int)pts, F(int, tbl, 8), 0);
         }
     }
     else if (F(int, s, 10924) == 1 && car && (F(BYTE, s, 20900) & 8))
@@ -10920,7 +10968,7 @@ void __fastcall Car_LampShadows(BYTE* s, void*)
                 cnt = 1;
             }
         }
-        Fx_Shadow((int)nodes, cnt, (int)pts, F(int, tbl, 8), 0);
+        Shadow_SubmitVehiclePolygon((int)nodes, cnt, (int)pts, F(int, tbl, 8), 0);
     }
     // the lamps, in the dark or the fog
     BYTE* w = g_lt6f33ac;
@@ -11074,7 +11122,7 @@ void __fastcall Car_LampShadows(BYTE* s, void*)
             if (dist < g_lt6796e4)
                 CallC(Lt_Decal, &q, &dir, param[i], tmp, flag[i]);
             if (dist < g_lt6796e8)
-                Fx_AddLight((int)s, &q, &dir, i + 10 * j, flag[i]);
+                VehicleLight_QueueLamp(s, &q, &dir, i + 10 * j, flag[i]);
         }
     }
 }
@@ -11083,7 +11131,7 @@ void __fastcall Car_LampShadows(BYTE* s, void*)
 
 // === the car's events (a method at $L_54d840)
 
-extern "C" int __cdecl Screen_5692e0(int id);
+extern "C" int __cdecl Screen_GetResourceState(int id);
 extern "C" int __cdecl Screen_56f210(int id);
 extern "C" Vec3* __fastcall Ce_MulAssign(Vec3* s, void*, Vec3* ret, float k); KING_ALIAS("@Ce_MulAssign@16", "@Vec3_MulAssign@16")
 extern "C" void Ce_Start(); KING_ALIAS("_Ce_Start", "@CarEffect_Start@12")
@@ -11149,7 +11197,7 @@ int __fastcall Car_HandleEvent(BYTE* s, void*, const int* ev)
     case 31:
     {
         BYTE* car = F(BYTE*, s, 21600);
-        if (!car || !Screen_5692e0(ev[1]) || ev[2] * 4 != 28)
+        if (!car || !Screen_GetResourceState(ev[1]) || ev[2] * 4 != 28)
             return 1;
         int k = F(int, car, 10704);
         if (k >= 4 || k < 0)
@@ -11219,16 +11267,16 @@ int __fastcall Car_HandleEvent(BYTE* s, void*, const int* ev)
         d.x = (float)((double)W.x - P.x);
         d.y = (float)((double)W.y - P.y);
         d.z = (float)((double)W.z - P.z);
-        if (!(Vec3_LengthSq4e298b(&d) < g_ce64f768))
+        if (!(WorldVec3_LengthSquared(&d) < g_ce64f768))
             return 0;
         BYTE* fx = s + 21568;
-        int st = Obj549bf0_Get(fx, 0);
+        int st = CarEffect_GetState(fx, 0);
         if (st == 1)
             return 0;
-        st = Obj549bf0_Get(fx, 0);
+        st = CarEffect_GetState(fx, 0);
         if (st == 2)
             return 0;
-        st = Obj549bf0_Get(fx, 0);
+        st = CarEffect_GetState(fx, 0);
         if (st == 3)
             return 0;
         CallThis(Ce_Start, fx, 0);
@@ -11257,12 +11305,12 @@ struct PvRect { int l, t, r, b; };
 struct PvMat { Vec3 r0, r1, r2, t; };
 
 extern "C" void __fastcall WorldObj_Reset(BYTE* self, int);
-extern "C" void __cdecl Sound_PlayVolume(Sound* s, float v);
+extern "C" void __cdecl Sound_RestartScaledByOption386(Sound* s, float v);
 extern "C" void __fastcall CGameApp_SetMousePos(CGameApp* self, void*, int x, int y);
 extern "C" BYTE* __fastcall Cam_ChaseStep(BYTE* s, void*, BYTE* out, double k);
 extern "C" BYTE* __fastcall Car_ViewMatrix(BYTE* s, void*, BYTE* out);
-extern "C" Matrix* __fastcall SceneObj_Matrix324(BYTE* self, void*, Matrix* out);
-extern "C" void Pv_M324(); KING_ALIAS("_Pv_M324", "@SceneObj_Matrix324@12")
+extern "C" Matrix* __fastcall SceneObj_GetAttachedNodeLocalMatrix(BYTE* self, void*, Matrix* out);
+extern "C" void Pv_M324(); KING_ALIAS("_Pv_M324", "@SceneObj_GetAttachedNodeLocalMatrix@12")
 extern "C" void Pv_M2(); KING_ALIAS("_Pv_M2", "@SceneObj_Matrix2@12")
 extern "C" void __cdecl Pv_ToAngles(PvMat m, double* a, double* b, double* c, double* d, double* e, double* f);
 KING_ALIAS("_Pv_ToAngles", "_Matrix_ToAngles")
@@ -11279,7 +11327,7 @@ extern "C" void __fastcall Dash_Prepare(BYTE* d, void*, int a1, int a2);
 extern "C" void __fastcall CabView_Update(BYTE* s);
 extern "C" void __cdecl Car_SparkBurst(BYTE* c, const float* v);
 extern "C" void __fastcall Vehicle_Sounds(BYTE* s, void*, int, int);
-extern "C" void __cdecl WarnLog_Flush();
+extern "C" void __cdecl WarningLog_FlushIfOpen();
 extern "C" int __fastcall Car_PlaceOnRoad(BYTE* s, void*, int special);
 extern "C" void __fastcall Cab_Sway(BYTE* s);
 extern "C" void Pv_SetText(); KING_ALIAS("_Pv_SetText", "@History_Record@16")                        // a dashboard text line (value, name)
@@ -11522,7 +11570,7 @@ void __fastcall Player_Frame(BYTE* s, void*)
             {
                 F(float, s, 44) = (float)Game_Time();
                 if (F(BYTE, s, 1404) & 16)
-                    Sound_PlayVolume((Sound*)g_pv6d1cfc, 0.3f);
+                    Sound_RestartScaledByOption386((Sound*)g_pv6d1cfc, 0.3f);
             }
             int left = 1 - (int)((Game_Time() - F(float, s, 44)) * g_pv64c968);
             F(int, s, 1392) = left;
@@ -11603,12 +11651,12 @@ void __fastcall Player_Frame(BYTE* s, void*)
         {
             // the car's view
             CallVirt(car, 104);
-            Car_556650(F(BYTE*, s, 616), 0);
+            Car_GetActiveCabHeightOffset(F(BYTE*, s, 616), 0);
             Cab_Sway(s);
             memcpy(s + 1568, (const Matrix*)Cab_EyeFrame(&A, 0), 48);
             Car_ViewMatrix(s, 0, (BYTE*)&B);
             Matrix V;
-            SceneObj_Matrix324(F(BYTE*, s, 616) + 16, 0, &V);
+            SceneObj_GetAttachedNodeLocalMatrix(F(BYTE*, s, 616) + 16, 0, &V);
             *cam = *Matrix_Multiply(&A, &B, (const Matrix*)(s + 520));
             float cosA = (float)x87_fabs(x87_cos(g_pv696d10));
             if (F(DWORD, g_pv6d2078, 1404) & 0x100)
@@ -11949,7 +11997,7 @@ void __fastcall Player_Frame(BYTE* s, void*)
     }
     Queue_PostEvent(s, 0, 1);
     if (g_pv696c70 || g_pv672d80 || g_pv696c74)
-        WarnLog_Flush();
+        WarningLog_FlushIfOpen();
 }
 
 } // extern "C"
@@ -11996,16 +12044,16 @@ void __fastcall Lamp_Flash(int* s, void*, int t)
 
 extern "C" float __fastcall Wheels_MinGrip(BYTE* self, void*);
 extern "C" double __fastcall Controls_Axis(BYTE* self, void*, int i);
-extern "C" int __fastcall Controls_530100(BYTE* self, void*, int x);
+extern "C" int __fastcall Controls_ShouldSelectNeutral(BYTE* self, void*, int x);
 extern "C" void Pc_M1(); KING_ALIAS("_Pc_M1", "@SceneObj_Matrix1@12")
 extern "C" float* __cdecl Pc_Coords(float* out, PvPos pos); KING_ALIAS("_Pc_Coords", "_Ai_GetCoordinatesPos")
 extern "C" int __fastcall King_53b3c0(BYTE* self, void*, int a);
-extern "C" void __fastcall Body_ToggleMode(BYTE* self, void*);
+extern "C" void __fastcall Body_TogglePhysicsModeOneOrThree(BYTE* self, void*);
 extern "C" void __fastcall Body_ProbeGround(BYTE* s, void*, int a);
 extern "C" void __fastcall Copter_Chase6(BYTE* self, void*, BYTE* target);
 extern "C" void __fastcall Copter_Chase10(BYTE* self, void*, BYTE* target);
 extern "C" void __fastcall CarEffect_StartFlasher(BYTE* f);
-extern "C" float __fastcall Car_557000(BYTE* self, void*);
+extern "C" float __fastcall Vehicle_GetOrientationAndWearFactor(BYTE* self, void*);
 extern "C" void __cdecl Cars_DumpHistory();
 extern "C" void __fastcall Copter_SetState(BYTE* s, void*, int n);
 extern "C" void Pc_SetText(); KING_ALIAS("_Pc_SetText", "@History_Record@16")
@@ -12013,14 +12061,18 @@ extern "C" void g_pcFlashFn(); KING_ALIAS("_g_pcFlashFn", "_Car_FlasherKick")
 KING_VAR(BYTE, g_pcControls, 6d1db8)
 KING_VAR(int, g_pc6cec68, 6cec68)
 typedef int(__cdecl* PcReadInt)();
-typedef float(__cdecl* PcReadFloat)();
+// Both analog input callbacks return a value in ST(0).
+using PcAxisCallback = double __cdecl();
+extern "C" {
+    PcAxisCallback Axis0, Car_ControlsAxis2;
+}
 KING_VAR(PcReadInt, g_pcIn79c, 67879c)               // the input readers
 KING_VAR(PcReadInt, g_pcIn7a0, 6787a0)
 KING_VAR(PcReadInt, g_pcIn7a4, 6787a4)
 KING_VAR(PcReadInt, g_pcIn7a8, 6787a8)
 KING_VAR(PcReadInt, g_pcIn7ac, 6787ac)
 KING_VAR(PcReadInt, g_pcIn7b0, 6787b0)
-KING_VAR(PcReadFloat, g_pcIn7b8, 6787b8)
+KING_VAR(PcAxisCallback*, g_pcIn7b8, 6787b8)
 KING_VAR(int, g_pc6d2068, 6d2068)
 KING_VAR(int, g_pc6d206c, 6d206c)
 KING_VAR(int, g_pc6d2084, 6d2084)
@@ -12138,7 +12190,7 @@ static bool Pc_FlipAllowed(BYTE* car, float d, bool above, float lim)
     if (F(int, car, 20636) == g_pc68b990)
         return ok && pz < g_pc64c450;
     int room;
-    AI_Make449c40(&room, (void*)(F(int, (BYTE*)SceneObj_Get800(car + 16, 0), 12)));
+    Room_FindIdByName(&room, (void*)(F(int, (BYTE*)SceneObj_Get800(car + 16, 0), 12)));
     if (room == -1)
         return false;
     PvPos pid;
@@ -12248,7 +12300,7 @@ void __fastcall Player_Controls(BYTE* s, void*)
     }
     F(BYTE, cab, 9985) = (BYTE)g_pcIn7b0();
     // the steering, eased
-    float x = g_pcIn7b8();
+    float x = (float)g_pcIn7b8();
     CallThis(Pc_SetText, s + 312, x, &g_pc6791f4);
     double fv = Filter_Value(s + 312);
     double t = x87_sqrt(x87_fabs(x - fv)) * g_pc64b788 + g_pc64b5b8;
@@ -12337,7 +12389,7 @@ void __fastcall Player_Controls(BYTE* s, void*)
                 {
                     if (Pc_Act(7))
                         F(short, cab, 10054) = 20;
-                    else if (Controls_530100(&g_pcControls, 0, F(int, F(BYTE*, F(BYTE*, s, 616), 21600), 7188)))
+                    else if (Controls_ShouldSelectNeutral(&g_pcControls, 0, F(int, F(BYTE*, F(BYTE*, s, 616), 21600), 7188)))
                         F(short, cab, 10054) = 21;
                     else
                         F(short, cab, 10054) = 0;
@@ -12352,6 +12404,7 @@ void __fastcall Player_Controls(BYTE* s, void*)
     }
     F(short, F(BYTE*, F(BYTE*, s, 616), 21600), 10010) = (short)Pc_Act(22);
     F(BYTE*, s, 624) = Car_InList(F(BYTE*, s, 624));
+    // Ordinary gameplay returns below when debug controls are disabled.
     // the debug flips
     if (g_pc6d2088 || g_pc6d2098 || g_pc6d2084)
     {
@@ -12513,7 +12566,7 @@ void __fastcall Player_Controls(BYTE* s, void*)
     if (g_pcKey19de && g_pcKey196a)
         g_pc6796b0 &= ~1;
     if (g_pcKey19a8 && g_pcKey196a)
-        Body_ToggleMode(F(BYTE*, F(BYTE*, s, 616), 21600), 0);
+        Body_TogglePhysicsModeOneOrThree(F(BYTE*, F(BYTE*, s, 616), 21600), 0);
     if (g_pcKey19b8 && g_pcKey196a)
     {
         // set the car upright where it is
@@ -12560,7 +12613,7 @@ void __fastcall Player_Controls(BYTE* s, void*)
         else
             Effect_New4daf40((int)(F(BYTE*, s, 616)), (int)((void*)g_pcFlashFn));
     }
-    Car_557000(F(BYTE*, s, 616), 0);
+    Vehicle_GetOrientationAndWearFactor(F(BYTE*, s, 616), 0);
     Car_WorkingOrder(F(BYTE*, s, 616));
 }
 
@@ -12578,12 +12631,12 @@ struct GwRoom
     int m_32, m_36, m_40, m_44;
 };
 extern "C" BYTE* __cdecl Car_InListFrom16(BYTE* p);
-extern "C" int __cdecl Room_ObjectAt(void* id, const float* v, void** obj, Position* pos, int anywhere);
+extern "C" int __cdecl World_FindRoadRoomObjectAt(void* id, const float* v, void** obj, Position* pos, int anywhere);
 extern "C" PvPos* __cdecl Gw_Right(PvPos* out, PvPos pos); KING_ALIAS("_Gw_Right", "_Ai_GetRightDirectionOf")
 extern "C" void __cdecl Gw_Room(PvPos pos, GwRoom* out); KING_ALIAS("_Gw_Room", "_Road_GetRoadParameters")
 extern "C" float* __cdecl Gw_Coords(float* out, PvPos pos); KING_ALIAS("_Gw_Coords", "_Ai_GetCoordinatesPos")
 extern "C" float* __cdecl Gw_Tangent(float* out, PvPos pos); KING_ALIAS("_Gw_Tangent", "_Ai_GetTangent")
-extern "C" void Gw_NextPoint(); KING_ALIAS("_Gw_NextPoint", "@Points_NextActive@12")
+extern "C" void Gw_NextPoint(); KING_ALIAS("_Gw_NextPoint", "@Body_NextActiveSecondaryPoint@12")
 extern "C" void Gw_M1(); KING_ALIAS("_Gw_M1", "@SceneObj_Matrix1@12")
 extern "C" int __cdecl Body_5893d0(int a);
 KING_VAR(BYTE*, g_gw6ef1fc, 6ef1fc)
@@ -12712,10 +12765,10 @@ BYTE* __fastcall Car_GiveWay(BYTE* s, void*)
         PvPos p1 = {{(DWORD)-1, (DWORD)-1, 0, 0, 0, 0, 0, (DWORD)-1}};
         PvPos p2 = {{(DWORD)-1, (DWORD)-1, 0, 0, 0, 0, 0, (DWORD)-1}};
         void* obj = 0;
-        Room_ObjectAt((void*)(F(int, F(BYTE*, s, 820), 12)), (const float*)(s + 600), &obj, (Position*)&p1, 0);
+        World_FindRoadRoomObjectAt((void*)(F(int, F(BYTE*, s, 820), 12)), (const float*)(s + 600), &obj, (Position*)&p1, 0);
         if (!obj)
             break;
-        Room_ObjectAt((void*)(F(int, F(BYTE*, other, 820), 12)), &M548.m[9], &obj, (Position*)&p2, 0);
+        World_FindRoadRoomObjectAt((void*)(F(int, F(BYTE*, other, 820), 12)), &M548.m[9], &obj, (Position*)&p2, 0);
         if (!obj)
             break;
         PvPos t;
@@ -12958,7 +13011,7 @@ extern "C" {
 void __cdecl Car_FlasherKick(const float* p, int mode, BYTE* c)
 {
     BYTE* fl = c + 21568;
-    if (Obj549bf0_Get(fl, 0) != 2 && Obj549bf0_Get(fl, 0) != 1)
+    if (CarEffect_GetState(fl, 0) != 2 && CarEffect_GetState(fl, 0) != 1)
         return;
     if (mode)
     {
@@ -13009,10 +13062,10 @@ void __cdecl Car_FlasherKick(const float* p, int mode, BYTE* c)
 
 extern "C" BYTE* __fastcall Body58b5b0_Construct(BYTE* self, void*, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11);
 extern "C" void __fastcall Car_Register(BYTE* self, void*, BYTE* x);
-extern "C" void __fastcall Car_556040(BYTE* self, void*, int mode);
+extern "C" void __fastcall CargoHold_SetInitialLoad(BYTE* self, void*, int mode);
 extern "C" void __stdcall Array_ForEach(BYTE* p, int size, int count, void (*fn)());
 extern "C" void Vc_Zero(); KING_ALIAS("_Vc_Zero", "@Vec3_ZeroThis@8")
-extern "C" int __fastcall Copter_FindLights(BYTE* self, void*, void* model);
+extern "C" int __fastcall Copter_BindLightsAndGuns(BYTE* self, void*, void* model);
 extern "C" void __fastcall Copter5615f0_Reset(BYTE* self, void*);
 KING_VAR(BYTE, g_vc6ef1f8, 6ef1f8)
 KING_VAR(BYTE, g_vcTypes, 6d20f0)
@@ -13128,7 +13181,7 @@ BYTE* __fastcall Vehicle_Construct(BYTE* v, void*, int w, BYTE* c, int p, int a)
     F(int, v, 10924) = 1;
     F(int, v, 20808) = F(int, c, 244);
     memcpy(v + 20640, c + 16, 48);
-    Car_556040(v, 0, 1);
+    CargoHold_SetInitialLoad(v, 0, 1);
     return v;
 }
 
@@ -13150,7 +13203,7 @@ BYTE* __fastcall Vehicle_ConstructCopter(BYTE* v, void*, int w, BYTE* h, BYTE* r
     F(BYTE*, v, 21604) = h;
     if (!h)
         World_Fatal("_Vehicle::_Vehicle()  hc==NULL");
-    Copter_FindLights(F(BYTE*, v, 21604), 0, (void*)(F(int, F(BYTE*, v, 48), 64)));
+    Copter_BindLightsAndGuns(F(BYTE*, v, 21604), 0, (void*)(F(int, F(BYTE*, v, 48), 64)));
     Copter5615f0_Reset(F(BYTE*, v, 21604), 0);
     F(BYTE*, F(BYTE*, v, 21604), 3480) = v ? v + 16 : 0;
     F(int, v, 20808) = F(int, h, 96);
@@ -13179,7 +13232,7 @@ BYTE* __fastcall Vehicle_ConstructCopter(BYTE* v, void*, int w, BYTE* h, BYTE* r
 #include <stdlib.h>
 
 extern "C" BYTE* __fastcall Controls530120_Construct(BYTE* s);
-extern "C" int __cdecl Carat_ReadFill2(int a, int b, int fill, int c, int d, int n);
+extern "C" int __cdecl Ini_ReadIntsWithDefault(int a, int b, int fill, int c, int d, int n);
 extern "C" void __cdecl Ini_ReadSections(const char* none, char* buf, int size, const char* file);
 KING_VAR(BYTE*, g_kjHead, 6d20dc)
 KING_VAR(BYTE, g_kjTemplate, 6cf4d8)
@@ -13292,7 +13345,7 @@ void __cdecl Controls_ReadDefFile()
         char* end;
         F(int, o, 16) = strtol(val, &end, 0);
         int nums[4] = {0, 0, 0, 0};
-        Carat_ReadFill2((int)section, (int)("nums"), 0, (int)nums, (int)s_kjFile, 4);
+        Ini_ReadIntsWithDefault((int)section, (int)("nums"), 0, (int)nums, (int)s_kjFile, 4);
         if (!nums[0] && !nums[1] && !nums[2] && !nums[3])
             World_Fatal("read_defFile_kmjIn(): #2");
         F(int, o, 20) = nums[0];
@@ -13386,10 +13439,10 @@ void __cdecl Controls_ReadDefFile()
 // === the viewer attaching a vehicle (FUN_531cc0 with its tail $L_531ce8)
 
 extern "C" void Av_Auto(); KING_ALIAS("_Av_Auto", "@Car_SetAuto@12")
-extern "C" void __fastcall King_53b130(BYTE* self, void*);
+extern "C" void __fastcall Player_ApplyEngineControlFlags(BYTE* self, void*);
 extern "C" void Av_RotX(); KING_ALIAS("_Av_RotX", "_Matrix_RotationX")
-extern "C" void __fastcall Dash_Setup(BYTE* self, void*, BYTE* car);
-extern "C" void __cdecl VehLogs_Enable();
+extern "C" void __fastcall Dashboard_BindVehicleInstruments(BYTE* self, void*, BYTE* car);
+extern "C" void __cdecl VehicleLogs_Enable();
 extern "C" void Av_Fill(); KING_ALIAS("_Av_Fill", "@Arrays_Fill@16")
 extern "C" void Av_Unless(); KING_ALIAS("_Av_Unless", "_Player_DetachCarUnless")
 KING_VAR(BYTE*, g_av6cec6c, 6cec6c)
@@ -13469,7 +13522,7 @@ void __fastcall Viewer_AttachVehicle(BYTE* s, void*, BYTE* v)
             gear = 2;
         F(BYTE, F(BYTE*, F(BYTE*, s, 616), 21600), 9984) = gear;
         F(float, F(BYTE*, F(BYTE*, s, 616), 21600), 10084) = 0.5f;
-        King_53b130(s, 0);
+        Player_ApplyEngineControlFlags(s, 0);
         F(int, s, 116) = F(int, F(BYTE*, F(BYTE*, s, 616), 21600), 15440);
     }
     else
@@ -13492,11 +13545,11 @@ void __fastcall Viewer_AttachVehicle(BYTE* s, void*, BYTE* v)
         F(float, s, 564) = Av_Sink(F(float, s, 564), h);
     WorldObj_Reset(&g_av6f6968, 0);
     g_av69784c = 0;
-    Dash_Setup(s, 0, F(BYTE*, s, 616));
+    Dashboard_BindVehicleInstruments(s, 0, F(BYTE*, s, 616));
     if (g_av696c70 || g_av672d80 || g_av696c6c || g_av696c74)
     {
         WarnLog_Open();
-        VehLogs_Enable();
+        VehicleLogs_Enable();
         char clock[100], line[160];
         Clock_Text(clock);
         sprintf(line, "\n----------Vehicle ATTACHED--------%s-------------", clock);
@@ -13550,7 +13603,7 @@ void __fastcall Viewer_AttachVehicle(BYTE* s, void*, BYTE* v)
 
 // === the tractor moving with its semitrailer (FUN_55d140 with its tails up to $L_55d59d)
 
-extern "C" void __fastcall Mode3976_Set(BYTE* self, void*, int mode);
+extern "C" void __fastcall Body_SetMotionMode(BYTE* self, void*, int mode);
 extern "C" double __cdecl Game_FrameTime();
 extern "C" void __fastcall Car_HitchImpulse(BYTE* s, void*);
 
@@ -13575,7 +13628,7 @@ extern "C" {
 // step (+1472), the hitch impulse applied between; fatal when either cannot move or is in slave mode
 void __fastcall Tractor_Move(BYTE* s, void*, int a1, int a2)
 {
-    Mode3976_Set(F(BYTE*, s, 21880) + 16, 0, F(int, s, 3992));
+    Body_SetMotionMode(F(BYTE*, s, 21880) + 16, 0, F(int, s, 3992));
     float dt = (float)Game_FrameTime();
     BYTE* e = s + 16;
     int r1 = CallVirt<int>(e, 84, dt, &a1);
@@ -13655,7 +13708,7 @@ void __fastcall Tractor_Move(BYTE* s, void*, int a1, int a2)
 
 // === a car's frame, speed and spin kept sane (FUN_5491f0 with its tail $L_549275)
 
-extern "C" Vec3* __fastcall SceneObj_LocalVelocity(BYTE* self, void*, Vec3* out);
+extern "C" Vec3* __fastcall SceneObj_GetPreviousLocalAngularVelocity(BYTE* self, void*, Vec3* out);
 extern "C" void Sn_Norm(); KING_ALIAS("_Sn_Norm", "_Vec3_Normalized")
 KING_VAR(Vec3, g_snZero, 702650)
 KING_VAR(float, g_sn64c448, 64c448)
@@ -13711,7 +13764,7 @@ int __cdecl Car_ResetSane(BYTE* c)
     if (Sn_OutOf(&w, 30.0f) && Sn_OutOf(&w, 100000.0f))
     {
         Matrix t;
-        w = *(const Vec3*)SceneObj_LocalVelocity(it, 0, (Vec3*)&t);
+        w = *(const Vec3*)SceneObj_GetPreviousLocalAngularVelocity(it, 0, (Vec3*)&t);
         if (Sn_OutOf(&w, 30.0f))
             w = Sn_Clamp(w, 10000.0f, g_sn64c450);
     }
@@ -14097,10 +14150,10 @@ BYTE* __fastcall Flasher_Construct(BYTE* s, void*, const float* pos, float k)
 // === a tractor's frame with its trailer hitched (FUN_55d5d0 with its tails $L_55ddd4 .. $L_55ddfe)
 
 extern "C" DWORD __fastcall Hitch_Solve(DWORD ecx_in, DWORD edx_in);
-extern "C" void __fastcall Car_CopyToTowed(BYTE* self, void*);
+extern "C" void __fastcall Tractor_CopyControlsToTrailer(BYTE* self, void*);
 extern "C" void __fastcall Body_UpdateHitch(BYTE* self, void*, int keep);
 extern "C" void Th_Matrix(); KING_ALIAS("_Th_Matrix", "@SceneObj_Matrix1@12")
-extern "C" int __cdecl SceneObj_Collide(BYTE* a, BYTE* b, DWORD arg);
+extern "C" int __cdecl Bodies_TestOverlapAtCurrentTransforms(BYTE* a, BYTE* b, DWORD arg);
 extern "C" void __fastcall Car_55ed50(BYTE* self, void*);
 extern "C" void __fastcall Car_558930(BYTE* self, void*);
 extern "C" void __fastcall Tractor_Move(BYTE* s, void*, int a1, int a2);
@@ -14155,7 +14208,7 @@ void __fastcall Tractor_Frame(BYTE* s)
         return;
     }
     F(DWORD, s, 10148) |= 0x20000;
-    Car_CopyToTowed(body, 0);
+    Tractor_CopyControlsToTrailer(body, 0);
     int ok = 1;
     if (F(int, s, 21868) && !F(int, s, 1204) && F(int, F(BYTE*, s, 21584), 9784) == 1)
     {
@@ -14205,7 +14258,7 @@ void __fastcall Tractor_Frame(BYTE* s)
     if (F(int, s, 21876) > 0)
     {
         r2 = 0;
-        bool apart = !SceneObj_Collide(s, t ? t + 16 : 0, (DWORD)&r2);
+        bool apart = !Bodies_TestOverlapAtCurrentTransforms(s, t ? t + 16 : 0, (DWORD)&r2);
         double h[3];
         float g[3];
         Th_Points(s, t, h, g, true);
@@ -14258,14 +14311,14 @@ lamps:
 
 // === a car's frame after its physics: rocking, lights, rumble and the beacon (FUN_54ff80 with its tail $L_550358)
 
-extern "C" void __fastcall Car_UpdateCargo(BYTE* self, void*);
-extern "C" int __cdecl Veh_54ef90(int unused, int a, int b);
+extern "C" void __fastcall Vehicle_UpdateProgressAndRecordChanges(BYTE* self, void*);
+extern "C" int __cdecl Vehicle_EmitTypeOneSkidEffect(int unused, const void* point, const void* velocity);
 extern "C" void __fastcall Car_LookAtSign(BYTE* s, void*);
 extern "C" void __fastcall Car_HitEvents(BYTE* s);
 extern "C" void __fastcall Car_ApplyPlacement(BYTE* self, void*);
 extern "C" void __fastcall Node_ApplyMatrix(BYTE* self, void*, const void* m, int mode);
-extern "C" void* __fastcall Obj551920_Construct(BYTE* self, void*, int a, BYTE* parent);
-extern "C" void* __fastcall Obj5518d0_Construct(BYTE* self, void*);
+extern "C" void* __fastcall Beacon_ConstructLampNode(BYTE* self, void*, int a, BYTE* parent);
+extern "C" void* __fastcall Beacon_ConstructTransformNode(BYTE* self, void*);
 KING_VAR(int, g_cf6ef200, 6ef200)
 KING_VAR(BYTE*, g_cfGame, 6d2078)
 KING_VAR(BYTE*, g_cf6ef254, 6ef254)
@@ -14377,9 +14430,9 @@ static void Cf_AddLamps(const Matrix* m)
     for (int k = 0; k < 3; k++)
     {
         BYTE* n = (BYTE*)operator new(88);
-        BYTE* node = n ? (BYTE*)Obj551920_Construct(n, 0, (int)&g_cfLamp, g_cf6ef258) : 0;
+        BYTE* node = n ? (BYTE*)Beacon_ConstructLampNode(n, 0, (int)&g_cfLamp, g_cf6ef258) : 0;
         BYTE* mm = (BYTE*)operator new(112);
-        BYTE* mo = mm ? (BYTE*)Obj5518d0_Construct(mm, 0) : 0;
+        BYTE* mo = mm ? (BYTE*)Beacon_ConstructTransformNode(mm, 0) : 0;
         F(BYTE*, node, 68) = mo;
         Node_ApplyMatrix(mo, 0, m + k, 0);
         CallVirt(g_cf69622c, 20, 0, node);
@@ -14398,7 +14451,7 @@ void __fastcall Car_AfterPhysics(BYTE* s)
     F(int, s, 916) = F(int, s, 908);
     if (F(int, s, 908) && F(BYTE*, s, 21604))
         F(int, F(BYTE*, s, 21604), 3488) = 1;
-    Car_UpdateCargo(s, 0);
+    Vehicle_UpdateProgressAndRecordChanges(s, 0);
     const float* M = &F(float, s, 612);
     if (F(int, s, 10808) && !g_cf6ef200)
     {
@@ -14419,7 +14472,7 @@ void __fastcall Car_AfterPhysics(BYTE* s)
             double d = (double)F(float, s, 1000) * nv.z + (double)F(float, s, 996) * nv.y +
                        (double)nv.x * F(float, s, 992);
             if (x87_fabs(d) < g_cf64d318 && x87_fabs(F(float, s, 1000)) < g_cf64b6e0)
-                Veh_54ef90(0, (int)v, (int)u);
+                Vehicle_EmitTypeOneSkidEffect(0, v, u);
         }
     }
     float dt = (float)Game_FrameTime();
@@ -14712,7 +14765,7 @@ extern "C" float* __cdecl Rq_Scaled(float* out, const void* v, float k); KING_AL
 extern "C" float* __cdecl Rq_Add(float* out, const float* a, const float* b); KING_ALIAS("_Rq_Add", "_Vec3_Add")
 extern "C" float* __cdecl Rq_Sub(float* out, const float* a, const float* b); KING_ALIAS("_Rq_Sub", "_Vec3_Sub")
 extern "C" BYTE* __cdecl Rq_Hit(BYTE* obj, const void* p, const void* d); KING_ALIAS("_Rq_Hit", "_Query_HitObject")
-extern "C" int __cdecl Rq_ObjAt(void* id, const void* v, void* obj, void* pos, int anywhere); KING_ALIAS("_Rq_ObjAt", "_Room_ObjectAt")
+extern "C" int __cdecl Rq_ObjAt(void* id, const void* v, void* obj, void* pos, int anywhere); KING_ALIAS("_Rq_ObjAt", "_World_FindRoadRoomObjectAt")
 extern "C" int __cdecl Rq_IsPlace(const void* pos); KING_ALIAS("_Rq_IsPlace", "_Road_IsPlace")
 extern "C" BYTE* __cdecl Rq_FindNamed(BYTE* scene, const char* name); KING_ALIAS("_Rq_FindNamed", "_Scene_FindObject")
 extern "C" void __cdecl Rq_Log(const char* text, int x); KING_ALIAS("_Rq_Log", "_Sys_Log")
@@ -14721,7 +14774,7 @@ extern "C" float* __cdecl Rq_Coords(float* out, RqPos pos); KING_ALIAS("_Rq_Coor
 extern "C" float* __cdecl Rq_Tangent(float* out, RqPos pos); KING_ALIAS("_Rq_Tangent", "_Ai_GetTangent")
 extern "C" int __cdecl Rq_RoomInfo(RqPos pos, void* out); KING_ALIAS("_Rq_RoomInfo", "_Road_GetRoadParameters")
 extern "C" int __cdecl Rq_Ray(BYTE* a, const void* p, const void* d, void* point, void* normal); KING_ALIAS("_Rq_Ray", "_Query_4e6749")
-extern "C" int __cdecl Rq_WorldHit(BYTE* a, const void* p, const void* d, void* point, void* normal); KING_ALIAS("_Rq_WorldHit", "_World_Hit")
+extern "C" int __cdecl Rq_WorldHit(BYTE* a, const void* p, const void* d, void* point, void* normal); KING_ALIAS("_Rq_WorldHit", "_World_RaycastFirstPartPointAndNormal")
 extern "C" int __cdecl Rq_IdSame(BYTE* x); KING_ALIAS("_Rq_IdSame", "_Id_Same")
 extern "C" BYTE* __cdecl Rq_MovingOf(BYTE* o); KING_ALIAS("_Rq_MovingOf", "_Moving_Of")
 extern "C" int __cdecl Rq_Blocked(int skip, BYTE* obj, const void* p, const void* d, BYTE* q); KING_ALIAS("_Rq_Blocked", "_Query_4e5415")
@@ -14793,8 +14846,8 @@ int __fastcall Car_PlaceOnRoad(BYTE* s, void*, int special)
         WorldObj_Reset(&g_rq6f6968, 0);
         return I(72) + I(40);
     }
-    if (Obj549bf0_Get(F(BYTE*, s, 616) + 21568, 0) == 1
-        || Obj549bf0_Get(F(BYTE*, s, 616) + 21568, 0) == 2)
+    if (CarEffect_GetState(F(BYTE*, s, 616) + 21568, 0) == 1
+        || CarEffect_GetState(F(BYTE*, s, 616) + 21568, 0) == 2)
         CarEffect_End(F(BYTE*, s, 616), 0, 1);
     BYTE* fx = F(BYTE*, F(BYTE*, s, 616), 21600);
     if (fx)
@@ -15568,7 +15621,7 @@ extern "C" {
 
 // [FUN_4de990] the cab camera's frame for the game's car (6d2078 +616) into out: in the free view (6cec68) the
 // look angle (696d10) about z, the tilt (car +200 scaled by its cosine, unless keep) about x, raised by the eye
-// height (Car_556650), then the cab frame (+1520); else the eye raised, turned by the look direction (+1396: -2..2
+// height (Car_GetActiveCabHeightOffset), then the cab frame (+1520); else the eye raised, turned by the look direction (+1396: -2..2
 // a quarter or a twelfth turn either way), pitched by the height and put in the head frame (+472), then +1520
 Matrix* __cdecl Cab_EyeFrame(Matrix* out, int keep)
 {
@@ -15576,7 +15629,7 @@ Matrix* __cdecl Cab_EyeFrame(Matrix* out, int keep)
     BYTE* g = g_cv6d2078;
     if (g && F(BYTE*, g, 616))
     {
-        float h = Car_556650(F(BYTE*, g, 616), 0);
+        float h = Car_GetActiveCabHeightOffset(F(BYTE*, g, 616), 0);
         Matrix B;
         if (g_cv6cec68)
         {
@@ -15584,12 +15637,12 @@ Matrix* __cdecl Cab_EyeFrame(Matrix* out, int keep)
             Matrix tilt = g_identity;
             if (!keep)
             {
-                double z = Obj_Float200(g_cv6d2078, 0);
+                double z = CabView_GetFreeLookPitch(g_cv6d2078, 0);
                 double c = !(x87_fabs(ang) <= g_cv64d688) ? g_cv64b678 : x87_cos(ang);
                 Matrix r;
                 tilt = *Matrix_RotationX(&r, (float)(z * c));
             }
-            double h2 = Car_556650(F(BYTE*, g_cv6d2078, 616), 0);
+            double h2 = Car_GetActiveCabHeightOffset(F(BYTE*, g_cv6d2078, 616), 0);
             Vec3 d;
             d.x = (float)(h2 * g_cv702630);
             d.y = (float)(h2 * g_cv702634);
@@ -15756,7 +15809,7 @@ void __fastcall Dash_TextPlace(BYTE* s, void*, int v, int* x, int* y)
 
 // [FUN_546240] records the vehicle's state block for the replay/network
 // stream: a packed 29-byte record (+1204, 11, the low bytes of the 17 dwords
-// at +21052, the speed from Car_555500, also kept at +10416) written as
+// at +21052, the weighted setting magnitude, also kept at +10416) written as
 // message 120 with the id at 67d10a
 KING_VAR(short, vh_67d10a, 67d10a)
 KING_VAR(BYTE*, vh_6ef1fc, 6ef1fc)
@@ -15770,7 +15823,7 @@ extern "C" void __fastcall Vehicle_RecordState(BYTE* self, void*)
     rec.a = F(int, self, 1204);
     for (int i = 0; i < 17; i++)
         rec.b[i] = F(BYTE, self, 21052 + i * 4);
-    float v = (float)Car_555500(self, 0);
+    float v = (float)Car_GetWeightedStateMagnitude(self, 0);
     F(float, self, 10416) = v;
     rec.speed = v;
     BYTE msg[428];
@@ -15855,24 +15908,26 @@ extern "C" BYTE* __fastcall Vh_D52f520(BYTE*, void*, int); KING_ALIAS("@Vh_D52f5
 // [$L_52f520] the deleting destructor reached through the base 376 bytes in
 extern "C" BYTE* __fastcall Vh_Thunk52f520(BYTE* s, void* d, int f) { return Vh_D52f520(s - 376, d, f); }
 
-// [$L_52ace0] static initializer: clears the 35 pair lists (44 bytes each) at 6ced98
-extern "C" BYTE* __fastcall Pairs5_Clear(BYTE* self, void*);
+extern "C" BYTE* __fastcall CollisionModels_ClearRow(BYTE* self, void*);
 KING_VAR(BYTE, vh_6ced98, 6ced98)
-extern "C" void __cdecl Vh_Init52ace0()
+// Initialize the five model pointers and use counts in each of the 35 rows.
+// [FUN_52ace0]
+extern "C" void __cdecl CollisionModels_InitializeRows()
 {
     for (int i = 0; i < 35; i++)
-        Pairs5_Clear(&vh_6ced98 + i * 44, 0);
+        CollisionModels_ClearRow(&vh_6ced98 + i * 44, 0);
 }
 
 // [$L_52b590] [$L_52e920] message handlers of two vehicle parts: the scene
 // object's handling first; then a message must be for this object (+1188),
 // type 13 with subtype 1 selects a part (+9528), type 10 goes to 52e8c0
 extern "C" int __fastcall SceneObj_OnMessage(BYTE* s, void*, int* m);
-extern "C" void __fastcall CarPart_Select(int* self, void*, int k);
+extern "C" void __fastcall CollisionModels_SelectVariant(int* self, void*, int k);
 extern "C" int __fastcall Vehicles_52e8c0(void* self, void*, const int* p);
 KING_VAR(AsmLabel, vh_s6784a0, 6784a0)
 KING_VAR(AsmLabel, vh_s678550, 678550)
-extern "C" int __fastcall Vh_OnMessage52b590(BYTE* self, void*, const int* m)
+// [FUN_52b590]
+extern "C" int __fastcall CollisionModels_HandleVehicleMessage(BYTE* self, void*, const int* m)
 {
     if (SceneObj_OnMessage(self, 0, (int*)m))
         return 1;
@@ -15881,7 +15936,7 @@ extern "C" int __fastcall Vh_OnMessage52b590(BYTE* self, void*, const int* m)
     if (m[1] != 13)
         return 0;
     if (m[2] == 1)
-        CarPart_Select((int*)(self + 9528), 0, m[3]);
+        CollisionModels_SelectVariant((int*)(self + 9528), 0, m[3]);
     return 1;
 }
 extern "C" int __fastcall Vh_OnMessage52e920(BYTE* self, void*, const int* m)

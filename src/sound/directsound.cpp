@@ -1177,8 +1177,8 @@ extern "C" int __fastcall Snd_CreateBuffer(BYTE* self, void*)
 // [FUN_6047d0] [$L_6049d1] probes DirectSound: loads dsound.dll and
 // DirectSoundCreate, creates the object, reads its caps and picks the primary
 // format (16-bit stereo, 8-bit stereo or 8-bit mono at 22050 Hz), then
-// releases the objects again. Returns 0. On a failure the original threw and
-// its catch unloaded the mixer and returned an unset local; -1 here.
+// releases the objects again. Each explicit failure throws the integer 4 in
+// Steam 8.1. Its handler unloads the mixer and returns that caught value.
 KING_VAR(HMODULE, ds_72419c, 72419c)
 KING_VAR(FARPROC, ds_7241a0, 7241a0)
 KING_VAR(void*, ds_724190b, 724190)
@@ -1239,7 +1239,7 @@ extern "C" int __cdecl Mixer_Probe(HWND)
     }
 fail:
     Mixer_Unload();
-    return -1;
+    return 4;
 }
 
 // [$L_604de0] clears a 24-byte wave record

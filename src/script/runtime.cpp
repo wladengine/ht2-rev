@@ -17,8 +17,7 @@ extern "C" long __cdecl ftell(FILE* f);
 extern "C" int __cdecl fseek(FILE* f, long off, int origin);
 extern "C" void** __stdcall List_Erase(void** out, void** node);     // aimain.cpp
 extern "C" double __cdecl Int_ToDouble(const void* n);
-extern "C" void* __cdecl Int_FromInt(int v, int a);
-KING_ALIAS("_Int_FromInt", "_BigInt_FromInt")
+extern "C" WORD* __cdecl BigInt_FromInt(WORD* storage, int value);
 extern "C" void __cdecl Poly_48d8f0(void* out, void* a, int b, int n, int c);
 KING_ALIAS("_Poly_48d8f0", "_Spline_Pieces")
 extern "C" void __cdecl AI_Error4a54e0(int code, int a, const char* name);
@@ -36,7 +35,7 @@ KING_VAR(AsmLabel, s_divByZero, 67055c)
 extern "C" void __fastcall CharVec_Assign(char** self, void*, const char* s);
 extern "C" WORD* __cdecl BigInt_FromUnsigned(WORD* p, unsigned v);
 extern "C" void FUN_48ae10(); KING_ALIAS("_FUN_48ae10", "_BigInt_FromUnsigned")
-extern "C" WORD* __cdecl WStr_Assign(WORD* dst, const WORD* src);
+extern "C" WORD* __cdecl BigInt_AssignLimbs(WORD* dst, const WORD* src);
 extern "C" BYTE** __cdecl NodePool_Get(BYTE** out, BYTE* pool, DWORD value);
 extern "C" void FUN_491420(); KING_ALIAS("_FUN_491420", "_NodePool_Get")
 extern "C" WORD* __cdecl BigInt_Gcd(WORD* a, WORD* b);
@@ -64,7 +63,7 @@ KING_VAR(AsmLabel, g_int6703f0, 6703f0)       // static big integers
 KING_VAR(AsmLabel, g_int6703f8, 6703f8)
 KING_VAR(AsmLabel, g_int670400, 670400)
 KING_VAR(DWORD, g_padding, 691ccc)
-KING_VAR(void*, g_691cd0, 691cd0)
+KING_VAR(WORD*, g_sharedBigIntOne, 691cd0)
 KING_VAR(AsmLabel, g_vtbl64bed0, 64bed0)
 KING_VAR(AsmLabel, g_vtbl64beb8, 64beb8)
 KING_VAR(AsmLabel, g_vtbl64bef4, 64bef4)
@@ -129,7 +128,8 @@ struct VecPoly {
 // ---------------------------------------------------------------------------
 // The save file: blocks of a size and data, padded to 4 bytes
 
-extern "C" int __cdecl Save_ReadVec(DVec3* out, FILE* f)
+// [FUN_488990]
+extern "C" int __cdecl Save_ReadVector3d(DVec3* out, FILE* f)
 {
     double x, y, z;
     fread(&x, 8, 1, f);
@@ -141,15 +141,16 @@ extern "C" int __cdecl Save_ReadVec(DVec3* out, FILE* f)
     return 0;
 }
 
-extern "C" int __cdecl Save_ReadMatrix(void* out, FILE* f)
+// [FUN_488a30]
+extern "C" int __cdecl Save_ReadTransform4x3(void* out, FILE* f)
 {
-    double m[12];
-    for (int i = 0; i < 12; i++) {
-        double v;
-        fread(&v, 8, 1, f);
-        m[i] = v;
+    BYTE words[12][8];
+    BYTE word[8];
+    for (int i = 0; i < 12; ++i) {
+        fread(word, sizeof(word), 1, f);
+        memcpy(words[i], word, sizeof(word));
     }
-    memcpy(out, m, 96);
+    memcpy(out, words, sizeof(words));
     return 0;
 }
 
@@ -229,6 +230,7 @@ struct BigInt {
     WORD d[1];
 };
 
+// [FUN_48aed0] Clear an owned magnitude or return the shared zero.
 extern "C" BigInt* __cdecl Int_SetZero(BigInt* p)
 {
     if (p && p->capacity) {
@@ -239,7 +241,8 @@ extern "C" BigInt* __cdecl Int_SetZero(BigInt* p)
     return (BigInt*)g_int6703f0;
 }
 
-extern "C" BigInt* __cdecl Int_SetDigit(BigInt* p, int v)
+// [FUN_48af00]
+extern "C" BigInt* __cdecl BigInt_SetSignedOne(BigInt* p, int v)
 {
     if (p && p->capacity >= 1) {
         p->n = 1;
@@ -263,7 +266,7 @@ extern "C" int __cdecl Int_CompareMagnitude(const BigInt* a, const BigInt* b)
     return 0;
 }
 
-// divides n digits by a small divisor; the quotient goes to q if given
+// [FUN_48bcc0] Return the remainder after division by a 16-bit limb; optionally store the quotient.
 extern "C" unsigned __cdecl Int_DivSmall(const WORD* digits, int n, unsigned divisor, WORD* q)
 {
     if (!n || (WORD)divisor == 1)
@@ -286,7 +289,8 @@ extern "C" unsigned __cdecl Int_DivSmall(const WORD* digits, int n, unsigned div
     return rem & 0xffff;
 }
 
-extern "C" void __cdecl Int_InitOne() { g_691cd0 = Int_FromInt(0, 1); }
+// [FUN_490d60]
+extern "C" void __cdecl BigInt_InitializeSharedOne() { g_sharedBigIntOne = BigInt_FromInt(0, 1); }
 
 // ---------------------------------------------------------------------------
 // Other helpers
@@ -610,8 +614,8 @@ static void WStr_Zero(WORD* from, WORD* to)
         *from = 0;
 }
 
-// a string of len characters, the first n from src (in old if it fits)
-extern "C" WORD* __cdecl WStr_Make(WORD* old, const WORD* src, int n, WORD flag, int len)
+// [FUN_48aa00] Copy the low limbs, zero-pad to the requested length and store the sign.
+extern "C" WORD* __cdecl BigInt_SetLimbs(WORD* old, const WORD* src, int n, WORD flag, int len)
 {
     WORD* p = old && !(len > (int)old[1]) ? old : WStr_New(len);
     p[2] = flag;
@@ -624,8 +628,8 @@ extern "C" WORD* __cdecl WStr_Make(WORD* old, const WORD* src, int n, WORD flag,
     return p;
 }
 
-// resizes a string to len characters, zero-filled
-extern "C" WORD* __cdecl WStr_Resize(WORD* old, unsigned len)
+// [FUN_48ab80] Preserve the low limbs and sign, zero-filling on growth.
+extern "C" WORD* __cdecl BigInt_ResizeLimbs(WORD* old, unsigned len)
 {
     WORD* p;
     unsigned cur;
@@ -651,7 +655,7 @@ extern "C" WORD* __cdecl WStr_Resize(WORD* old, unsigned len)
 }
 
 // dst = src
-extern "C" WORD* __cdecl WStr_Assign(WORD* dst, const WORD* src)
+extern "C" WORD* __cdecl BigInt_AssignLimbs(WORD* dst, const WORD* src)
 {
     if (dst == src)
         return dst;
@@ -706,6 +710,7 @@ static WORD* Int_Normalize(WORD* r)
 }
 
 // out = a * k
+// [FUN_48b6b0]
 extern "C" WORD* __cdecl Int_MulInt(WORD* a, int k, WORD* out)
 {
     if (!a)
@@ -715,7 +720,7 @@ extern "C" WORD* __cdecl Int_MulInt(WORD* a, int k, WORD* out)
     if (n == 0 || k == 0)
         r = (WORD*)Int_SetZero((BigInt*)out);
     else if (k == 1)
-        r = WStr_Assign(out, a);
+        r = BigInt_AssignLimbs(out, a);
     else {
         int pos = k >= 0;
         WORD sign = (short)a[2] == pos;
@@ -726,7 +731,7 @@ extern "C" WORD* __cdecl Int_MulInt(WORD* a, int k, WORD* out)
             kd[kn++] = (WORD)u;
         bool same = a == out;
         int len = kn + n;
-        r = same ? WStr_Resize(out, len) : BigInt_Alloc(out, len);
+        r = same ? BigInt_ResizeLimbs(out, len) : BigInt_Alloc(out, len);
         WORD* d = r + 3;
         WORD* end = d + len;
         WORD *dst, *outer, *low, *inner, *innerEnd;
@@ -773,13 +778,14 @@ extern "C" WORD* __cdecl Int_MulInt(WORD* a, int k, WORD* out)
 }
 
 // out = a shifted by sh bits: left when sh > 0, right when sh < 0
+// [FUN_48c040]
 extern "C" WORD* __cdecl Int_Shift(WORD* a, int sh, WORD* out)
 {
     if (!a)
         g_rangeError("Integer", "operation on uninitialized Integer");
     int n = a[0];
     if (n == 0 || sh == 0)
-        return WStr_Assign(out, a);
+        return BigInt_AssignLimbs(out, a);
     bool same = a == out;
     int sign = (short)a[2];
     unsigned u = sh >= 0 ? sh : -sh;
@@ -788,7 +794,7 @@ extern "C" WORD* __cdecl Int_Shift(WORD* a, int sh, WORD* out)
     WORD* r;
     if (sh > 0) {
         int len = n + words + 1;
-        r = same ? WStr_Resize(out, len) : BigInt_Alloc(out, len);
+        r = same ? BigInt_ResizeLimbs(out, len) : BigInt_Alloc(out, len);
         WORD* d = r + 3;
         WORD* p = d + len - 1;
         WORD* src = same ? d : a + 3;
@@ -805,7 +811,7 @@ extern "C" WORD* __cdecl Int_Shift(WORD* a, int sh, WORD* out)
         if (len < 0)
             r = (WORD*)Int_SetZero((BigInt*)out);
         else {
-            r = same ? WStr_Resize(out, len) : BigInt_Alloc(out, len);
+            r = same ? BigInt_ResizeLimbs(out, len) : BigInt_Alloc(out, len);
             WORD* d = r + 3;
             WORD* end = d + len;
             WORD* src = same ? d : a + 3;
@@ -833,7 +839,8 @@ extern "C" WORD* __cdecl Int_Shift(WORD* a, int sh, WORD* out)
 // by the vn digits of V, qn quotient digits from the top; R keeps the
 // remainder, Q (if any) gets the quotient. The estimate's high bits are
 // kept as the original keeps them; only its low 16 bits are used.
-extern "C" void __cdecl Int_DivDigits(WORD* R, const WORD* V, int vn, WORD* Q, int qn)
+// [FUN_48ba90]
+extern "C" void __cdecl BigInt_DivideNormalizedLimbs(WORD* R, const WORD* V, int vn, WORD* Q, int qn)
 {
     unsigned v1 = V[vn - 1];
     unsigned v2 = V[vn - 2];
@@ -927,7 +934,7 @@ WORD* __cdecl BigInt_Negate(WORD* a, WORD* r)
     if (!a)
         BigInt_Fail((const char*)s_bigintNull);
     if (r != a)
-        r = WStr_Assign(r, a);
+        r = BigInt_AssignLimbs(r, a);
     if (r[0])
         r[2] = r[2] == 0;
     return r;
@@ -937,7 +944,7 @@ WORD* __cdecl BigInt_Negate(WORD* a, WORD* r)
 WORD** __cdecl BigInt_Op48c260(WORD** out, WORD* const* a, WORD* const* b)
 {
     WORD* t = BigInt_Gcd(*a, *b);
-    *out = WStr_Assign(0, t);
+    *out = BigInt_AssignLimbs(0, t);
     if (t && t[1])
         operator delete(t);
     return out;
@@ -1022,7 +1029,7 @@ void __fastcall Rational_Reduce(WORD** self, void*)
     }
     WORD* g;
     BigInt_Op48c260(&g, self, q);
-    if (CallC<int>(FUN_48af50, g, g_691cd0)) {
+    if (CallC<int>(FUN_48af50, g, g_sharedBigIntOne)) {
         self[0] = BigInt_Quotient(self[0], g, self[0]);
         *q = BigInt_Quotient(*q, g, *q);
     }
@@ -1118,9 +1125,9 @@ extern "C" void FUN_491100(); KING_ALIAS("_FUN_491100", "@Rec491100_Destroy@8")
 extern "C" void FUN_4914c0(); KING_ALIAS("_FUN_4914c0", "@Run4914c0_Destroy@4")
 extern "C" void FUN_491590(); KING_ALIAS("_FUN_491590", "@Task491590_Destruct@8")
 KING_VAR(AsmLabel, g_run64bee4, 64bee4)
-KING_VAR(AsmLabel, g_run6705ec, 6705ec)
-KING_VAR(AsmLabel, g_run6705f4, 6705f4)
-KING_VAR(AsmLabel, g_run6705fc, 6705fc)
+KING_VAR(AsmLabel, s_itemTypeName, 6705ec)
+KING_VAR(AsmLabel, s_closureTypeName, 6705f4)
+KING_VAR(AsmLabel, s_continuationTypeName, 6705fc)
 
 static BYTE* Run_DeleteAfter(BYTE* self, int flags, void (*dtor)())
 {
@@ -1130,15 +1137,15 @@ static BYTE* Run_DeleteAfter(BYTE* self, int flags, void (*dtor)())
     return self;
 }
 // [$L_490f50]
-extern "C" int __fastcall Run_490f50(BYTE* s) { return (int)g_run6705ec; }
+extern "C" const char* __fastcall SchItem_GetTypeName(BYTE*) { return s_itemTypeName; }
 // [$L_490f60]
 extern "C" int __fastcall Run_490f60(BYTE* s) { return 4; }
 // [$L_490f70]
-extern "C" int __fastcall Run_490f70(BYTE* s) { return (int)g_run6705f4; }
+extern "C" const char* __fastcall SchClosure_GetTypeName(BYTE*) { return s_closureTypeName; }
 // [$L_491400]
 extern "C" int __fastcall Run_491400(BYTE* s) { return 5; }
 // [$L_491410]
-extern "C" int __fastcall Run_491410(BYTE* s) { return (int)g_run6705fc; }
+extern "C" const char* __fastcall SchContinuation_GetTypeName(BYTE*) { return s_continuationTypeName; }
 // [$L_490f80]
 extern "C" BYTE* __fastcall Run490f80_DeletingDestructor(BYTE* s, void*, int flags) { return Run_DeleteAfter(s, flags, FUN_490fa0); }
 // [$L_490fd0]
@@ -1211,12 +1218,11 @@ extern "C" void __fastcall Ring491090_Destruct(BYTE* s, void*)
 // ---------------------------------------------------------------------------
 // Small methods and static helpers: guarded static construction, releases, frees.
 
-KING_VAR(BYTE*, g_q49_691cd0, 691cd0)
 // [$L_490d90] frees the 691cd0 block when its +2 word is set
 extern "C" void __cdecl Block691cd0_Free(void)
 {
-    if (g_q49_691cd0 && F(WORD, g_q49_691cd0, 2))
-        operator delete(g_q49_691cd0);
+    if (g_sharedBigIntOne && g_sharedBigIntOne[1])
+        operator delete(g_sharedBigIntOne);
 }
 
 // ---------------------------------------------------------------------------
@@ -1366,14 +1372,9 @@ extern "C" void __fastcall Points_Reverse(BYTE* s)
 // [$L_48d670] the length of the polyline of s (24-byte points +32..+36)
 extern "C" double __fastcall Points_Length(BYTE* s)
 {
-    double len = g_q115_64b678;
     const double* p = F(const double*, s, 32);
     unsigned n = (F(int, s, 36) - F(int, s, 32)) / 24 - 1;
-    for (unsigned i = 0; i < n; i++, p += 3) {
-        double dx = p[3] - p[0], dy = p[4] - p[1], dz = p[5] - p[2];
-        len += x87_sqrt(dy * dy + dz * dz + dx * dx);
-    }
-    return len;
+    return x87_polyline_length(p, n);
 }
 
 // [FUN_4903a0] vector polynomial s with each coefficient divided by v component-wise, into out
@@ -1471,16 +1472,16 @@ extern "C" int __fastcall Curve_Advance(BYTE* s, void*, double* t, double* d, do
         if (!(v > *d)) {
             *t = 1.0;
             *d = *d - v;
-            if (*d < g_q113_64b678)
+            if (!(*d >= g_q113_64b678))
                 *d = 0.0;
             return 1;
         }
-    } else if (*d < g_q113_64b678) {
+    } else if (!(*d >= g_q113_64b678)) {
         double v = Poly1392_Diff(s, 0, t0, 0.0);
-        if (!(v < *d)) {
+        if (v >= *d) {
             *t = 0.0;
             *d = *d - v;
-            if (!(*d <= g_q113_64b678))
+            if (*d > g_q113_64b678)
                 *d = 0.0;
             return 1;
         }
@@ -1489,21 +1490,14 @@ extern "C" int __fastcall Curve_Advance(BYTE* s, void*, double* t, double* d, do
         *x = *d / Poly1392_Diff(s, 0, t0, t0 + *x) * *x;
     double nt = *x + t0;
     *t = nt;
-    if (!(nt <= g_q115_64b670))
+    if (nt > g_q115_64b670)
         *t = 1.0;
-    else if (nt < g_q113_64b678)
+    else if (!(nt >= g_q113_64b678))
         *t = 0.0;
     *d = 0.0;
     return 0;
 }
 
-// the length of segment i of polyline points p
-static double Run119_SegLen(const double* p, int i)
-{
-    const double* a = p + i * 3;
-    double dx = a[3] - a[0], dy = a[4] - a[1], dz = a[5] - a[2];
-    return x87_sqrt(dy * dy + dz * dz + dx * dx);
-}
 // [FUN_48d710] the distance along the polyline of s (24-byte points +32..+36) from fraction t1 of segment i1 to
 // fraction t2 of segment i2 (an index at the last point counts as the end of the segment before it)
 extern "C" double __fastcall Points_Distance(BYTE* s, void*, double t1, int i1, double t2, int i2)
@@ -1518,26 +1512,21 @@ extern "C" double __fastcall Points_Distance(BYTE* s, void*, double t1, int i1, 
         t2 += g_q115_64b670;
         i2--;
     }
-    if (i1 == i2)
-        return Run119_SegLen(p, i1) * (t2 - t1);
-    double len = Run119_SegLen(p, i1) * (g_q115_64b670 - t1);
-    for (int j = i1 + 1; j < i2; j++)
-        len += Run119_SegLen(p, j);
-    return len + Run119_SegLen(p, i2) * t2;
+    return x87_polyline_span(p, t1, i1, t2, i2);
 }
 
 // ---------------------------------------------------------------------------
 // Static initializers: construct a global, register its teardown at exit.
 
 extern "C" int __cdecl atexit(void(__cdecl* fn)(void));
-extern "C" void __cdecl Int_InitOne();
+extern "C" void __cdecl BigInt_InitializeSharedOne();
 extern "C" void q197_L_490d90(); KING_ALIAS("_q197_L_490d90", "_Block691cd0_Free")
 // [$L_490d80] registers the teardown at exit
 extern "C" int __cdecl Static490d50_AtExit(void) { return atexit((void(__cdecl*)(void))q197_L_490d90); }
 // [$L_490d50] the static initializer: FUN_490d60, then the teardown at exit
 extern "C" int __cdecl Static490d50_Init(void)
 {
-    Int_InitOne();
+    BigInt_InitializeSharedOne();
     return Static490d50_AtExit();
 }
 
@@ -1633,11 +1622,11 @@ int __fastcall SaveBlock_Read(BYTE* self, void*, FILE* f)
             Save_ReadHeader(f, &id, &p2, &s2);
             if (id == g_sv6703a4) {
                 DVec3 v;
-                Save_ReadVec(&v, f);
+                Save_ReadVector3d(&v, f);
                 memcpy(Sv_Last(self, 28) + 16, &v, 24);
             } else if (id == g_sv67039c) {
                 double m[12];
-                Save_ReadMatrix(m, f);
+                Save_ReadTransform4x3(m, f);
                 memcpy(Sv_Last(self, 28) + 40, m, 96);
                 memcpy(Sv_Last(self, 28) + 16, m + 9, 24);
                 F(BYTE, Sv_Last(self, 28), 140) = 1;
@@ -1679,7 +1668,7 @@ int __fastcall SaveBlock_Read(BYTE* self, void*, FILE* f)
                 fread(&count, 4, 1, f);
                 for (int i = count; i > 0; i--) {
                     DVec3 v;
-                    Save_ReadVec(&v, f);
+                    Save_ReadVector3d(&v, f);
                     BYTE** vec = (BYTE**)(Sv_Last(self, 16) + 16);
                     if (vec[1] != vec[2]) {
                         if (vec[1])
@@ -1805,12 +1794,12 @@ WORD* __cdecl Int_AddSigned(WORD* a, int na, WORD* b, int nb, WORD* out)
     bool aOut = a == out, bOut = b == out;
     WORD* r;
     if (lb == 0)
-        return Int_Normalize(WStr_Make(out, a + 3, la, sa, la));
+        return Int_Normalize(BigInt_SetLimbs(out, a + 3, la, sa, la));
     if (la == 0)
-        return Int_Normalize(WStr_Make(out, b + 3, lb, sb, lb));
+        return Int_Normalize(BigInt_SetLimbs(out, b + 3, lb, sb, lb));
     int mx = la > lb ? la : lb;
     if (sa == sb) {
-        r = (aOut || bOut) ? WStr_Resize(out, mx + 1) : BigInt_Alloc(out, mx + 1);
+        r = (aOut || bOut) ? BigInt_ResizeLimbs(out, mx + 1) : BigInt_Alloc(out, mx + 1);
         r[2] = sa;
         WORD* d = r + 3;
         const WORD *lo, *loEnd, *sh, *shEnd;
@@ -1848,7 +1837,7 @@ WORD* __cdecl Int_AddSigned(WORD* a, int na, WORD* b, int nb, WORD* out)
     int cmp = Int_CompareMagnitude((const BigInt*)a, (const BigInt*)b);
     if (cmp == 0)
         return Int_Normalize((WORD*)Int_SetZero((BigInt*)out));
-    r = (aOut || bOut) ? WStr_Resize(out, mx) : BigInt_Alloc(out, mx);
+    r = (aOut || bOut) ? BigInt_ResizeLimbs(out, mx) : BigInt_Alloc(out, mx);
     WORD* d = r + 3;
     const WORD *lo, *loEnd, *sh, *shEnd;
     if (cmp > 0) {
@@ -1916,11 +1905,11 @@ WORD* __cdecl Int_Mul(WORD* a, WORD* b, WORD* out)
     if (!la || !lb)
         r = (WORD*)Int_SetZero((BigInt*)out);
     else if (la == 1 && a[3] == 1)
-        r = WStr_Assign(out, b);
+        r = BigInt_AssignLimbs(out, b);
     else if (lb == 1 && b[3] == 1)
-        r = WStr_Assign(out, a);
+        r = BigInt_AssignLimbs(out, a);
     else if (a == b && aOut) {
-        r = WStr_Resize(out, n);
+        r = BigInt_ResizeLimbs(out, n);
         WORD* d = r + 3;
         int hi = la - 1, lo = la - 1;
         for (int k = n - 2; k >= 0; k--) {
@@ -1943,7 +1932,7 @@ WORD* __cdecl Int_Mul(WORD* a, WORD* b, WORD* out)
                 hi--;
         }
     } else {
-        r = (aOut || bOut) ? WStr_Resize(out, n) : BigInt_Alloc(out, n);
+        r = (aOut || bOut) ? BigInt_ResizeLimbs(out, n) : BigInt_Alloc(out, n);
         WORD* d = r + 3;
         const WORD *rd, *rdLow, *other;
         int ol, w;
@@ -2058,7 +2047,7 @@ extern "C" void __fastcall Vec24_FreeStorage(BYTE** v, int);
 extern "C" void __fastcall Vec8_Free(BYTE** v, int);
 extern "C" void FUN_44c470(); KING_ALIAS("_FUN_44c470", "@Vec8_Insert44c470@16")
 extern "C" BYTE* __stdcall Vec8b_AllocCopy(unsigned n, const BYTE* first, const BYTE* last);
-extern "C" void __cdecl Construct8(DWORD* d, const DWORD* s);
+extern "C" void __cdecl CopyConstructTwoWords(DWORD* d, const DWORD* s);
 extern "C" DWORD* __fastcall Rec_Init48e8c0(DWORD* s, void*, DWORD a);
 extern "C" void FUN_48e8c0(); KING_ALIAS("_FUN_48e8c0", "@Rec_Init48e8c0@12")
 extern "C" BYTE** __fastcall Vec24_CopyConstruct(BYTE** s, void*, BYTE* const* src);
@@ -2070,7 +2059,7 @@ extern "C" void FUN_490930(); KING_ALIAS("_FUN_490930", "@Vec8_Copy@12")
 static void Bl_PushKnot(BYTE** v, double d)
 {
     if (v[1] != v[2]) {
-        Construct8((DWORD*)v[1], (const DWORD*)&d);
+        CopyConstructTwoWords((DWORD*)v[1], (const DWORD*)&d);
         v[1] += 8;
     } else
         Vec8_Insert44c470(v, 0, v[1], (const BYTE*)&d);
@@ -2207,25 +2196,25 @@ WORD* __cdecl BigInt_Gcd(WORD* a, WORD* b)
         g_onError((const char*)s_bigint, (int)(const char*)s_bigintNull);
     int lb = b[0], la = a[0];
     if (!lb)
-        return WStr_Make(0, a + 3, la, 1, la);
+        return BigInt_SetLimbs(0, a + 3, la, 1, la);
     if (!la)
-        return WStr_Make(0, b + 3, lb, 1, lb);
-    WORD* u = WStr_Make(0, a + 3, la, 1, la);
-    WORD* v = WStr_Make(0, b + 3, lb, 1, lb);
+        return BigInt_SetLimbs(0, b + 3, lb, 1, lb);
+    WORD* u = BigInt_SetLimbs(0, a + 3, la, 1, la);
+    WORD* v = BigInt_SetLimbs(0, b + 3, lb, 1, lb);
     int k = Gcd_TrailingZeros(u, la, v, lb, la < lb ? la : lb);
     if (k) {
         u = Int_Shift(u, -k, u);
         v = Int_Shift(v, -k, v);
     }
-    WORD* t = (u[3] & 1) ? WStr_Make(0, v + 3, v[0], v[2] == 0, v[0]) : WStr_Make(0, u + 3, u[0], u[2], u[0]);
+    WORD* t = (u[3] & 1) ? BigInt_SetLimbs(0, v + 3, v[0], v[2] == 0, v[0]) : BigInt_SetLimbs(0, u + 3, u[0], u[2], u[0]);
     while (t[0]) {
         if (int s = Gcd_TrailingZeros(t, t[0], 0, 0, t[0]))
             t = Int_Shift(t, -s, t);
         if (t[2] == 1) {
-            u = WStr_Assign(u, t);
+            u = BigInt_AssignLimbs(u, t);
             t = Int_AddSigned(t, 0, v, 1, t);
         } else {
-            v = WStr_Make(v, t + 3, t[0], t[2] == 0, t[0]);
+            v = BigInt_SetLimbs(v, t + 3, t[0], t[2] == 0, t[0]);
             t = Int_AddSigned(t, 0, u, 0, t);
         }
     }
@@ -2304,12 +2293,12 @@ void __cdecl BigInt_DivMod(WORD** a, WORD** b, WORD** q, WORD** r)
     int qsign = sa == (short)y[2];
     if (cmp < 0) {
         qq = (WORD*)Int_SetZero((BigInt*)qq);
-        rr = WStr_Assign(rr, x);
+        rr = BigInt_AssignLimbs(rr, x);
     } else if (cmp == 0) {
-        qq = (WORD*)Int_SetDigit((BigInt*)qq, qsign);
+        qq = (WORD*)BigInt_SetSignedOne((BigInt*)qq, qsign);
         rr = (WORD*)Int_SetZero((BigInt*)rr);
     } else if (lb == 1) {
-        qq = WStr_Assign(qq, x);
+        qq = BigInt_AssignLimbs(qq, x);
         unsigned rem = Int_DivSmall(qq + 3, qq[0], y[3], qq + 3);
         rr = BigInt_FromInt(rr, rem);
         if (rem)
@@ -2328,7 +2317,7 @@ void __cdecl BigInt_DivMod(WORD** a, WORD** b, WORD** q, WORD** r)
         }
         int n = la - lb + 1;
         qq = BigInt_Alloc(qq, n);
-        Int_DivDigits(rr + 3, v + 3, lb, qq + 3, n);
+        BigInt_DivideNormalizedLimbs(rr + 3, v + 3, lb, qq + 3, n);
         if (v != y && v[1])
             operator delete(v);
         if (d != 1) {
@@ -2368,7 +2357,7 @@ Poly* __cdecl Poly_ChebyshevFit(Poly* out, double a, double b, int n, const Poly
         BYTE l[200], t[200], tmp[200];
         F(unsigned, l, 192) = 0;
         double one = 1.0;
-        Construct8((DWORD*)l, (const DWORD*)&one);
+        CopyConstructTwoWords((DWORD*)l, (const DWORD*)&one);
         F(unsigned, l, 192)++;
         for (int j = 0; j <= n; j++) {
             if (j == k)
@@ -2377,7 +2366,7 @@ Poly* __cdecl Poly_ChebyshevFit(Poly* out, double a, double b, int n, const Poly
             double neg = -x[j];
             double one2 = 1.0;
             F(unsigned, t, 192) = 0;
-            Construct8((DWORD*)t, (const DWORD*)&one2);
+            CopyConstructTwoWords((DWORD*)t, (const DWORD*)&one2);
             F(unsigned, t, 192)++;
             Poly_Append((Poly*)t, 0, &neg);
             memcpy(l, Poly_Multiply(l, 0, tmp, t), 196);
@@ -2456,9 +2445,9 @@ WORD* __cdecl BigInt_Quotient(WORD* a, WORD* b, WORD* out)
     if (cmp < 0)
         q = (WORD*)Int_SetZero((BigInt*)out);
     else if (cmp == 0)
-        q = (WORD*)Int_SetDigit((BigInt*)out, qs);
+        q = (WORD*)BigInt_SetSignedOne((BigInt*)out, qs);
     else if (lb == 1) {
-        q = WStr_Assign(out, a);
+        q = BigInt_AssignLimbs(out, a);
         Int_DivSmall(q + 3, q[0], b[3], q + 3);
     } else {
         WORD d = (WORD)(65536 / ((unsigned)b[2 + lb] + 1));
@@ -2474,7 +2463,7 @@ WORD* __cdecl BigInt_Quotient(WORD* a, WORD* b, WORD* out)
         }
         int n = la - lb + 1;
         q = BigInt_Alloc(out, n);
-        Int_DivDigits(r + 3, v + 3, lb, q + 3, n);
+        BigInt_DivideNormalizedLimbs(r + 3, v + 3, lb, q + 3, n);
         if (v != b && v[1])
             operator delete(v);
         if (r[1])
@@ -2712,7 +2701,7 @@ extern "C" int __cdecl Poly_FindMin(const Poly* p, double* best, double* at, dou
     for (int i = 0; i < n; i++) {
         double x = i * span / steps + lo;
         double v = p->Eval(x);
-        if (v < *best) {
+        if (!(v >= *best)) {
             *best = v;
             *at = x;
             found = 1;
@@ -2721,7 +2710,7 @@ extern "C" int __cdecl Poly_FindMin(const Poly* p, double* best, double* at, dou
             double s = d1.Eval(x);
             x -= s / d2.Eval(x);
             v = p->Eval(x);
-            if (v < *best && !(x > hi) && !(x < lo)) {
+            if (!(v >= *best) && !(x > hi) && x >= lo) {
                 *best = v;
                 *at = x;
                 found = 1;
@@ -2735,11 +2724,9 @@ extern "C" int __cdecl Poly_FindMin(const Poly* p, double* best, double* at, dou
 // components summed
 extern "C" void __cdecl Poly_DistanceSq(Poly* out, VecPoly* v, const DVec3* c)
 {
-    DVec3 n = {-c->x, -c->y, -c->z};
     VecPoly k;
-    k.count = 0;
-    k.c[0] = n;
-    k.count++;
+    DVec3_SetXYZ(&k.c[0], nullptr, -c->x, -c->y, -c->z);
+    k.count = 1;
     VecPoly d, t;
     VPoly_Add((BYTE*)v, 0, (BYTE*)&d, (BYTE*)&k);
     memcpy(&d, VPoly_Multiply((BYTE*)&d, 0, (BYTE*)&t, (BYTE*)&d), 580);
@@ -2826,16 +2813,18 @@ int __fastcall Road_NearestOn(BYTE* s, void*, const DVec3* p, double* best, doub
     const DVec3* pts = F(const DVec3*, s, 32);
     DVec3 start = Rn_Lerp(pts[i0], pts[i0 + 1], t0);
     DVec3 v = {p->x - start.x, p->y - start.y, p->z - start.z};
-    double a = Rn_Len2(v);
+    // The three squared lengths are stored as binary64 before the endpoint
+    // tests. A segment shorter than that format can represent ties at its start.
+    volatile double a = Rn_Len2(v);
     int found = 0;
     for (int k = i0; k <= i1; k++)
     {
         DVec3 next = k != i1 ? pts[k + 1] : Rn_Lerp(pts[i1], pts[i1 + 1], t1);
         DVec3 w = {p->x - next.x, p->y - next.y, p->z - next.z};
-        double b = w.x * w.x + w.y * w.y + w.z * w.z;
+        volatile double b = w.x * w.x + w.y * w.y + w.z * w.z;
         DVec3 cur = k == i0 ? Rn_Lerp(pts[i0], pts[i0 + 1], t0) : pts[k];
         DVec3 seg = {next.x - cur.x, next.y - cur.y, next.z - cur.z};
-        double L2 = Rn_Len2(seg);
+        volatile double L2 = Rn_Len2(seg);
         if (!(L2 + a > b))
         {
             // the start is the closest
@@ -3051,7 +3040,7 @@ BYTE* __fastcall Curve_Construct(BYTE* s, void*, const BYTE* p)
 // Batch 32: polylines and list nodes
 
 extern "C" void Rt32_Copy24s(); KING_ALIAS("_Rt32_Copy24s", "_UninitCopy24s")
-extern "C" void __fastcall Stl_Lock(volatile LONG* l, void*);
+extern "C" void __fastcall StlAllocator_AcquireLock(volatile LONG* l, void*);
 extern "C" BYTE* __cdecl Stl_ChunkAlloc(unsigned size, int* count);
 extern "C" BYTE** __fastcall VecChar_Copy(BYTE** self, int, BYTE* const* src);
 extern "C" void Rt32_Reserve4(); KING_ALIAS("_Rt32_Reserve4", "@Vec4_Reserve@16")
@@ -3088,7 +3077,7 @@ BYTE* __fastcall Polyline_Construct(BYTE* self, void*, BYTE** pts)
 // of value src: its char vector, dword vector (+12) and second dword vector (+24)
 BYTE* __fastcall List_NewNode(void* list, void*, BYTE* src)
 {
-    Stl_Lock((volatile LONG*)&rt32_lock68d204, 0);
+    StlAllocator_AcquireLock((volatile LONG*)&rt32_lock68d204, 0);
     BYTE* node = rt32_free48_68d1d8;
     if (!node) {
         int n = 20;
@@ -3122,7 +3111,7 @@ BYTE* __fastcall List_NewNode(void* list, void*, BYTE* src)
 KING_VAR(BYTE*, rt_free16_68d1c8, 68d1c8)
 extern "C" BYTE* __cdecl Stl_Alloc16()
 {
-    Stl_Lock((volatile LONG*)&rt32_lock68d204, 0);
+    StlAllocator_AcquireLock((volatile LONG*)&rt32_lock68d204, 0);
     BYTE* node = rt_free16_68d1c8;
     if (!node) {
         int n = 20;

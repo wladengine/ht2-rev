@@ -1,0 +1,109 @@
+#include <windows.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define F(t,p,o) (*(t*)((BYTE*)(p)+(o)))
+#define V(n) (*(float*)(fr+(n)))
+#define I(n) (*(int*)(fr+(n)))
+struct Vec3 { float x,y,z; };
+struct Matrix { float m[12]; };
+static BYTE subject[3300], contact[128], other[3300], object[16];
+static BYTE *frameBegin, *moving;
+static size_t frameSize;
+static int bounce, impulse, activate, callback, multiply, matrices, decompose, impactRecords;
+static bool transform;
+static void check(bool ok,const char* why) {
+    if(!ok) { printf("FAIL: %s\n",why); exit(1); }
+}
+template<size_t N> struct GuardedFrame {
+    BYTE before[32], bytes[N], after[32];
+    GuardedFrame() { memset(this,0xA5,sizeof(*this)); }
+    ~GuardedFrame() {
+        for(int i=0;i<32;++i) check(before[i]==0xA5 && after[i]==0xA5,"frame canaries");
+    }
+};
+static void range(const void* out,size_t size,const char* why) {
+    uintptr_t p=(uintptr_t)out,b=(uintptr_t)frameBegin;
+    check(p>=b && p-b<=frameSize && size<=frameSize-(p-b),why);
+}
+static Matrix resultMatrix;
+static Matrix* fill(Matrix* out) {
+    range(out,48,"matrix write exceeds production frame");
+    for(int i=0;i<12;++i)out->m[i]=(float)(100+matrices*12+i);
+    ++matrices; return out;
+}
+static BYTE* Mx_MovingOf(BYTE* p) { check(p==object,"contact other object"); return moving; }
+static void CheckContact(const void* a,const void* b,const void* c,bool paired) {
+    check(a==subject && b==moving && c==contact,"recorded contact participants");
+    check(paired==(moving && (F(int,moving,392)==1 || F(int,moving,392)==2)), "recorded response type");
+    check(!impulse && !bounce && impactRecords==0,"record once before response");
+    if(paired && transform) check(multiply==2 && !memcmp(other+3172,&resultMatrix,48),"record adjusted pose");
+    ++impactRecords;
+}
+static void MovingItem_PointBounce(BYTE* s,const float* p,const float* n) {
+    CheckContact(s,moving,contact,false);
+    check(s==subject && p==(float*)(contact+52) && n==(float*)(contact+64),"bounce arguments"); ++bounce;
+}
+static void Mi3_Decompose(const BYTE* m,float* a,float* b,float* c,float* d,float* e,float* f) {
+    check(m==contact+4,"contact matrix input"); float* out[]={a,b,c,d,e,f};
+    for(int i=0;i<6;++i) { range(out[i],4,"decompose output"); *out[i]=(float)(i+1); }
+    ++decompose;
+}
+static Vec3* Vec3_MulAssign(Vec3* v,int,Vec3* out,float k) {
+    range(v,12,"vector input"); range(out,12,"vector output");
+    check(k==0.25f,"contact scale preserved"); *out=*v; return out;
+}
+static Vec3 Mx_Vec(float x,float y,float z) { Vec3 v={x,y,z};return v; }
+static Vec3 Mx_Zero() { return Mx_Vec(0,0,0); }
+static Matrix* Matrix_Translation(Matrix* out,Vec3) { return fill(out); }
+static BYTE* Mi3_Matrix1(BYTE* b,int,BYTE* out) { check(b==other,"matrix owner");fill((Matrix*)out);return out; }
+static double Vec3_Length(const Vec3* v) { range(v,12,"length input");return 2; }
+static Matrix* Matrix_LookAt(Matrix* out,Vec3,Vec3,float len) { check(len==2,"length passed");return fill(out); }
+static Matrix* Matrix_Multiply(Matrix* out,const Matrix* a,const Matrix* b) {
+    range(a,48,"multiply lhs");range(b,48,"multiply rhs");
+    fill(out); ++multiply;
+    if(multiply==2) {
+        out->m[9]=-3125.5f;out->m[10]=-4050.25f;out->m[11]=21.75f;
+        resultMatrix=*out;
+    }
+    return out;
+}
+static void Mi3_Impulse(BYTE* s,BYTE* c,BYTE* b) {
+    CheckContact(s,b,c,true);
+    check(s==subject && c==contact && b==other,"impulse arguments preserved");
+    check(!bounce && !activate && !callback,"impulse order");
+    check(multiply==(transform?2:0),"transformation branch");
+    if(transform)check(!memcmp(b+3172,&resultMatrix,48),"complete output copied to body");
+    else for(int i=0;i<48;++i)check(b[3172+i]==0x5A,"no transform without flag");
+    ++impulse;
+}
+static void Mi3_ActivateAll(BYTE* b,int) {check(b==other && impulse==1 && !callback,"wake order");++activate;}
+static double Mi3_FrameTime() {check(impulse==1,"frame time after impulse");return 0.125;}
+static void CallVirt(BYTE* s,int offset,BYTE* b,BYTE* c,float dt) {
+    check(s==subject && offset==200 && b==other && c==contact && dt==0.125f,"callback arguments");
+    check(impulse==1 && activate==(F(int,other,392)==2),"callback order");++callback;
+}
+static double Mx_Time() {check(callback==1,"contact time after callback");return 123.5;}
+// PRODUCTION
+int main() {
+    static_assert(sizeof(void*)==4 && sizeof(Matrix)==48,"x86 matrix contract");
+    const DWORD flags[]={0,0x8000000,0x10}; int cases=0, recordedCases=0;
+    for(int kind=-1;kind<=2;++kind)for(int f=0;f<3;++f) {
+        memset(subject,0,sizeof(subject));memset(contact,0,sizeof(contact));memset(other,0x5A,sizeof(other));
+        F(BYTE*,contact,116)=object;F(int,other,392)=kind;moving=kind<0?0:other;
+        bounce=impulse=activate=callback=multiply=matrices=decompose=impactRecords=0;transform=(flags[f]&0x8000000)!=0;
+        MovingItem_BodyContact(subject,contact,flags[f],0.25f);
+        recordedCases+=impactRecords;
+        if(kind<1)check(bounce==1 && !impulse && !callback && !matrices,"non-body branch");
+        else {
+            check(!bounce && impulse==1 && callback==1 && activate==(kind==2),"body branch");
+            check(matrices==(transform?5:0) && decompose==(transform?1:0),"matrix branch count");
+            check(F(float,subject,3144)==123.5f,"contact timestamp");
+        }
+        ++cases;
+    }
+    check(recordedCases==cases,"one impact record per response");
+    printf("PASS: %d body-contact cases; checked frame writes, recorded participants, branch order and canaries\n",cases);
+    return 0;
+}

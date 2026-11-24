@@ -216,14 +216,16 @@ extern "C" BYTE* __fastcall Dtor57cfa0_DeletingDestructor(BYTE* s, void*, int fl
 // Object placement.
 
 extern "C" Matrix* __cdecl Matrix_Multiply(Matrix* out, const Matrix* a, const Matrix* b);
-extern "C" int __cdecl Obj_Lookup4e5b22(int a, int b, int c, char* out);
+extern "C" int __cdecl World_ResolveSegmentDestination(int a, int b, int c, char* out);
 // [$L_580ff0] places the object: its world matrix (+692 by +500), the cell looked up from it (or +800 after slot
 // 28), then slot 64 with the matrix and the cell
 extern "C" void __fastcall Obj580ff0_Place(BYTE* s, void*)
 {
     float m[12];
     Matrix_Multiply((Matrix*)m, (const Matrix*)(s + 692), (const Matrix*)(s + 500));
-    int c = Obj_Lookup4e5b22(F(int, s, 800), (int)(s + 536), (int)(m + 8), (char*)(s + 1132));
+    // FUN_580ff0 passes the translation at byte 36, not the last basis entry.
+    // The resulting room owns the render node and is also used by the mirror.
+    int c = World_ResolveSegmentDestination(F(int, s, 800), (int)(s + 536), (int)(m + 9), (char*)(s + 1132));
     if (!c) {
         c = F(int, s, 800);
         CallVirt(s, 28, 1);
@@ -343,7 +345,7 @@ BYTE* __fastcall MovingObj_ConstructListed(BYTE* s, void*, BYTE* w, BYTE* a2, in
 
 extern "C" void __cdecl VehLog_Value(int v);
 extern "C" void __fastcall Node_GetLocal(BYTE* self, void*, void* out);
-extern "C" int __fastcall SceneNode5f98c0_Draw(BYTE* s, void*, int flags, BYTE* b);
+extern "C" int __fastcall ShadedReference_Draw(BYTE* s, void*, int flags, BYTE* b);
 extern "C" void Sh_sprintf(); KING_ALIAS("_Sh_sprintf", "_sprintf")
 extern "C" void __cdecl Window_DrawLine(BYTE* w, int x0, int y0, int x1, int y1, DWORD c, int rgb);
 KING_VAR(int, g_sh696c6c, 696c6c)
@@ -378,7 +380,7 @@ int __fastcall Item_DrawMarked(BYTE* s, void*, int a, int b)
         Sh_Log3(" %s_M %6.3f %6.3f %6.3f ", F(const char*, F(BYTE*, s, 64), 12), F(float, s, 280), F(float, s, 284),
                 F(float, s, 288));
     }
-    int r = SceneNode5f98c0_Draw(s, 0, a, (BYTE*)b);
+    int r = ShadedReference_Draw(s, 0, a, (BYTE*)b);
     if (g_sh696be4 <= 1)
         return r;
     BYTE* w = F(BYTE*, g_sh6ef1fc, 464);
@@ -796,6 +798,8 @@ extern "C" {
 // [FUN_58e7f0..$L_58f1cd] moving item s's frame m (while doing `what`, with a code) checked: each axis turned by
 // m, by s's frames +500 and +548 and by its node's local frame keeps unit length, and m's place is within 15000;
 // else everything logged and a fatal error
+// Removing this empty call changes the v142 instruction layout of MovingItem_CheckFrame.
+static inline void FrameErrorContext(const char*, const void*, const void*) {}
 void __fastcall MovingItem_CheckFrame(BYTE* s, void*, const float* m, const char* what, int code)
 {
     float L[12];
@@ -843,6 +847,7 @@ void __fastcall MovingItem_CheckFrame(BYTE* s, void*, const float* m, const char
         Ck_LogRow(&g_ckRow, L + 6);
         WarnLog_Close();
         sprintf(buf, &g_ckWhile, what);
+        FrameErrorContext(buf, s, m);
         World_Fatal(buf);
     }
     if (Vec3_OutOfBox(m + 9, 15000.0f))
@@ -855,6 +860,7 @@ void __fastcall MovingItem_CheckFrame(BYTE* s, void*, const float* m, const char
         Ck_Row(r1, &g_ckRow, m + 3);
         Ck_Row(r2, &g_ckRow, m + 6);
         sprintf(buf, &g_ckSix, head, old, pos, r0, r1, r2);
+        FrameErrorContext(buf, s, m);
         World_Fatal(buf);
     }
 }

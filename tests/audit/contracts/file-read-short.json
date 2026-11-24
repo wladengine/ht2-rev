@@ -1,0 +1,266 @@
+{
+  "original_sha256": "31fbd1dbbe7706183f09a3688482791255db2bfb557c02675374b96796ce2ebd",
+  "original_va": "5ab0f0",
+  "symbol": "_File_ReadShort",
+  "result": "eax",
+  "stack": 4,
+  "services": {
+    "read": {
+      "original_va": "61e20f",
+      "symbol": "_fread"
+    }
+  },
+  "cases": [
+    {
+      "name": "end of file",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        16814644
+      ],
+      "expect_result": 4294939188
+    },
+    {
+      "name": "bytes 7a",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "7a"
+            ]
+          ],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        16781946
+      ],
+      "expect_result": 4730
+    },
+    {
+      "name": "bytes 01",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "01"
+            ]
+          ],
+          "return": 0
+        }
+      ],
+      "expect_stack_args": [
+        16814593
+      ],
+      "expect_result": 4294939137
+    },
+    {
+      "name": "bytes 0000",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "0000"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        16777216
+      ],
+      "expect_result": 0
+    },
+    {
+      "name": "bytes 0080",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "0080"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        16809984
+      ],
+      "expect_result": 4294934528
+    },
+    {
+      "name": "bytes ffff",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "ffff"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        16842751
+      ],
+      "expect_result": 4294967295
+    },
+    {
+      "name": "bytes 7fff",
+      "args": [
+        {
+          "at": 37428
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 37428
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "7fff"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        16842623
+      ],
+      "expect_result": 4294967167
+    },
+    {
+      "name": "bytes 1020",
+      "args": [
+        {
+          "at": 4660
+        }
+      ],
+      "calls": [
+        {
+          "service": "read",
+          "args": [
+            null,
+            2,
+            1,
+            {
+              "at": 4660
+            }
+          ],
+          "write_to_arg": [
+            [
+              0,
+              "1020"
+            ]
+          ],
+          "return": 1
+        }
+      ],
+      "expect_stack_args": [
+        16785424
+      ],
+      "expect_result": 8208
+    }
+  ]
+}

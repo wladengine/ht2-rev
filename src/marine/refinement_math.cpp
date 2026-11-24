@@ -24,8 +24,8 @@ KING_VAR(float, g_mm_radius, 6531d8)
 KING_VAR(float, g_mm_diameter, 725fc8)
 KING_VAR(float, g_mm_randomRadius, 653220)
 KING_VAR(float, g_mm_randomDiameter, 7287f8)
-extern "C" double __cdecl MarineAngle_Sine(float);
-extern "C" double __cdecl MarineAngle_Cosine(float);
+extern "C" double __cdecl MarineAngle_SignedCosine(float);
+extern "C" double __cdecl MarineAngle_SineOfMagnitude(float);
 extern "C" double __fastcall MarineGrid_MapY(BYTE*,void*,const DWORD*);
 extern "C" Vec3* __cdecl Vec3_Diff(Vec3*,const Vec3*,const Vec3*);
 extern "C" Vec3* __cdecl Vec3_DivBy(Vec3*,const Vec3*,float);
@@ -84,6 +84,7 @@ extern "C" double __fastcall MarineGrid_SurfaceWeight(BYTE* self,void*,const DWO
     double second=hasSecond?MarineMath_SurfaceWeight(self,d,e,f,true):0.0f;
     return first>second?first:second;
 }
+// [FUN_6120c0]
 extern "C" void __fastcall MarineGrid_ReflectionUV(BYTE* self,void*,float x,float y,float z,const Vec3* surface,float* u,float* v)
 {
     Vec3 input;
@@ -119,16 +120,17 @@ extern "C" double __fastcall MarineGrid_RippleHeight(BYTE* self,void*,const floa
     float rotatedX=(float)(x*F(float,self,84)+y*F(float,self,80));
     double rotatedY=y*F(float,self,84)-x*F(float,self,80);
     float phase=(float)(MarineMath_Unsigned(F(DWORD,self,40))/F(float,self,68)+rotatedY/F(float,self,60));
-    float sine=(float)MarineAngle_Sine(phase);
+    float sine=(float)MarineAngle_SignedCosine(phase);
     phase=(float)(MarineMath_Unsigned(F(DWORD,self,40))/F(float,self,64)+(double)rotatedX/F(float,self,56));
-    double base=MarineAngle_Cosine(phase)*sine*F(float,self,72);
+    double base=MarineAngle_SineOfMagnitude(phase)*sine*F(float,self,72);
     if(!extra) return base;
     float roundedBase=(float)base;
     phase=(float)(MarineMath_Unsigned(F(DWORD,self,40))*g_mm_rippleTimeA+(double)point[0]*g_mm_rippleSpaceA);
-    float first=(float)MarineAngle_Sine(phase);
+    float first=(float)MarineAngle_SignedCosine(phase);
     phase=(float)(MarineMath_Unsigned(F(DWORD,self,40))*g_mm_rippleTimeB+(double)point[0]*g_mm_rippleSpaceB);
-    return MarineAngle_Sine(phase)*first*g_mm_rippleScale+roundedBase;
+    return MarineAngle_SignedCosine(phase)*first*g_mm_rippleScale+roundedBase;
 }
+// [FUN_6057b0]
 extern "C" void __fastcall MarineMaterial_UpdateFrame(BYTE* self,void*,DWORD now)
 {
     DWORD count=F(DWORD,self,0);

@@ -6,6 +6,7 @@
 #include <string.h>
 #include "car.h"
 #include "vecmath.h"
+#include "x87.h"
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
 
@@ -75,9 +76,11 @@ float Car::BestGear()
     return Car_BestGear(F(int, this, 2252), F(float, this, 9792), &gear, &rpm);
 }
 
+KING_VAR(float, driveForceZero, 64c264)
+
 double Car::DriveForce()
 {
-    double sum = 0.0f;
+    double sum = driveForceZero;
     int n = F(int, this, 3540);
     for (int k = 0; k < n; k++)
         if (Driving(k))
@@ -167,7 +170,8 @@ extern "C" int __cdecl Car_ClearSettings(int* out)
     return 27;
 }
 
-extern "C" void __cdecl Car_InitDefaults()
+// [FUN_503dd0]
+extern "C" void __cdecl VehicleContacts_InitializeFallbackMaterial()
 {
     g_697678 = 1;
     g_69767c = 12;
@@ -410,8 +414,16 @@ extern "C" int __fastcall Wheel_StepLevel(BYTE* s, void*, int i, float* amount, 
 }
 
 extern "C" float __cdecl Angle_F2Pi(float x, const char* name);
-extern "C" double __cdecl Table360_At(float angle);   // world.cpp
+extern "C" float __cdecl World_SampleSineByAngle(float angle);   // world.cpp
 KING_VAR(char, g_strCheckDamage, 67498c)    // "_Car_V::check_damage"
+
+KING_VAR(double, damagePhaseQuarterTurn, 64d940)
+KING_VAR(double, damagePhaseHalfTurn, 64d938)
+KING_VAR(double, damageMidpointWeight, 64b6e0)
+KING_VAR(double, damageOscillationWeight, 64b738)
+KING_VAR(double, damageBaseWeight, 64b700)
+KING_VAR(double, damagedDriveShare, 64b840)
+KING_VAR(float, damagedGearScale, 64c320)
 
 // [FUN_501930] the damaged wheels' wobble (+7028), the drive shares (+7320) and the gear range of the drive mode
 extern "C" void __fastcall Car_CheckDamage(BYTE* s, void*)
@@ -423,13 +435,13 @@ extern "C" void __fastcall Car_CheckDamage(BYTE* s, void*)
         if (a == b)
             F(DWORD, s, 7028 + k * 4) = F(DWORD, s, 7552 + k * 4);
         else if (a == 2 || a == 1) {
-            float t = (float)(F(float, s, 3740 + k * 4) + 1.570796326795);
-            float u = (float)((double)Angle_F2Pi(t, &g_strCheckDamage) + 3.14159265359);
-            double c = Table360_At(u);
+            float t = (float)(F(float, s, 3740 + k * 4) + damagePhaseQuarterTurn);
+            float u = (float)((double)Angle_F2Pi(t, &g_strCheckDamage) + damagePhaseHalfTurn);
+            double c = World_SampleSineByAngle(u);
             if (a == 2)
-                F(float, s, 7028 + k * 4) = (float)((c * ((double)A - B) + ((double)A + B)) * 0.5);
+                F(float, s, 7028 + k * 4) = (float)((c * ((double)A - B) + ((double)A + B)) * damageMidpointWeight);
             else
-                F(float, s, 7028 + k * 4) = (float)((c * ((double)A - B) + B) * 0.25 + (double)A * 0.75);
+                F(float, s, 7028 + k * 4) = (float)((c * ((double)A - B) + B) * damageOscillationWeight + (double)A * damageBaseWeight);
         } else
             F(DWORD, s, 7028 + k * 4) = F(DWORD, s, 7520 + k * 4);
         n = F(int, s, 3540);
@@ -438,19 +450,19 @@ extern "C" void __fastcall Car_CheckDamage(BYTE* s, void*)
     for (int k = 0; k < n; k++) {
         double r = Ramp_Value(s + 16216, 0) * F(float, s, 7812 + k * 4);
         if (F(int, s, 15900 + k * 20))
-            r *= 0.2;
+            r *= damagedDriveShare;
         F(float, s, 7320 + k * 4) = (float)r;
         n = F(int, s, 3540);
     }
     int m = F(int, s, 15540);
     if (m == 2) {
-        int g = F(int, s, 7684) - 3;
+        int g = static_cast<int>(F(unsigned, s, 7684) - 3u);
         F(int, s, 7192) = g < 1 ? 1 : g;
-        F(float, s, 7216) = (float)((double)F(float, s, 7708) * 5.0f);
-        F(float, s, 7220) = (float)((double)F(float, s, 7712) * 5.0f);
-        F(float, s, 7224) = (float)((double)F(float, s, 7716) * 5.0f);
+        F(float, s, 7216) = (float)((double)F(float, s, 7708) * damagedGearScale);
+        F(float, s, 7220) = (float)((double)F(float, s, 7712) * damagedGearScale);
+        F(float, s, 7224) = (float)((double)F(float, s, 7716) * damagedGearScale);
     } else if (m == 1) {
-        F(int, s, 7192) = F(int, s, 7684) - 1;
+        F(unsigned, s, 7192) = F(unsigned, s, 7684) - 1u;
         F(float, s, 7216) = (float)((double)F(float, s, 7708) + F(float, s, 7708));
         F(float, s, 7220) = (float)((double)F(float, s, 7712) + F(float, s, 7712));
         F(float, s, 7224) = (float)((double)F(float, s, 7716) + F(float, s, 7716));
@@ -681,14 +693,14 @@ extern "C" BYTE* __cdecl VehSet_Init697688(void) { return Tuning_SetDefaults((BY
 // Static initializers: construct a global, register its teardown at exit.
 
 extern "C" int __cdecl atexit(void(__cdecl* fn)(void));
-extern "C" void __cdecl Car_InitDefaults();
+extern "C" void __cdecl VehicleContacts_InitializeFallbackMaterial();
 extern "C" void q197_L_503e10(); KING_ALIAS("_q197_L_503e10", "_Block697684_Free")
 // [$L_503e00] registers the teardown at exit
 extern "C" int __cdecl Static503dc0_AtExit(void) { return atexit((void(__cdecl*)(void))q197_L_503e10); }
 // [$L_503dc0] the static initializer: FUN_503dd0, then the teardown at exit
 extern "C" int __cdecl Static503dc0_Init(void)
 {
-    Car_InitDefaults();
+    VehicleContacts_InitializeFallbackMaterial();
     return Static503dc0_AtExit();
 }
 
@@ -865,32 +877,33 @@ extern "C" {
 // uses is taken from *amount; 1 when it is all used (for the gears 3..10 the last step but one is the limit)
 int __fastcall Control_Move(BYTE* s, void*, int k, float* amount, float speed)
 {
-    if (*amount == g_cm64c264 || k < 0 || k >= 27)
+    if ((x87_compare_status(*amount, g_cm64c264) & X87_C3) || k < 0 || k >= 27)
         return 0;
     BYTE* e = s + 15520 + k * 20;
-    if (speed == g_cm64c264) {
+    if (x87_compare_status(speed, g_cm64c264) & X87_C3) {
         F(int, e, 12) = 0;
         F(int, e, 0) = 0;
         return 1;
     }
     double lim = speed * (double)F(float, e, 12);
     float limf = (float)lim;
-    if (*amount > g_cm64c264) {
+    const unsigned short belowOrEqual = X87_C0 | X87_C3;
+    if (!(x87_compare_status(*amount, g_cm64c264) & belowOrEqual)) {
         double al = lim < 0 ? -lim : lim;
-        if (!(al > *amount)) {
+        if (x87_compare_status(al, static_cast<double>(*amount)) & belowOrEqual) {
             *amount = (float)(*amount - al);
             F(int, e, 12) = 0;
             F(int, e, 0) = 0;
             return 0;
         }
         double q = *amount / (double)speed;
-        if (limf > g_cm64c264) {
+        if (!(x87_compare_status(limf, g_cm64c264) & belowOrEqual)) {
             F(float, e, 12) = (float)(F(float, e, 12) - q);
-            if (F(float, e, 12) < g_cm64c264)
+            if (x87_compare_status(F(float, e, 12), g_cm64c264) & X87_C0)
                 F(int, e, 12) = 0;
         } else {
             F(float, e, 12) = (float)(q + F(float, e, 12));
-            if (F(float, e, 12) > g_cm64c264)
+            if (!(x87_compare_status(F(float, e, 12), g_cm64c264) & belowOrEqual))
                 F(int, e, 12) = 0;
         }
         F(int, e, 0) = (int)(F(int, e, 4) * (double)F(float, e, 12));
@@ -900,15 +913,15 @@ int __fastcall Control_Move(BYTE* s, void*, int k, float* amount, float speed)
     double v = F(float, e, 12);
     double room = (g_cm64b670 - (v < 0 ? -v : v)) * speed;
     double aa = *amount < 0 ? -(double)*amount : *amount;
-    if (aa < room) {
+    if (x87_compare_status(aa, room) & X87_C0) {
         double q = *amount / (double)speed;
-        if (!(lim < g_cm64c264)) {
+        if (!(x87_compare_status(lim, static_cast<double>(g_cm64c264)) & X87_C0)) {
             F(float, e, 12) = (float)(F(float, e, 12) - q);
-            if (F(float, e, 12) > g_cm64c250)
+            if (!(x87_compare_status(F(float, e, 12), g_cm64c250) & belowOrEqual))
                 F(float, e, 12) = 1.0f;
         } else {
             F(float, e, 12) = (float)(q + F(float, e, 12));
-            if (F(float, e, 12) < g_cm64c938)
+            if (x87_compare_status(F(float, e, 12), g_cm64c938) & X87_C0)
                 F(float, e, 12) = -1.0f;
         }
         int p = (int)(F(int, e, 4) * (double)F(float, e, 12));
@@ -924,7 +937,7 @@ int __fastcall Control_Move(BYTE* s, void*, int k, float* amount, float speed)
     }
     *amount = (float)((room < 0 ? -room : room) + *amount);
     F(int, e, 0) = F(int, e, 4);
-    F(float, e, 12) = lim > g_cm64c264 ? 1.0f : -1.0f;
+    F(float, e, 12) = (x87_compare_status(lim, static_cast<double>(g_cm64c264)) & belowOrEqual) ? -1.0f : 1.0f;
     if (k >= 3 && k < 11 && F(int, e, 0) == F(int, e, 4) - 2) {
         int last = F(int, e, 4) - 2;
         F(int, e, 0) = last;
@@ -977,10 +990,10 @@ void __fastcall Body_InWater(BYTE* s)
     Vec3 u, v, w;
     Vec3_SetThis(&u, 0, -g_bw702630, -g_bw702634, -g_bw702638);
     Vec3_SetThis(&v, 0, u.x * g_bw64d990, u.y * g_bw64d990, u.z * g_bw64d990);
-    if (i < n && depth < g_bw64c264) {
+    if (i != n && !(depth >= g_bw64c264)) {
         float a = (float)x87_fabs(depth);
         float b = a * g_bw64c258;
-        if (b < g_bw64c264)
+        if (!(b >= g_bw64c264))
             b = 0;
         else if (b > g_bw64c250)
             b = 1.0f;
@@ -1137,8 +1150,8 @@ extern "C" {
 // [FUN_504d30] finds each wheel's ground contact (FUN_503e30 at its hub +7356 lowered by the suspension length
 // +7028, in body space): on the ground (+6564 zero) its contact point +100, world contact +6212 and the
 // compression +3608 / +3544 (clamped to +8092, the wheel lifted when beyond), the mean ground normal +196 and
-// grip +9904; in the air the wheel hangs at full length; then the axle flags +6580.. and the body's state; 0 when
-// the body is replaced (+15444)
+// grip +9904; in the air the wheel hangs at full length. Return the number of wheel contacts, or zero
+// when the body is replaced (+15444).
 int __fastcall Wheels_FindGround(BYTE* s)
 {
     memcpy(s + 196, &g_gc702650, 12);
@@ -1239,7 +1252,7 @@ int __fastcall Wheels_FindGround(BYTE* s)
         F(BYTE, s, 6580) = F(BYTE, s, 6580) && w[i];
     }
     Body_GroundNormal(s, 0, 1);
-    return (int)(s + 6564 + n * 2);
+    return count;
 }
 
 } // extern "C"
@@ -2066,8 +2079,8 @@ const Matrix* __fastcall Car_PlaceOnGround(BYTE* s, void*, const Matrix* Mx)
 
 extern "C" int __fastcall Vehicle_RayTest(BYTE* self, void*, DWORD* p, BYTE** hit);
 extern "C" int __fastcall Car_WheelContact(BYTE* c, void*, BYTE* out);
-extern "C" unsigned __cdecl Query_Parts1(int a, int mode, BYTE* q);
-extern "C" unsigned __cdecl Query_Parts2(int a, int mode, BYTE* q);
+extern "C" unsigned __cdecl World_QueryObjectCollision(int a, int mode, BYTE* q);
+extern "C" unsigned __cdecl World_QueryRoadCollision(int a, int mode, BYTE* q);
 extern "C" int __fastcall Wheel_Surface(BYTE* s, void*, BYTE* c, int w);
 extern "C" Vec3* __fastcall Vec3_SubAssign(Vec3* self, void*, Vec3* ret, const Vec3* v);
 extern "C" void __fastcall Wheel_RollDrag(BYTE* s, void*, BYTE* nd, int i, int kind);
@@ -2161,7 +2174,7 @@ int __fastcall Wheel_FindGround(BYTE* s, void*, int keep, const Vec3* p, BYTE* o
             if (F(short, s, 9992))
             {
                 char buf[256];
-                r = (int)Query_Parts2((int)obj, 4, nd);
+                r = (int)World_QueryRoadCollision((int)obj, 4, nd);
                 int hit = r & 1;
                 if (hit)
                 {
@@ -2173,7 +2186,7 @@ int __fastcall Wheel_FindGround(BYTE* s, void*, int keep, const Vec3* p, BYTE* o
                 }
                 else
                 {
-                    r = (int)Query_Parts1((int)obj, 4, nd);
+                    r = (int)World_QueryObjectCollision((int)obj, 4, nd);
                     hit = r & 1;
                     if (hit)
                     {
@@ -2450,8 +2463,6 @@ void __fastcall Wheel_RollDrag(BYTE* s, void*, BYTE* nd, int i, int kind)
 }
 
 } // extern "C"
-
-#include "x87.h"
 
 // === a car's clutch, gear choice and drive force for the frame (FUN_4ff800, running on through $L_5006aa)
 
@@ -2925,20 +2936,21 @@ shared:
 // minimum speed (+7300); else from the engine torque, the engine brake
 // torque, both as wheel forces, and the drive force; clamped
 KING_VAR(float, vs_64c250, 64c250)
-KING_VAR(float, vs_64c264, 64c264)
 KING_VAR(double, vs_64c958, 64c958)
 KING_VAR(float, vs_64da38, 64da38)
 #include <math.h>
 extern "C" double __fastcall Car_SlipRatio(BYTE* s, void*)
 {
-    if (F(int, s, 7196) == 1 || F(float, s, 7300) < vs_64c250)
+    if (F(int, s, 7196) == 1 || !(F(float, s, 7300) >= vs_64c250))
         return vs_64c250;
     float a = (float)Car_TorqueNow(s, 0);
     float b = (float)Car_EngineBrakeTorque(s, 0, F(float, s, 7300));
     a = (float)Car_WheelForceNow((Car*)s, 0, a);
     b = (float)Car_WheelForceNow((Car*)s, 0, b);
-    float d = (float)Car_DriveForce((Car*)s, 0);
-    if (fabs(a) < d || d == vs_64c264)
+    // Stock keeps the accumulated force for the first comparison, then uses its float copy.
+    double driveForce = Car_DriveForce((Car*)s, 0);
+    float d = (float)driveForce;
+    if (!(fabs(a) >= driveForce) || d == driveForceZero)
         return vs_64c250;
     double r;
     if (F(int, s, 7196) == 0)
@@ -2948,7 +2960,7 @@ extern "C" double __fastcall Car_SlipRatio(BYTE* s, void*)
     r *= vs_64c958;
     if (r > vs_64c958)
         return vs_64da38;
-    if (r < vs_64c264)
-        return vs_64c264;
+    if (!(r >= driveForceZero))
+        return driveForceZero;
     return r;
 }

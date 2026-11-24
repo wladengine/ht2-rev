@@ -97,7 +97,8 @@ struct Rect16 { DWORD m[4]; };
 // ---------------------------------------------------------------------------
 // The unit at 0x52abf0
 
-extern "C" BYTE* __fastcall Pairs5_Clear(BYTE* self, void*)
+// [FUN_52ad10]
+extern "C" BYTE* __fastcall CollisionModels_ClearRow(BYTE* self, void*)
 {
     for (int i = 0; i < 5; i++) {
         F(int, self, i * 4) = 0;
@@ -166,6 +167,7 @@ extern "C" int __cdecl CarType_Number(int t)
     return 0;
 }
 
+// [FUN_52eb40] Map the public vehicle number to its class-relative type index.
 extern "C" int __cdecl CarType_FromNumber(int n)
 {
     if (n >= 1 && n <= 30)
@@ -183,20 +185,24 @@ extern "C" int __cdecl CarType_FromNumber(int n)
     return 0;
 }
 
+KING_VAR(double, soundPercentScale, 64b5a0)
+KING_VAR(double, soundDefaultScale, 64b670)
+
 // the volume of the options at off times v
 static float Volume(int off, float v)
 {
-    double k = g_options ? F(short, g_options, off) * 0.01 : 1.0;
+    double k = g_options ? F(short, g_options, off) * soundPercentScale : soundDefaultScale;
     return (float)(v * k);
 }
 
 static float VolumeMul(int off, float v)
 {
-    double k = g_options ? F(short, g_options, off) * 0.01 : 1.0;
+    double k = g_options ? F(short, g_options, off) * soundPercentScale : soundDefaultScale;
     return (float)(k * v);
 }
 
-extern "C" void __cdecl Sound_Play388(Sound* s, float v)
+// [FUN_52f710] Apply the configured percentage to both arguments of Sound_Restart.
+extern "C" void __cdecl Sound_RestartScaledByOption388(Sound* s, float v)
 {
     if (!s)
         return;
@@ -204,7 +210,8 @@ extern "C" void __cdecl Sound_Play388(Sound* s, float v)
     s->Play(x, x);
 }
 
-extern "C" void __cdecl Sound_Play3_388(void* s, float v)
+// [FUN_52f760]
+extern "C" void __cdecl Sound_PlayScaledByOption388(void* s, float v)
 {
     if (!s)
         return;
@@ -212,25 +219,28 @@ extern "C" void __cdecl Sound_Play3_388(void* s, float v)
     Sound_Play((BYTE*)s, 0, x, x, 0);
 }
 
-extern "C" void __cdecl Sound_Play3_388Pos(void* s, float v, int pos)
+// [FUN_52f7b0]
+extern "C" void __cdecl Sound_PlayScaledByOption388WithPitch(void* s, float v, int pos)
 {
     if (!s)
         return;
-    Sound_Play3_388(s, v);
+    Sound_PlayScaledByOption388(s, v);
     CallThis(FUN_5fd5c0, s, pos);
 }
 
-extern "C" void __cdecl Sound_Start388(void* s, int a, float v, int b)
+// [FUN_52f7e0]
+extern "C" void __cdecl Sound_StartRangeScaledByOption388(void* s, int a, float v, int b)
 {
     if (s)
         CallC(FUN_4e5140, s, a, VolumeMul(388, v), b);
 }
 
-extern "C" void __cdecl Sound_Start388Pos(void* s, int a, float v, int pos, int b)
+// [FUN_52f830] Start the sound with option 388 volume scaling, then set its pitch.
+extern "C" void __cdecl Sound_StartScaledWithPitch(void* s, int a, float v, int pos, int b)
 {
     if (!s)
         return;
-    Sound_Start388(s, a, v, b);
+    Sound_StartRangeScaledByOption388(s, a, v, b);
     CallThis(FUN_5fd5c0, s, pos);
 }
 
@@ -240,19 +250,21 @@ extern "C" void __cdecl Sound_Loop388(void* s, int a, float v, int b)
         CallC(FUN_4e51b1, s, a, VolumeMul(388, v), b);
 }
 
-extern "C" void __cdecl Sound_Play390(void* s, float v, int a)
+// [FUN_52f8b0]
+extern "C" void __cdecl Sound_PlayPannedThenStereoScaledByOption390(void* s, float v, const float* direction)
 {
     if (!s)
         return;
     float x = Volume(390, v);
-    Sound_PlayPannedCos((BYTE*)s, x, (const float*)a, 0);
+    Sound_PlayPannedCos((BYTE*)s, x, direction, 0);
     Sound_Play((BYTE*)s, 0, x, x, 0);
 }
 
-extern "C" void __cdecl Sound_Play390If(void* s, float v, int unused, int a)
+// [FUN_52f910]
+extern "C" void __cdecl Sound_PlayPannedThenStereoFromEvent(void* s, float v, int unused, const float* direction)
 {
     if (s)
-        Sound_Play390(s, v, a);
+        Sound_PlayPannedThenStereoScaledByOption390(s, v, direction);
 }
 
 extern "C" void __cdecl Sound_Play3_386(void* s, float v)
@@ -263,7 +275,8 @@ extern "C" void __cdecl Sound_Play3_386(void* s, float v)
     Sound_Play((BYTE*)s, 0, x, x, 0);
 }
 
-extern "C" void __cdecl Sound_Start386(void* s, int a, float v, int b)
+// [FUN_52f980]
+extern "C" void __cdecl Sound_StartRangeScaledByOption386(void* s, int a, float v, int b)
 {
     if (s)
         CallC(FUN_4e5140, s, a, VolumeMul(386, v), b);
@@ -323,7 +336,8 @@ extern "C" void __cdecl Cars_LoadCollision()
 }
 
 // switches a car's part to model k, releasing and taking the models
-extern "C" void __fastcall CarPart_Select(int* self, void*, int k)
+// [FUN_52aec0]
+extern "C" void __fastcall CollisionModels_SelectVariant(int* self, void*, int k)
 {
     if (k == self[0] || k < 0 || k >= 5 || !g_carPartModels[self[1] * 11 + k])
         return;
@@ -398,7 +412,7 @@ static BYTE* SceneObj_FindCommandTarget(int key)
     return 0;
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*);
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*);
 
 // --- vehicle constructors: the base (FUN_58b5b0 / FUN_58b720 / FUN_57cb70)
 // is built from the car model table entry (876 bytes) of the model.
@@ -1304,8 +1318,8 @@ void __fastcall Scenery_Hit(BYTE* s, void*, const float* p, const float* v)
 
 // === setting up a parked car from its model (FUN_52b0e0)
 
-extern "C" void __fastcall Flags1196_Set(BYTE* self, void*, int bit);
-extern "C" void __fastcall Flags1196_Clear(BYTE* self, void*, int bit);
+extern "C" void __fastcall Body_SetMotionFlag(BYTE* self, void*, int bit);
+extern "C" void __fastcall Body_ClearMotionFlag(BYTE* self, void*, int bit);
 extern "C" void __fastcall Body_SetMoveMode(BYTE* self, void*, int v);
 extern "C" int __fastcall Points_Add(BYTE* self, void*, int second, const Vec3Bits* p, int value);
 extern "C" void __fastcall Plane_SetWithPoint(float* self, void*, const float* p);
@@ -1322,8 +1336,8 @@ void __fastcall Parked_Setup(BYTE* s, void*, int idx, int m)
     F(int, s, 9548) = m;
     F(int, s, 9540) = F(int, s, 1188);
     F(int, s, 3568) = 1;
-    Flags1196_Set(s, 0, 2);
-    Flags1196_Clear(s, 0, 1);
+    Body_SetMotionFlag(s, 0, 2);
+    Body_ClearMotionFlag(s, 0, 1);
     Body_SetMoveMode(s, 0, 3);
     F(int, s, 9544) = idx;
     BYTE* T = (BYTE*)g_carModelNames + idx * 876;
@@ -1388,7 +1402,7 @@ extern "C" Vec3* __fastcall Vec3_ZeroThis(Vec3* self, void*);
 extern "C" BYTE* __fastcall Node_Init(BYTE* self, void*);
 extern "C" void* __cdecl Query_HitObject(void* obj, const Vec3Bits* p, const Vec3Bits* d);
 extern "C" int __cdecl Query_4e6578(int skip, void* obj, const Vec3Bits* p, const Vec3Bits* d, BYTE* q);
-extern "C" void __cdecl Fx_Shadow(int a, int b, int c, int d, int tree);
+extern "C" void __cdecl Shadow_SubmitVehiclePolygon(int a, int b, int c, int d, int tree);
 KING_VAR(float, g_ps6969f4, 6969f4)               // the camera
 KING_VAR(float, g_ps6969f8, 6969f8)
 KING_VAR(float, g_ps6969fc, 6969fc)
@@ -1582,7 +1596,7 @@ void* __fastcall ParkedCar_DrawShadow(BYTE* s, void*, int a, int b)
             count = 1;
         }
     }
-    Fx_Shadow((int)nodes, count, (int)C, F(int, R, 452), mark ? 1 : 0);
+    Shadow_SubmitVehiclePolygon((int)nodes, count, (int)C, F(int, R, 452), mark ? 1 : 0);
     return r;
 }
 

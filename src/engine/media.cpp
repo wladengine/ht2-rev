@@ -22,7 +22,7 @@ extern "C" void __fastcall Media_Destroy(BYTE* s);
 extern "C" void FUN_5c4410(); KING_ALIAS("_FUN_5c4410", "@Media_Destroy@4")
 extern "C" void FUN_5cc930(); KING_ALIAS("_FUN_5cc930", "@Trees_Construct@8")
 extern "C" void __fastcall Value_Free(int* s);
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
 extern "C" void __stdcall Array_ForEach(BYTE* p, int size, int count, void (*fn)());
 extern "C" void FUN_4bd4d0(); KING_ALIAS("_FUN_4bd4d0", "@Vec3_ZeroThis@8")
 extern "C" void __fastcall Med5ce930_Destroy(BYTE* s);
@@ -1403,7 +1403,7 @@ void __fastcall Media5c8780_Destroy(BYTE* self, void*)
     Value_Free((int*)(self + 64));
     if (F(void*, self, 60))
         operator delete(F(void*, self, 60));
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
 // [FUN_5ceae0]
@@ -1500,11 +1500,11 @@ extern "C" void __fastcall Media_Reset5c5380(BYTE* self, void*)
     Media_ClearList(self, 0);
 }
 
-// [FUN_5cc680] 5cc6b0(0, b, obj) (passing this on), then obj's vtbl+8(1.0)
-extern "C" void __fastcall Media_Call5cc680(void* self, void*, int a, int b, BYTE* obj)
+// [FUN_5cc680] Grow the tree from the root and return its completion callback's result.
+extern "C" __declspec(noinline) BYTE* __fastcall Tree_GrowAndFinishRoot(BYTE* self, void*, int, const BYTE* transform, BYTE* root)
 {
-    Tree_Grow((BYTE*)self, 0, 0, (const BYTE*)b, obj);
-    CallVirt(obj, 8, 1.0f);
+    Tree_Grow(self, nullptr, 0, transform, root);
+    return CallVirt<BYTE*>(root, 8, DWORD(0x3f800000)); // binary32 1.0, passed as stored
 }
 
 
@@ -1977,8 +1977,8 @@ extern "C" void __fastcall Med5ce930_Destroy(BYTE* s)
 // Constructors and destructors (exception frames dropped).
 
 extern "C" void __fastcall Handle_Release(BYTE* self, void*);
-extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s);
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void __fastcall SceneSlotNode_Destroy(BYTE* s);
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 extern "C" int __fastcall Node_Remove(BYTE* self, void*);
 extern "C" void __fastcall Rec_Close(BYTE* self, void*);
 extern "C" void FUN_5c4340(); KING_ALIAS("_FUN_5c4340", "@Rec_Close@8")
@@ -2002,7 +2002,7 @@ extern "C" void __fastcall Med5cf370_Destroy(BYTE* s)
     F(void*, s, 32) = g_med651e34;
     Node_Remove(s + 32, 0);
     Handle_Release(s, 0);
-    Node5f1a70_Destroy(s ? s + 32 : 0);
+    SceneSlotNode_Destroy(s ? s + 32 : 0);
     Object_Destroy(s);
 }
 // [FUN_5ce5b0] a sound list (vtable 651db0) deletes its sounds (+24, next +8)
@@ -2122,30 +2122,33 @@ extern "C" BYTE* __fastcall SoundSystem_Construct(BYTE* s, void*, int a, int b)
 extern "C" int __cdecl Dp_SendTo(int to, int a, int b);
 extern "C" void __fastcall Msg_Write120(BYTE* self, int, int id, const BYTE* p, int n);
 extern "C" void FUN_602e80(); KING_ALIAS("_FUN_602e80", "@MsgBuf_Destroy@8")
-typedef BYTE (__cdecl* MedChatFn)(const char*, int);
+using RegisterDriverFn = BYTE (__cdecl*)(const char*, int);
+static constexpr int kJoinRequest = 902;
+static constexpr int kJoinReply = 901;
 
-// [FUN_5c5450] (-, text): in a network game (707f6c +420 == 2) the chat text (at most 64 characters) is sent
-extern "C" int __fastcall Media_SendChat(BYTE* s, void*, int, const char* text)
+// [FUN_5c5450] The host registers the joining driver and replies with its own name.
+extern "C" int __fastcall Net_SendJoinReply(BYTE* session, void*, const char* joiningDriver, const char* hostName)
 {
     if (F(int, g_med707f6c, 420) != 2)
         return 1;
-    BYTE pkt[32];
-    DpMessage_Construct(pkt, 0);
-    size_t n = strlen(text);
-    if (n > 64) {
-        MsgBuf_Destroy(pkt, 0);
+    BYTE message[32];
+    DpMessage_Construct(message, nullptr);
+    constexpr size_t kMaxHostNameLength = 64;
+    const size_t nameLength = strlen(hostName);
+    if (nameLength > kMaxHostNameLength) {
+        MsgBuf_Destroy(message, 0);
         return 0;
     }
-    int id = F(int, g_med707f6c, 440);
-    BYTE d[80];
-    MedChatFn fn = F(MedChatFn, s, 444);
-    d[1] = fn ? fn(text, id) : 255;
+    const int playerId = F(int, g_med707f6c, 440);
+    const auto registerDriver = F(RegisterDriverFn, session, 444);
+    BYTE reply[kMaxHostNameLength + 3];
+    reply[1] = registerDriver ? registerDriver(joiningDriver, playerId) : 255;
     F(int, g_med707f6c, 440)++;
-    d[0] = (BYTE)id;
-    memcpy(d + 2, text, n + 1);
-    Msg_Write120(pkt, 0, 901, d, (int)n + 3);
-    Dp_SendTo(F(int, s, 408), (int)(F(BYTE*, pkt, 4)), F(BYTE*, pkt, 8) - F(BYTE*, pkt, 4));
-    MsgBuf_Destroy(pkt, 0);
+    reply[0] = static_cast<BYTE>(playerId);
+    memcpy(reply + 2, hostName, nameLength + 1);
+    Msg_Write120(message, 0, kJoinReply, reply, static_cast<int>(nameLength) + 3);
+    Dp_SendTo(F(int, session, 408), (int)(F(BYTE*, message, 4)), F(BYTE*, message, 8) - F(BYTE*, message, 4));
+    MsgBuf_Destroy(message, 0);
     return 1;
 }
 
@@ -2322,14 +2325,14 @@ extern "C" int __cdecl Static71e808_Construct(void)
 // ---------------------------------------------------------------------------
 // Small static setup and teardown procs, destructors and thunks.
 
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 KING_VAR(AsmLabel, g_q47_651d64, 651d64)
 // [FUN_5cdcb0] destructor: sets +40 bit 0, the 651d64 vtable, then the node
 extern "C" void __fastcall Med5cdcb0_Destruct(BYTE* s, void*)
 {
     F(BYTE, s, 40) |= 1;
     F(void*, s, 0) = g_q47_651d64;
-    Node5f1a70_Destroy(s);
+    SceneSlotNode_Destroy(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -2910,7 +2913,7 @@ extern "C" void q241_L_5d2070(); KING_ALIAS("_q241_L_5d2070", "_Md_Exit5d2070")
 extern "C" int __cdecl Static5d2060_AtExit(void) { return atexit((void(__cdecl*)(void))q241_L_5d2070); }
 
 extern "C" void FUN_5abc40(); KING_ALIAS("_FUN_5abc40", "_Matrix_Translation")
-extern "C" void FUN_5cc680(); KING_ALIAS("_FUN_5cc680", "@Media_Call5cc680@20")
+extern "C" void FUN_5cc680(); KING_ALIAS("_FUN_5cc680", "@Tree_GrowAndFinishRoot@20")
 KING_VAR(float, g_q243_702630, 702630)
 KING_VAR(float, g_q243_702634, 702634)
 KING_VAR(float, g_q243_702638, 702638)
@@ -2929,7 +2932,7 @@ extern "C" BYTE* __fastcall Particles_StartAt(BYTE* s, void*, BYTE* p, float x, 
     CallC(FUN_5abc40, m, v);
     F(float, p, 32) = (float)(t * g_q243_64c748 / (F(int, s, 32) + 1));
     F(float, s, 12) = (float)(t * g_q243_64c330);
-    return CallThis<BYTE*>(FUN_5cc680, s, 0, m, p);
+    return Tree_GrowAndFinishRoot(s, nullptr, 0, m, p);
 }
 
 extern "C" void FUN_5ce6e0(); KING_ALIAS("_FUN_5ce6e0", "@PointCloud_Construct@56")
@@ -3277,7 +3280,7 @@ void __fastcall Music_WaitNetwork(BYTE* m, void*, const char* name, char* out)
             if (Tsc_Now() > lim) {
                 BYTE q[32];
                 DpMessage_Construct(q, 0);
-                Msg_Write120(q, 0, 902, (const BYTE*)name, (int)strlen(name) + 1);
+                Msg_Write120(q, 0, kJoinRequest, (const BYTE*)name, (int)strlen(name) + 1);
                 Dp_Send((int)(F(BYTE*, q, 4)), F(BYTE*, q, 8) - F(BYTE*, q, 4));
                 g_nm707f88 = t;
                 MsgBuf_Destroy(q, 0);
@@ -3294,7 +3297,7 @@ void __fastcall Music_WaitNetwork(BYTE* m, void*, const char* name, char* out)
                 BYTE blob[256];
                 bool found = false;
                 while (!Msg_NextType(r, 0, (int*)&type)) {
-                    if (type == 120 && !Stream_ReadBlob(r, 0, &id, blob, &size) && id == 901) {
+                    if (type == 120 && !Stream_ReadBlob(r, 0, &id, blob, &size) && id == kJoinReply) {
                         found = true;
                         break;
                     }
@@ -3498,16 +3501,20 @@ void __fastcall Tree_Grow(BYTE* s, void*, int depth, const BYTE* m, BYTE* b)
         return;
     }
     float len = (float)(Branch_Value(b, 0) * F(float, s, 28));
+    // Both callbacks receive the stored binary32 word. Loading it through x87
+    // again would clear the rounding flag left by the child transform.
+    DWORD lengthBits;
+    memcpy(&lengthBits, &len, sizeof lengthBits);
     float a = (float)(F(float, s, 24) * g_tb64c900 + Branch_Sway(b, 0, F(float, s, 40)) * F(float, s, 16));
     float z = (float)(F(float, s, 20) * g_tb651d24);
     BYTE c[48];
     Tb_Child(c, m, len, a, g_tb651d24, z);
-    Tree_Grow(s, 0, depth + 1, c, CallVirt<BYTE*>(b, 0, len));
+    Tree_Grow(s, 0, depth + 1, c, CallVirt<BYTE*>(b, 0, lengthBits));
     float a2 = (float)((g_q168_64c250 - F(float, s, 24)) * g_tb64c900 +
                        (g_q168_64c250 - Branch_Sway(b, 0, F(float, s, 40))) * F(float, s, 16));
     float z2 = (float)(F(float, s, 20) * g_tb651d24);
     Tb_Child(c, m, len, a2, g_tb651d20, z2);
-    Tree_Grow(s, 0, depth + 1, c, CallVirt<BYTE*>(b, 4, len));
+    Tree_Grow(s, 0, depth + 1, c, CallVirt<BYTE*>(b, 4, lengthBits));
 }
 
 } // extern "C"
@@ -3834,8 +3841,8 @@ extern "C" int __fastcall Stream_ReadInt(BYTE* self, void*, DWORD* id, DWORD* ou
 extern "C" {
 
 // [FUN_5c5740] while the session is open (+416) reads the waiting network messages (kind 4: its sender to +408):
-// chat texts (field 120, id 902) go to Media_SendChat (with a), pings (field 45, id 902) are answered (901)
-void __fastcall Chat_Receive(BYTE* s, void*, int a, int, int)
+// Field 120 / 902 asks to register a driver. Field 45 / 902 is a ping.
+void __fastcall Chat_Receive(BYTE* s, void*, const char* hostName, int, int)
 {
     BYTE msg[32], st[16];
     DpMessage_Construct(msg, 0);
@@ -3859,8 +3866,8 @@ void __fastcall Chat_Receive(BYTE* s, void*, int a, int, int)
             if (tag == 120) {
                 char buf[256];
                 DWORD len;
-                if (!Stream_ReadBlob(msg, 0, &id, buf, &len) && id == 902)
-                    Media_SendChat(s, 0, (int)buf, (const char*)a);
+                if (!Stream_ReadBlob(msg, 0, &id, buf, &len) && id == kJoinRequest)
+                    Net_SendJoinReply(s, nullptr, buf, hostName);
             } else if (tag == 45) {
                 DWORD v;
                 if (!Stream_ReadInt(msg, 0, &id, &v) && id == 902) {
@@ -4850,21 +4857,21 @@ void __cdecl Strip_DrawArch(float* p, int n, float w, float a, float b, float c,
             if (i > 0)
                 oz += x87_sqrt((double)a * a - ((double)b * b + (double)c * c) * (double)(i * i));
             double v = g_bs64c250 - di / nf;
-            V[0] = (float)(ox + q[0]);
-            V[1] = (float)(oy + q[1]);
-            V[2] = (float)(oz + q[2]);
+            V[0] = (float)(ox + p[0]);
+            V[1] = (float)(oy + p[1]);
+            V[2] = (float)(oz + p[2]);
             F(DWORD, V, 12) = col;
             V[4] = (float)t1;
             V[5] = (float)v;
-            V[6] = (float)(ox + q[0] + w);
-            V[7] = (float)(oy + q[1]);
-            V[8] = (float)(oz + q[2]);
+            V[6] = (float)(ox + p[0] + w);
+            V[7] = (float)(oy + p[1]);
+            V[8] = (float)(oz + p[2]);
             F(DWORD, V, 36) = col;
             V[10] = t2;
             V[11] = (float)v;
-            V[12] = (float)(ox + q[0]);
-            V[13] = (float)(oy + q[1] + w);
-            V[14] = (float)(oz + q[2]);
+            V[12] = (float)(ox + p[0]);
+            V[13] = (float)(oy + p[1] + w);
+            V[14] = (float)(oz + p[2]);
             F(DWORD, V, 60) = col;
             V[16] = t3;
             V[17] = (float)v;

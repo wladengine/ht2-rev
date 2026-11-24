@@ -25,9 +25,9 @@ extern "C" void __cdecl PopHeapAux4(DWORD* first, DWORD* last, DWORD* result, DW
 extern "C" void FUN_46ad50(); KING_ALIAS("_FUN_46ad50", "_PopHeapAux4")
 extern "C" void FUN_46cc00(); KING_ALIAS("_FUN_46cc00", "_Mult46cc00")
 extern "C" void FUN_4870e0(); KING_ALIAS("_FUN_4870e0", "_Player_ReplanToNode")
-extern "C" void FUN_529880(); KING_ALIAS("_FUN_529880", "_Carat_MarkKey")
+extern "C" void __cdecl Carat_MarkKey(int player, int key);
 extern "C" void FUN_447ef0(); KING_ALIAS("_FUN_447ef0", "@Vec12_FreeStorage@8")
-extern "C" double __cdecl Players_NearestTo(const int* const* node, const BYTE** list);   // aimain.cpp
+extern "C" double __cdecl PlayerNodes_MinDistance(const int* const* node, const BYTE** list);   // aimain.cpp
 extern "C" void FUN_40c1a0(); KING_ALIAS("_FUN_40c1a0", "@ValueBuf_Destroy@8")
 extern "C" void FUN_40cc50(); KING_ALIAS("_FUN_40cc50", "@Rec40cc50_Destroy@8")
 extern "C" void FUN_40cb60(); KING_ALIAS("_FUN_40cb60", "@Rec40cb60_Destroy@8")
@@ -137,17 +137,20 @@ static void AdjustHeapKey(BYTE** first, int hole, int n, BYTE* v, int off)
 extern "C" void __cdecl Heap24_Pop(BYTE** first, BYTE** last) { PopHeapKey(first, last, 24); }
 extern "C" void __cdecl Heap328_Pop(BYTE** first, BYTE** last) { PopHeapKey(first, last, 328); }
 
-extern "C" void __cdecl Heap24_Adjust(BYTE** first, int hole, int n, BYTE* v)
+// [FUN_46ba20]
+extern "C" void __cdecl Heap_AdjustBySignedKey24(BYTE** first, int hole, int n, BYTE* v)
 {
     AdjustHeapKey(first, hole, n, v, 24);
 }
 
-extern "C" void __cdecl Heap328_Adjust(BYTE** first, int hole, int n, BYTE* v)
+// [FUN_46bba0]
+extern "C" void __cdecl Heap_AdjustBySignedKey328(BYTE** first, int hole, int n, BYTE* v)
 {
     AdjustHeapKey(first, hole, n, v, 328);
 }
 
-extern "C" void __cdecl Heap24_Push(BYTE** first, int hole, int top, BYTE* v)
+// [FUN_46cea0]
+extern "C" void __cdecl Heap_SiftUpBySignedKey24(BYTE** first, int hole, int top, BYTE* v)
 {
     for (int p = (hole - 1) / 2; hole > top && F(int, first[p], 24) < F(int, v, 24); p = (hole - 1) / 2) {
         first[hole] = first[p];
@@ -203,14 +206,14 @@ extern "C" BYTE** __cdecl Bound28_Upper(BYTE** first, BYTE** last, BYTE* const* 
 extern "C" BYTE** __cdecl Bound32_Lower(BYTE** first, BYTE** last, BYTE* const* key) { return Bound(first, last, key, 32, false); }
 extern "C" BYTE** __cdecl Bound32_Upper(BYTE** first, BYTE** last, BYTE* const* key) { return Bound(first, last, key, 32, true); }
 
-// the same by the distance of Players_NearestTo(element, ctx)
+// the same by the distance of PlayerNodes_MinDistance(element, ctx)
 extern "C" BYTE** __cdecl BoundD_Lower(BYTE** first, BYTE** last, BYTE** key, int ctx)
 {
     for (int n = (int)(last - first); n > 0;) {
         int half = n >> 1;
         BYTE** mid = first + half;
-        double m = Players_NearestTo((const int* const*)mid, (const BYTE**)ctx);
-        if (Players_NearestTo((const int* const*)key, (const BYTE**)ctx) > m) {
+        double m = PlayerNodes_MinDistance((const int* const*)mid, (const BYTE**)ctx);
+        if (PlayerNodes_MinDistance((const int* const*)key, (const BYTE**)ctx) > m) {
             first = mid + 1;
             n += -1 - half;
         } else
@@ -224,8 +227,8 @@ extern "C" BYTE** __cdecl BoundD_Upper(BYTE** first, BYTE** last, BYTE** key, in
     for (int n = (int)(last - first); n > 0;) {
         int half = n >> 1;
         BYTE** mid = first + half;
-        double k = Players_NearestTo((const int* const*)key, (const BYTE**)ctx);
-        if (!(Players_NearestTo((const int* const*)mid, (const BYTE**)ctx) > k)) {
+        double k = PlayerNodes_MinDistance((const int* const*)key, (const BYTE**)ctx);
+        if (!(PlayerNodes_MinDistance((const int* const*)mid, (const BYTE**)ctx) > k)) {
             first = mid + 1;
             n += -1 - half;
         } else
@@ -262,7 +265,8 @@ static BYTE* DeleteAfter(BYTE* self, int flags, void (*dtor)())
 extern "C" BYTE* __fastcall Mult46c8e0_DeletingDestructor(BYTE* self, void*, int flags) { return DeleteAfter(self, flags, FUN_40c1a0); }
 extern "C" BYTE* __fastcall Mult46c900_DeletingDestructor(BYTE* self, void*, int flags) { return DeleteAfter(self, flags, FUN_40cc50); }
 extern "C" BYTE* __fastcall Mult46c920_DeletingDestructor(BYTE* self, void*, int flags) { return DeleteAfter(self, flags, FUN_40cb60); }
-extern "C" BYTE* __fastcall Mult46c940_DeletingDestructor(BYTE* self, void*, int flags) { return DeleteAfter(self, flags, FUN_4a36c0); }
+// [FUN_46c940] Release the script handle and optionally delete its storage (flag bit 0).
+extern "C" BYTE* __fastcall SchHandle_DeletingDestructor(BYTE* self, void*, int flags) { return DeleteAfter(self, flags, FUN_4a36c0); }
 extern "C" BYTE* __fastcall Mult46c960_DeletingDestructor(BYTE* self, void*, int flags) { return DeleteAfter(self, flags, FUN_50d190); }
 
 // ---------------------------------------------------------------------------
@@ -291,7 +295,8 @@ struct Entry32 {
     DWORD  m_16[4];
 };
 
-extern "C" void __cdecl Heap32_Push(Entry32* first, int hole, int top, Entry32 v)
+// [FUN_46cf50]
+extern "C" void __cdecl LoadEntries_SiftUpByWeight(Entry32* first, int hole, int top, Entry32 v)
 {
     for (int p = (hole - 1) / 2; hole > top; p = (hole - 1) / 2) {
         if (!(first[p].key > v.key))
@@ -302,12 +307,15 @@ extern "C" void __cdecl Heap32_Push(Entry32* first, int hole, int top, Entry32 v
     first[hole] = v;
 }
 
+KING_VAR(const double, g_progressDifferenceThreshold, 64b678)
+
 // push_heap of pointers stopping at an equal double at +504
-extern "C" void __cdecl Heap504_Push(BYTE** first, int hole, int top, BYTE* v)
+// [FUN_46d280]
+extern "C" void __cdecl Racers_SiftUpByProgressDifference(BYTE** first, int hole, int top, BYTE* v)
 {
     for (int p = (hole - 1) / 2; hole > top; p = (hole - 1) / 2) {
         BYTE* e = first[p];
-        if (x87_eq(F(double, e, 504) - F(double, v, 504), 0.0))
+        if (x87_eq(F(double, e, 504) - F(double, v, 504), g_progressDifferenceThreshold))
             break;
         first[hole] = e;
         hole = p;
@@ -493,10 +501,10 @@ int __cdecl Route_Call487230(int a, int b)
     return Route_Call4870e0(a, b);
 }
 
-// [FUN_483ff0]
-int __cdecl Route_Call529880(int a, int b)
+// [FUN_483ff0] Mark the map entries for a road visited by the player.
+void __cdecl Route_Call529880(int player, int road)
 {
-    return CallC<int>(FUN_529880, a, b);
+    Carat_MarkKey(player, road);
 }
 
 // [FUN_487ce0] constructs a byte
@@ -598,7 +606,7 @@ void __cdecl Mult46cc00(ByteVec* a, BYTE* last, ByteVec* b, ByteVec v, int x)
 
 }
 
-extern "C" BYTE* __cdecl Copy1(const BYTE* first, const BYTE* last, BYTE* dest);
+extern "C" BYTE* __cdecl ByteRange_Move(const BYTE* first, const BYTE* last, BYTE* dest);
 extern "C" int __cdecl _stricmp(const char* a, const char* b);
 
 // vector<char> assignment *d = [f, l); copy moves the bytes of the part
@@ -617,8 +625,8 @@ static void ByteVec_Assign(ByteVec* d, BYTE* f, BYTE* l, bool useCopy)
     } else {
         unsigned have = d->end - d->begin;
         if (useCopy) {
-            Copy1(f, f + have, d->begin);
-            Copy1(f + (d->end - d->begin), l, d->end);
+            ByteRange_Move(f, f + have, d->begin);
+            ByteRange_Move(f + (d->end - d->begin), l, d->end);
         } else {
             memmove(d->begin, f, have);
             memmove(d->end, f + (d->end - d->begin), l - (f + (d->end - d->begin)));
@@ -729,7 +737,7 @@ extern "C" void __cdecl Heap504_Adjust(BYTE** a, int hole, int len, int val, int
         a[hole] = a[child - 1];
         hole = child - 1;
     }
-    Heap504_Push(a, hole, top, (BYTE*)val);
+    Racers_SiftUpByProgressDifference(a, hole, top, (BYTE*)val);
 }
 
 extern "C" void** __fastcall Vec_Construct(void** self, void*, int);
@@ -845,7 +853,7 @@ extern "C" void __cdecl Heap32_Adjust(Entry32* first, int hole, int len, Entry32
     }
     Entry32 c;
     Rec_Copy8Skip1((int*)&c, 0, (const int*)&v);
-    Heap32_Push(first, hole, top, c);
+    LoadEntries_SiftUpByWeight(first, hole, top, c);
 }
 
 // ---------------------------------------------------------------------------
@@ -881,7 +889,7 @@ extern "C" void FUN_40a9f0(); KING_ALIAS("_FUN_40a9f0", "_AI_ListData")
 extern "C" void __cdecl Ai_FinishRacingPlayer(BYTE* player);
 extern "C" void __cdecl Player_Retire(BYTE* id);
 extern "C" int* __fastcall Int_Copy(int* s, void*, const int* src);
-extern "C" void __cdecl Rec_4015a0Both(int id);
+extern "C" void __cdecl Ai_ActivateVehicleAndRoute(int id);
 extern "C" DWORD* __cdecl Player_Register(DWORD* out, BYTE* p);
 extern "C" int* __fastcall Int_Set(int* s, void*, int a);
 extern "C" BYTE* __cdecl Range_CallD(BYTE* out, DWORD f, DWORD l, int v);
@@ -955,7 +963,7 @@ int __cdecl Ai_NetMessage(int id, BYTE* data)
         Pm_SetForeign(p);
         int it;
         Player_Register((DWORD*)&it, p);
-        Rec_4015a0Both(it);
+        Ai_ActivateVehicleAndRoute(it);
         if (g_pm68d188 == 1 || g_pm68d188 == 2)
             Player_Retire((BYTE*)it);
         break;
@@ -1375,12 +1383,11 @@ extern "C" void __cdecl PopHeapAux4(DWORD* first, DWORD* last, DWORD* result, DW
     Heap504_Adjust((BYTE**)first, 0, (int)(last - first), value, pred);
 }
 
-// [FUN_487290] places player a at node (an empty position on no road) and
-// runs its route call with b
 extern "C" void __fastcall Player_SetPosition(void* self, void*, const void* p);
-extern "C" int __cdecl Player_PlaceAtNode(BYTE* player, int node, int b)
+// [FUN_487290]
+extern "C" int __cdecl Player_PlaceAtNodeAndReplan(BYTE* player, int node, int destination)
 {
     DWORD p[8] = {0xFFFFFFFF, (DWORD)node, 0, 0, 0, 0, 0, 0xFFFFFFFF};
     Player_SetPosition(player + 8, 0, p);
-    return Route_Call4870e0((int)player, b);
+    return Route_Call4870e0((int)player, destination);
 }

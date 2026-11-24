@@ -35,10 +35,17 @@ KING_VAR(BYTE*, g_game, 6d2078)
 KING_VAR(BYTE*, g_view, 696224)
 typedef void* EffectBuffers[10];
 KING_VAR(EffectBuffers, g_effectBuffers, 696704)
-KING_VAR(BYTE*, g_truck, 6f33ac)
-KING_VAR(int, g_sound694838, 694838)
-KING_VAR(int, g_sound694834, 694834)
-KING_VAR(void*, g_sounds, 6f63d0)
+KING_VAR(BYTE*, g_effectWeather, 6f33ac)
+KING_VAR(double, g_wheelDustWaveLimit, 64b7a8)
+KING_VAR(float, g_wheelDustDaylightLimit, 64c1c8)
+KING_VAR(float, g_boxCenterScale, 64c258)
+KING_VAR(float, g_raisedSegmentMinY, 64c264)
+KING_VAR(float, g_raisedSegmentMaxY, 64d3fc)
+KING_VAR(float, g_raisedSegmentMinX, 64c968)
+KING_VAR(float, g_raisedSegmentMaxX, 64c450)
+KING_VAR(int, g_treeShadowMaterial, 694838)
+KING_VAR(int, g_vehicleShadowMaterial, 694834)
+KING_VAR(void*, g_shadowRenderer, 6f63d0)
 KING_VAR(int, g_696244, 696244)
 KING_VAR(int, g_6f6a78, 6f6a78)
 KING_VAR(void*, g_6961fc, 6961fc)
@@ -46,6 +53,7 @@ KING_VAR(BYTE*, g_7025b8, 7025b8)
 KING_VAR(void*, g_d3d, 72090c)
 KING_VAR(void*, g_lightDevice, 696260)
 KING_VAR(int, g_lightsOn, 69625c)
+KING_VAR(BYTE*, g_hardwareLights, 6ce520)
 KING_VAR(void*, g_68b990, 68b990)
 KING_VAR(BYTE*, g_6cec6c, 6cec6c)
 KING_VAR(BYTE*, g_world, 696ca0)
@@ -90,8 +98,8 @@ extern "C" void FUN_59d4a0(); KING_ALIAS("_FUN_59d4a0", "@Effect59d4a0_Construct
 extern "C" BYTE* __fastcall Blow_Construct(BYTE* s, void*, BYTE* v, const Vec3* pos);
 extern "C" void FUN_4d9460(); KING_ALIAS("_FUN_4d9460", "@Blow_Construct@16")
 extern "C" int __fastcall Node_Remove(BYTE* self, void*);
-extern "C" void __fastcall Node5f1a70_Destroy(BYTE* s);
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void __fastcall SceneSlotNode_Destroy(BYTE* s);
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 extern "C" BYTE* __fastcall Object_ConstructKind(BYTE* s, void*, int kind, const char* name);
 extern "C" void FUN_5d31e0(); KING_ALIAS("_FUN_5d31e0", "@Object_ConstructKind@16")
 extern "C" void __fastcall Owner_Attach(BYTE* self, void*, BYTE* node);
@@ -136,8 +144,8 @@ extern "C" double __fastcall Wave_Value(void* self, void*, double phase);   // e
 extern "C" int __fastcall FF_PoolStart(BYTE* self, int, int a, int b, int c, int d, int e);
 extern "C" void __fastcall Object_Destroy(BYTE* s);
 extern "C" void FUN_5d3290(); KING_ALIAS("_FUN_5d3290", "@Object_Destroy@4")    // Task::~Task
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
-extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@Sce5ef660_Destroy@4")    // module destructor
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
+extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@SceneNode_DestroyBase@4")    // module destructor
 extern "C" void __fastcall Fx_CameraPair(BYTE* s, void*);
 extern "C" void FUN_4bf510(); KING_ALIAS("_FUN_4bf510", "@Fx_CameraPair@8")    // particles: reset
 extern "C" BYTE* __fastcall NodeN_Construct(BYTE* self, void*, const char* name, int kind, int n);
@@ -158,8 +166,18 @@ extern "C" void __cdecl Fx_Update4df0(void* x);
 KING_ALIAS("_Fx_Update4df0", "_Eff_CreateSparks")
 extern "C" void __cdecl Fx_Message(const char* text, int);
 KING_ALIAS("_Fx_Message", "_Sys_Log")
-extern "C" int __cdecl Fx_Find4e5bf5(int a, int b, int c, char* buf);
-KING_ALIAS("_Fx_Find4e5bf5", "_Obj_Lookup4e5b22")
+extern "C" int __cdecl World_ResolveSegmentDestination(int object, int start, int end, char* name);
+
+static int Effect_ResolveSegmentDestination(int object, int start, int end, bool& hasName)
+{
+    // A portal can return its qualified room name. The effect only observes
+    // the first character, but the query writes the entire string.
+    char name[256];
+    name[0] = 0;
+    const int destination = World_ResolveSegmentDestination(object, start, end, name);
+    hasName = name[0] != 0;
+    return destination;
+}
 extern "C" void __cdecl Fx_DefaultData(void* data);
 KING_ALIAS("_Fx_DefaultData", "_Car_ResetSetup")
 extern "C" int __cdecl Fx_Handle(int a);
@@ -184,6 +202,7 @@ extern "C" Vec3* __cdecl Vec3_Diff(Vec3* out, const Vec3* a, const Vec3* b)
     return out;
 }
 
+// [FUN_4bfef0] Component-wise vector sum used to position effect vertices.
 extern "C" Vec3* __cdecl Vec3_Sum(Vec3* out, const Vec3* a, const Vec3* b)
 {
     float z = (float)((double)a->z + b->z), y = (float)((double)a->y + b->y), x = (float)((double)a->x + b->x);
@@ -191,6 +210,7 @@ extern "C" Vec3* __cdecl Vec3_Sum(Vec3* out, const Vec3* a, const Vec3* b)
     return out;
 }
 
+// [FUN_4bff20] Write scalar times vector to the result slot.
 extern "C" Vec3* __cdecl Vec3_ScaleBy(Vec3* out, float s, const Vec3* v)
 {
     float z = (float)((double)s * v->z), y = (float)((double)s * v->y), x = (float)((double)s * v->x);
@@ -226,14 +246,16 @@ extern "C" Vec3* __cdecl Vec3_Negated(Vec3* out, const Vec3* v)
     return out;
 }
 
-extern "C" Vec3* __cdecl Vec3_Negate(Vec3* out, const Vec3* v)
+// [FUN_4cc7e0]
+extern "C" Vec3* __cdecl Reflection_NegateVector(Vec3* out, const Vec3* v)
 {
     float z = -v->z, y = -v->y, x = -v->x;
     out->x = x; out->y = y; out->z = z;
     return out;
 }
 
-extern "C" Vec3* __cdecl Vec3_Cross2(Vec3* out, const Vec3* a, const Vec3* b)
+// [FUN_4be260]
+extern "C" Vec3* __cdecl Vec3_CrossProduct(Vec3* out, const Vec3* a, const Vec3* b)
 {
     Vec3 r;
     r.x = (float)((double)b->z * a->y - (double)a->z * b->y);
@@ -244,21 +266,23 @@ extern "C" Vec3* __cdecl Vec3_Cross2(Vec3* out, const Vec3* a, const Vec3* b)
 }
 
 // the midpoint of the two corners of an object's box
-extern "C" Vec3* __cdecl Fx_BoxCenter(Vec3* out, BYTE* obj)
+// [FUN_4ca440]
+extern "C" Vec3* __cdecl VehicleShadow_BoxCenter(Vec3* out, BYTE* obj)
 {
     Vec3 a = F(Vec3, obj, 3848), b = F(Vec3, obj, 3860);
     double x = (double)a.x + b.x;
     float y = (float)((double)a.y + b.y);
     float z = (float)((double)a.z + b.z);
     Vec3 r;
-    r.x = (float)(x * 0.5f);
-    r.y = (float)(y * 0.5f);
-    r.z = (float)(z * 0.5f);
+    r.x = (float)(x * g_boxCenterScale);
+    r.y = (float)(y * g_boxCenterScale);
+    r.z = (float)(z * g_boxCenterScale);
     *out = r;
     return out;
 }
 
-extern "C" float __cdecl Max3f(float a, float b, float c)
+// [FUN_4be580]
+extern "C" float __cdecl Color_MaxOfThreeComponents(float a, float b, float c)
 {
     float m = a > b ? a : b;
     if (c > m)
@@ -266,7 +290,8 @@ extern "C" float __cdecl Max3f(float a, float b, float c)
     return m;
 }
 
-extern "C" float __cdecl Min3f(float a, float b, float c)
+// [FUN_4be5b0]
+extern "C" float __cdecl Color_MinOfThreeComponents(float a, float b, float c)
 {
     float m = !(a >= b) ? a : b;
     if (!(c >= m))
@@ -274,33 +299,82 @@ extern "C" float __cdecl Min3f(float a, float b, float c)
     return m;
 }
 
-// a colour component from hue h (degrees) between a and b
-extern "C" double __cdecl HueComponent(float a, float b, float hue)
+// [FUN_4be750] Interpolate one HSL color channel. Hue is expressed in degrees.
+#pragma warning(push)
+#pragma warning(disable: 4035) // x86 floating return register
+// Preserve the extended hue and the order of the binary32 operands. In
+// particular, loading a subnormal separately can raise an extra exception.
+extern "C" double __cdecl Color_ChannelFromHue(float lowerValue, float upperValue, float hue)
 {
-    double h = hue;
-    if (h > 360.0f)
-        h = h - 360.0f;
-    if (!(h >= 0.0f))
-        h = h + 360.0f;
-    if (!(h >= 60.0f))
-        return ((double)b - a) * h * 0.016666668f + a;
-    if (!(h >= 180.0f))
-        return b;
-    if (!(h >= 240.0f))
-        return ((double)b - a) * (240.0f - h) * 0.016666668f + a;
-    return a;
+    static const float turn = 360.0f, zero = 0.0f, riseEnd = 60.0f;
+    static const float plateauEnd = 180.0f, fallEnd = 240.0f;
+    static const float slope = 1.0f / 60.0f;
+    __asm {
+        fld hue
+        fcom turn
+        fnstsw ax
+        test ah, 41h
+        jnz testNegative
+        fsub turn
+    testNegative:
+        fcom zero
+        fnstsw ax
+        test ah, 1
+        jz chooseBand
+        fadd turn
+    chooseBand:
+        fcom riseEnd
+        fnstsw ax
+        test ah, 1
+        jz plateau
+        fld upperValue
+        fsub lowerValue
+        fmulp st(1), st(0)
+        fmul slope
+        fadd lowerValue
+        jmp finished
+    plateau:
+        fcom plateauEnd
+        fnstsw ax
+        test ah, 1
+        jz falling
+        fstp st(0)
+        fld upperValue
+        jmp finished
+    falling:
+        fcom fallEnd
+        fnstsw ax
+        test ah, 1
+        jz baseColor
+        fld upperValue
+        fsub lowerValue
+        fld fallEnd
+        fsub st(0), st(2)
+        fmulp st(1), st(0)
+        fmul slope
+        fadd lowerValue
+        fstp st(1)
+        jmp finished
+    baseColor:
+        fstp st(0)
+        fld lowerValue
+    finished:
+    }
 }
+#pragma warning(pop)
 
-extern "C" int __cdecl Fx_InRange(const float* v)
+// [FUN_4dc8c0]
+extern "C" int __cdecl RaisedSegment_ContainsXY(const float* v)
 {
-    if (!(v[1] >= 0.0f) || v[1] > 12.0f)
+    if (!(v[1] >= g_raisedSegmentMinY) || v[1] > g_raisedSegmentMaxY)
         return 0;
-    if (!(v[0] >= -10.0f) || v[0] > 10.0f)
+    if (!(v[0] >= g_raisedSegmentMinX) || v[0] > g_raisedSegmentMaxX)
         return 0;
     return 1;
 }
 
-extern "C" int __cdecl Fx_EvenStep(int x)
+// [FUN_4d43a0]
+extern "C" int __cdecl Fx_LevelFromVehicleStep(int x)
 {
     return ((x < 4 ? x + 1 : x) % 2 != 0) ? 0 : -1;
 }
@@ -309,7 +383,8 @@ extern "C" int __cdecl Fx_EvenStep(int x)
 // Effects
 
 // a light effect added to the effect list (up to 255)
-extern "C" void __cdecl Fx_AddLight(int kind, const Vec3* pos, const Vec3* color, int a, int b)
+// [FUN_4b8320]
+extern "C" void __cdecl VehicleLight_QueueLamp(BYTE* vehicle, const Vec3* pos, const Vec3* direction, int lampIndex, int flags)
 {
     if (!g_effectList)
         return;
@@ -319,11 +394,11 @@ extern "C" void __cdecl Fx_AddLight(int kind, const Vec3* pos, const Vec3* color
         F(int, e, 12) = 0; F(int, e, 16) = 0; F(int, e, 20) = 0;
         F(int, e, 24) = 0; F(int, e, 28) = 0; F(int, e, 32) = 0;
         F(void*, e, 0) = g_vtbl64c248;
-        F(int, e, 8) = kind;
+        F(BYTE*, e, 8) = vehicle;
         F(Vec3, e, 12) = *pos;
-        F(Vec3, e, 24) = *color;
-        F(int, e, 36) = a;
-        F(int, e, 40) = b;
+        F(Vec3, e, 24) = *direction;
+        F(int, e, 36) = lampIndex;
+        F(int, e, 40) = flags;
         F(int, e, 4) = 2;
     }
     unsigned n = F(unsigned, g_effectList, 36);
@@ -342,13 +417,15 @@ static const char* VehicleName()
     return F(const char*, p, 60);
 }
 
-extern "C" int __cdecl Fx_VehicleIsAaTr()
+// [FUN_4b8600]
+extern "C" int __cdecl PlayerVehicle_HasAaOrTrPrefix()
 {
     const char* n = VehicleName();
     return n && ((n[0] == 'a' && n[1] == 'a') || (n[0] == 't' && n[1] == 'r'));
 }
 
-extern "C" int __cdecl Fx_VehicleIsDbAc()
+// [FUN_4b8650]
+extern "C" int __cdecl PlayerVehicle_HasDbOrAcPrefix()
 {
     const char* n = VehicleName();
     return n && ((n[0] == 'd' && n[1] == 'b') || (n[0] == 'a' && n[1] == 'c'));
@@ -387,20 +464,26 @@ extern "C" void __cdecl Fx_FreeBuffers()
         }
 }
 
-// the truck stands: grip at most 0.7 and no speed
-extern "C" int __cdecl Fx_TruckStill()
+// The wheel effect checks the weather wave and the daylight intensity.
+// [FUN_4bb010]
+extern "C" int __cdecl Weather_AllowsWheelDust()
 {
-    if (Wave_Value(g_truck, 0, 0.0) > 0.7)
+    if (Wave_Value(g_effectWeather, 0, 0.0) > g_wheelDustWaveLimit)
         return 0;
-    if (F(float, g_truck, 536) > 0.001f)
+    if (F(float, g_effectWeather, 536) > g_wheelDustDaylightLimit)
         return 0;
     return 1;
 }
 
-extern "C" int __cdecl Fx_PlaySound(int a, int b, int c, int d, int alt)
+// [FUN_4bb350]
+extern "C" int __cdecl Shadow_SubmitWithMaterial(int a, int b, int c, int d, int tree)
 {
-    int sound = alt ? g_sound694838 : g_sound694834;
-    return FF_PoolStart((BYTE*)g_sounds, 0, a, b, c, d, sound);
+    // This entry reads the tree material even when the caller requests the vehicle material.
+    const volatile int& treeMaterial = g_treeShadowMaterial;
+    int material = treeMaterial;
+    if (!tree)
+        material = g_vehicleShadowMaterial;
+    return FF_PoolStart((BYTE*)g_shadowRenderer, 0, a, b, c, d, material);
 }
 
 extern "C" void __cdecl Fx_Update2(void* x)
@@ -432,16 +515,16 @@ extern "C" int __cdecl Fx_IsRadeon()
     return 0;
 }
 
-extern "C" int __cdecl Fx_Find(int a, int b, int c)
+// [FUN_4ca3f0]
+extern "C" int __cdecl Shadow_FindProjectionObject(int a, int b, int c)
 {
-    char buf[256];
-    buf[0] = 0;
-    int r = Fx_Find4e5bf5(a, b, c, buf);
-    return buf[0] ? a : r;
+    bool hasName;
+    int destination = Effect_ResolveSegmentDestination(a, b, c, hasName);
+    return hasName ? a : destination;
 }
 
-// the truck is closer than 80 to the object
-extern "C" int __cdecl Fx_NearTruck(BYTE* obj)
+// [FUN_4cedd0] Enter traffic physics inside the 80-unit sphere around the player.
+extern "C" int __cdecl Traffic_ShouldEnterPhysics(BYTE* obj)
 {
     BYTE m1[52], m2[52];
     BYTE* a = SceneObj_Matrix1(F(BYTE*, g_game, 616) + 16, 0, m1);
@@ -453,13 +536,18 @@ extern "C" int __cdecl Fx_NearTruck(BYTE* obj)
     return !(Vec3_Length(&d) >= 80.0);
 }
 
-extern "C" bool __cdecl Fx_HasItems(BYTE* p) { return F(void*, p, 24) != F(void*, p, 28); }
+// [FUN_4cfc10] The player handle includes the list links before the route vector.
+extern "C" bool __cdecl Player_HasRouteHops(BYTE* player)
+{
+    return F(void*, player, 24) != F(void*, player, 28);
+}
 
 // ---------------------------------------------------------------------------
 // Fades: state +76 (0 off, 1 on, 2, 3 fading out, 4 fading in, 5), level +64
 
 static double FrameTime() { return F(double, g_view, 2960); }
 
+// [FUN_4ccaf0]
 extern "C" int __cdecl Fade_Step(BYTE* f)
 {
     int state = F(int, f, 76);
@@ -498,6 +586,7 @@ extern "C" int __cdecl Fade_Age(BYTE* f)
     return 2;
 }
 
+// [FUN_4ccba0]
 extern "C" void __cdecl Fade_Touch(BYTE* f) { F(int, f, 68) = Frame(); }
 
 static void SetFade(BYTE* f, int state, DWORD level)
@@ -581,7 +670,8 @@ extern "C" int __cdecl Fade_Set(BYTE* f, int on)
 }
 
 // scales the colours of a material by the fade level, once per frame
-extern "C" int __cdecl Fade_Apply(BYTE* f, float* c)
+// [FUN_4ccda0]
+extern "C" int __cdecl Fade_ApplyToMaterialOncePerFrame(BYTE* f, float* c)
 {
     if (!Fade_Age(f))
         return 0;
@@ -600,10 +690,12 @@ extern "C" int __cdecl Fade_Apply(BYTE* f, float* c)
 
 static BYTE* VehicleById(BYTE* list, int id) { return (BYTE*)Resources_Get((BYTE**)(list + 704), 0, id); }
 
+// [FUN_4d8a20]
 extern "C" void* __cdecl Vehicle_Object(int id) { return F(void*, VehicleById(F(BYTE*, g_6cec6c, 1356), id), 28); }
 extern "C" int __cdecl Vehicle_Exists(int id) { return Vehicle_Object(id) != 0; }
 
-extern "C" int __cdecl Vehicle_Flag4012(int id)
+// [FUN_4d8a60]
+extern "C" int __cdecl Vehicle_HasUnloadedResourceTableFlag(int id)
 {
     BYTE* v = VehicleById(F(BYTE*, g_6cec6c, 1356), id);
     if (!v)
@@ -611,7 +703,8 @@ extern "C" int __cdecl Vehicle_Flag4012(int id)
     return (signed char)F(BYTE, F(BYTE*, v, 12), 4012) & 1;
 }
 
-extern "C" int __cdecl Vehicle_TimeOver(int id)
+// [FUN_4d8a90]
+extern "C" int __cdecl Vehicle_HasReachedDeadline(int id)
 {
     BYTE* v = VehicleById(F(BYTE*, g_6cec6c, 1356), id);
     unsigned now = F(unsigned, g_world, 2704);
@@ -711,7 +804,7 @@ void FxMethods::DestructB()
         operator delete(F(void*, SELF, 76 + i * 4));
     if (F(void*, SELF, 72))
         operator delete(F(void*, SELF, 72));
-    Sce5ef660_Destroy(SELF);
+    SceneNode_DestroyBase(SELF);
 }
 
 // three zero vectors and an identity matrix
@@ -971,6 +1064,49 @@ void FxMethods::AddReflection(const void* src, int a)
     F(int, SELF, 13296)++;
 }
 
+// Lights_Choose sorts the entries in place. Keep snapshots at stable
+// addresses so repeated submissions of a dying node share its fade state.
+struct HardwareLightStorage {
+    BYTE entries[255][120];
+    alignas(DWORD) BYTE snapshots[255][80];
+};
+
+static void PreserveSubmittedLight(BYTE* light)
+{
+    if (!g_hardwareLights)
+        return;
+    int count = F(int, g_hardwareLights, 4);
+    HardwareLightStorage* storage = F(HardwareLightStorage*, g_hardwareLights, 12);
+    if (!storage)
+        return;
+
+    bool used[255] = {};
+    bool submitted = false;
+    for (int i = 0; i < count; ++i) {
+        BYTE* source = F(BYTE*, storage->entries[i], 104);
+        if (source == light)
+            submitted = true;
+        ULONG_PTR offset = (ULONG_PTR)source - (ULONG_PTR)storage->snapshots;
+        if (offset < sizeof storage->snapshots)
+            used[offset / sizeof storage->snapshots[0]] = true;
+    }
+    if (!submitted)
+        return;
+
+    // At least one active entry refers to the scene node, so at most
+    // count - 1 snapshot slots are in use. A popped entry owns no slot.
+    int slot = 0;
+    while (used[slot])
+        ++slot;
+    BYTE* snapshot = storage->snapshots[slot];
+    memcpy(snapshot, light, sizeof storage->snapshots[slot]);
+    for (int i = 0; i < count; ++i) {
+        BYTE*& source = F(BYTE*, storage->entries[i], 104);
+        if (source == light)
+            source = snapshot;
+    }
+}
+
 // the pool of 255 hardware lights, all switched off
 BYTE* FxMethods::LightsConstruct(unsigned n, void* dev)
 {
@@ -980,7 +1116,7 @@ BYTE* FxMethods::LightsConstruct(unsigned n, void* dev)
     F(unsigned, SELF, 0) = n;
     F(int, SELF, 8) = 0;
     F(int, SELF, 4) = 0;
-    BYTE* p = (BYTE*)operator new(30600);
+    BYTE* p = (BYTE*)operator new(sizeof(HardwareLightStorage));
     if (p)
         for (int i = 0; i < 255; i++)
             F(int, p, i * 120 + 112) = 0;
@@ -1103,9 +1239,12 @@ BYTE* __fastcall Fx_SetVtbl89c(BYTE* s, void*) { F(void*, s, 0) = g_vtbl64c89c; 
 void __fastcall Fx_SetVtbl8a8(BYTE* s, void*) { F(void*, s, 0) = g_vtbl64c8a8; }                           // [FUN_4c85b0]
 BYTE* __fastcall Fx_Set8(BYTE* s, void*, const Vec3* a, const DWORD* b, int c, int d, int e, int f) { return M(s)->Set8(a, b, c, d, e, f); } // [FUN_4c9930]
 void __fastcall Fx_AddReflection(BYTE* s, void*, const void* src, int a) { M(s)->AddReflection(src, a); }  // [FUN_4cc800]
-BYTE* __fastcall Lights_Construct(BYTE* s, void*, unsigned n, void* dev) { return M(s)->LightsConstruct(n, dev); } // [FUN_4cce70]
-void __fastcall Lights_Destruct(BYTE* s, void*) { M(s)->LightsDestruct(); }                                // [FUN_4ccf10]
-int __fastcall Lights_Release(BYTE* s, void*, int a) { return M(s)->LightsRelease(a); }                    // [FUN_4cd3c0]
+// [FUN_4cce70]
+BYTE* __fastcall Lights_Construct(BYTE* s, void*, unsigned n, void* dev) { return M(s)->LightsConstruct(n, dev); }
+// [FUN_4ccf10]
+void __fastcall Lights_Destruct(BYTE* s, void*) { M(s)->LightsDestruct(); }
+// [FUN_4cd3c0]
+int __fastcall Lights_Release(BYTE* s, void*, int a) { return M(s)->LightsRelease(a); }
 BYTE* __fastcall Fx_ObjectInit(BYTE* s, void*, int a, int b, const char* name, const Matrix* m, int c, const void* data, int d, int e, int f) { return M(s)->ObjectInit(a, b, name, m, c, data, d, e, f); } // [FUN_4cd670]
 int __fastcall Fx_Get12(BYTE* s, void*) { return F(int, s, 12); }                                          // [FUN_4cf5e0]
 int __fastcall Fx_Get9544(BYTE* s, void*) { return F(int, s, 9544); }                                      // [FUN_4cf5f0]
@@ -1127,7 +1266,7 @@ extern "C" void FUN_5d9290(); KING_ALIAS("_FUN_5d9290", "@Scenes_Find@12")    //
 extern "C" void __fastcall Msg_Write120(BYTE* self, int, int id, const BYTE* p, int n);
 extern "C" void FUN_593720(); KING_ALIAS("_FUN_593720", "@Sparks_Burst@20")
 extern "C" void __fastcall Shadow_Add(BYTE* s, void*, int a0, int a1, const float* at, unsigned minLevel, int a4, int a5);
-extern "C" void __fastcall Hits_Remember(BYTE* self, void*, const BYTE* hits, unsigned n);
+extern "C" void __fastcall Shadow_RememberQueryHits(BYTE* self, void*, const BYTE* hits, unsigned n);
 KING_VAR(AsmLabel, g_vtbl64c24c, 64c24c)
 KING_VAR(void*, g_lib696204, 696204)
 KING_VAR(void*, g_lib696200, 696200)
@@ -1154,7 +1293,8 @@ static void Fx_Error(int line)
 static inline BYTE* Fx_Material(const char* name, void* lib) { return Fx_FindByName(name, (BYTE*)lib); }
 
 // adds a decal (a mark at p along n) to the effect list
-extern "C" void __cdecl Fx_AddDecal(const Vec3Bits* p, const Vec3Bits* n, int a, int b, int c)
+// [FUN_4b83f0]
+extern "C" void __cdecl VehicleLight_QueueProjectedMark(const Vec3Bits* p, const Vec3Bits* n, int a, int b, int c)
 {
     if (!g_effectList)
         return;
@@ -1213,23 +1353,23 @@ extern "C" void __cdecl Fx_LoadVapor()
 extern "C" void __cdecl Fx_LoadShadows()
 {
     BYTE* o = Scenes_Find(g_view, 0, (const char*)g_strTrucks);
-    g_sound694838 = 0;
-    g_sound694834 = 0;
+    g_treeShadowMaterial = 0;
+    g_vehicleShadowMaterial = 0;
     bool found = false;
     BYTE* arr = F(BYTE*, o, 76);
     for (unsigned i = 0; i < F(unsigned, o, 72); i++)
         if (strcmp((const char*)arr + i * 124, "effect_Shadow") == 0) {
-            g_sound694834 = (int)(arr + i * 124);
-            found = g_sound694834 != 0;
+            g_vehicleShadowMaterial = (int)(arr + i * 124);
+            found = g_vehicleShadowMaterial != 0;
             break;
         }
     if (!found)
         Fx_Error(744);
-    g_sound694838 = (int)Fx_Material("shadtree0", g_lib696200);
-    if (!g_sound694838)
+    g_treeShadowMaterial = (int)Fx_Material("shadtree0", g_lib696200);
+    if (!g_treeShadowMaterial)
         Fx_Error(750);
-    F(DWORD, g_sound694834, 32) |= 0x40200;
-    F(DWORD, g_sound694838, 32) |= 0x40200;
+    F(DWORD, g_vehicleShadowMaterial, 32) |= 0x40200;
+    F(DWORD, g_treeShadowMaterial, 32) |= 0x40200;
 }
 
 static int Fx_Skid(float level, BYTE type, const Vec3Bits* p, const Vec3Bits* v, int net)
@@ -1260,14 +1400,15 @@ extern "C" int __cdecl Fx_Skid2(const Vec3Bits* p, const Vec3Bits* v, int net)
 }
 
 // a vehicle's shadow at the detail level of the options
-extern "C" void __cdecl Fx_Shadow(int a, int b, int c, int d, int tree)
+// [FUN_4bb270]
+extern "C" void __cdecl Shadow_SubmitVehiclePolygon(int a, int b, int c, int d, int tree)
 {
-    void* m = (void*)(tree ? g_sound694838 : g_sound694834);
+    void* m = (void*)(tree ? g_treeShadowMaterial : g_vehicleShadowMaterial);
     float k = g_shadowLevel;
     int lvl = !(k > 0.25f) ? 3 : !(k > 0.5f) ? 2 : !(k > 0.75f) ? 1 : 0;
-    Shadow_Add((BYTE*)g_sounds, 0, a, b, (const float*)c, lvl, d, (int)m);
+    Shadow_Add((BYTE*)g_shadowRenderer, 0, a, b, (const float*)c, lvl, d, (int)m);
     if (g_696234)
-        Hits_Remember((BYTE*)g_696234, 0, (const BYTE*)a, b);
+        Shadow_RememberQueryHits((BYTE*)g_696234, 0, (const BYTE*)a, b);
 }
 
 extern "C" int __cdecl Fade_RunStage(void* f, int t);
@@ -1301,7 +1442,8 @@ static void Hit_Fill(BYTE* r, const BYTE* hit)
         F(int, r, 88) = F(int, o, 36);
 }
 
-extern "C" BYTE* __fastcall HitRec_Construct(BYTE* self, void*, const BYTE* hit)
+// [FUN_4bd620]
+extern "C" BYTE* __fastcall HitRecord_InitFromQuery(BYTE* self, void*, const BYTE* hit)
 {
     for (int i = 0; i < 24; i += 4)
         F(int, self, i) = 0;
@@ -1314,7 +1456,8 @@ extern "C" BYTE* __fastcall HitRec_Construct(BYTE* self, void*, const BYTE* hit)
 }
 
 // remembers the hits on new objects of some kinds (a ring of 50)
-extern "C" void __fastcall Hits_Remember(BYTE* self, void*, const BYTE* hits, unsigned n)
+// [FUN_4c43b0]
+extern "C" void __fastcall Shadow_RememberQueryHits(BYTE* self, void*, const BYTE* hits, unsigned n)
 {
     BYTE* base = F(BYTE*, self, 40) + 64;
     const BYTE* h = hits + 100;
@@ -1341,6 +1484,7 @@ extern "C" void __fastcall Hits_Remember(BYTE* self, void*, const BYTE* hits, un
         for (int j = 0; j < 24; j += 4)
             F(int, r, j) = 0;
         Matrix_IdentityThis((Matrix*)(r + 36), 0);
+        // Steam 8.1 filters each hit but copies the payload from the first query result.
         Hit_Fill(r, hits);
         BYTE* d = base + slot * 92;
         memcpy(d + 8, r, 92);
@@ -1394,7 +1538,8 @@ static int LightSet(int id, BYTE* self) { return (*(LightCall2*)(*(BYTE**)g_ligh
 static int LightEnable(int id, int on) { return (*(LightCall176*)(*(BYTE**)g_lightDevice + 176))(g_lightDevice, id, on); }
 
 // turns a hardware light on or off as its fade wants
-extern "C" int __fastcall Light_Switch(BYTE* self, void*, int on, int keep)
+// [FUN_4cd270]
+extern "C" int __fastcall HardwareLight_ApplyEnableState(BYTE* self, void*, int on, int keep)
 {
     BYTE* s = F(BYTE*, self, 104);
     int id = F(int, self, 116);
@@ -1421,7 +1566,7 @@ extern "C" int __fastcall Light_Switch(BYTE* self, void*, int on, int keep)
     } else {
         int k = Fade_RunStage(s, on);
         if (k) {
-            Fade_Apply(F(BYTE*, self, 104), (float*)self);
+            Fade_ApplyToMaterialOncePerFrame(F(BYTE*, self, 104), (float*)self);
             LightSet(F(int, self, 116), self);
         } else
             Fade_Touch(F(BYTE*, self, 104));
@@ -1474,7 +1619,7 @@ extern "C" int __cdecl Glow_Add2(int a, const Vec3Bits* p, float b, float r1, fl
     return 1;
 }
 
-// adds a hardware light (rec: 104 bytes) and turns it on while there are free ones
+// [FUN_4cd470] adds a hardware light (rec: 104 bytes) and turns it on while there are free ones
 extern "C" int __fastcall Lights_Add(unsigned* self, void*, const void* rec, int a, int fade)
 {
     unsigned n = self[1];
@@ -1506,7 +1651,7 @@ extern "C" int __fastcall Lights_Add(unsigned* self, void*, const void* rec, int
     } else {
         int k = Fade_RunStage(s, 1);
         if (k) {
-            Fade_Apply(F(BYTE*, e, 104), (float*)e);
+            Fade_ApplyToMaterialOncePerFrame(F(BYTE*, e, 104), (float*)e);
             LightSet(F(int, e, 116), e);
         } else
             Fade_Touch(F(BYTE*, e, 104));
@@ -1614,7 +1759,7 @@ void __fastcall Effect4c09d0_Destroy(BYTE* self, void*)
     F(int, self, 68) = 0;
     F(int, self, 64) = 0;
     Node_Remove(self, 0);
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 // [FUN_4c4c40]
@@ -1638,7 +1783,7 @@ void __fastcall Effect4c8890_Destroy(BYTE* self, void*)
     Node_Remove(self, 0);
     if (F(void*, self, 72))
         operator delete(F(void*, self, 72));
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
 // [FUN_4c9970] a task on the vehicle v
@@ -1686,7 +1831,7 @@ void __fastcall Effect4cc9f0_Destroy(BYTE* self, void*)
     F(void*, self, 0) = g_vtbl64c97c;
     Node_Remove(self, 0);
     F(int, self, 13296) = 0;
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 // [FUN_4ce0d0] a task on the vehicle v with two named objects
@@ -1925,8 +2070,9 @@ void __fastcall Effect4d25f0_Destroy(BYTE* self, void*)
 // [FUN_4d9e70] destructor
 void __fastcall Effect4d9e70_Destroy(BYTE* self, void*)
 {
+    PreserveSubmittedLight(self + 56);
     CallThis(FUN_5e48f0, self + 56);
-    Node5f1a70_Destroy(self);
+    SceneSlotNode_Destroy(self);
 }
 
 // [FUN_4d9ec0] destructor: also deletes the shared object at $L_696734
@@ -2264,8 +2410,8 @@ extern "C" Vec3* __cdecl Effect_Direction4cda20(Vec3* out, Bytes32 pos, int nega
     return out;
 }
 
-// [FUN_4cee70] whether a vehicle is too far from the player for an effect (over 300), or over 100 and standing still
-extern "C" int __cdecl Effect_TooFar4cee70(BYTE* car)
+// [FUN_4cee70] Leave physics beyond 300, or from 100 with little lateral offset and flag 2 clear.
+extern "C" int __cdecl Traffic_ShouldLeavePhysics(BYTE* car)
 {
     Matrix m1, m2;
     BYTE* a = (BYTE*)SceneObj_Matrix1(F(BYTE*, g_game, 616) + 16, 0, &m1);
@@ -2289,7 +2435,25 @@ extern "C" int __cdecl Effect_TooFar4cee70(BYTE* car)
     return 1;
 }
 
-extern "C" double __cdecl HueComponent(float p, float q, float h);
+extern "C" double __cdecl Color_ChannelFromHue(float p, float q, float h);
+
+// Commit each extended channel directly to the output float. A subsequent
+// reload and store would erase C1 from the final rounding operation.
+static void Color_StoreHueChannel(const float& lowerValue, const float& upperValue, const float& hue, float* out)
+{
+    __asm {
+        mov eax, hue
+        push dword ptr [eax]
+        mov eax, upperValue
+        push dword ptr [eax]
+        mov eax, lowerValue
+        push dword ptr [eax]
+        call Color_ChannelFromHue
+        add esp, 12
+        mov eax, out
+        fstp dword ptr [eax]
+    }
+}
 
 // [FUN_4be7f0] HSL to RGB: hue h (degrees), lightness l, saturation s
 extern "C" void __cdecl Color_FromHsl(float h, float l, float s, float* r, float* g, float* b)
@@ -2300,13 +2464,13 @@ extern "C" void __cdecl Color_FromHsl(float h, float l, float s, float* r, float
     else
         q = (float)(((double)s + 1.0f) * l);
     float p = (float)(((double)l + l) - q);
-    if (!(s < 0 || s > 0)) {     // equal or unordered
+    if (x87_compare_status(s, 0.0f) & X87_C3) {
         *r = l; *g = l; *b = l;
         return;
     }
-    *r = (float)HueComponent(p, q, (float)((double)h + 120.0f));
-    *g = (float)HueComponent(p, q, h);
-    *b = (float)HueComponent(p, q, (float)((double)h - 120.0f));
+    Color_StoreHueChannel(p, q, (float)((double)h + 120.0f), r);
+    Color_StoreHueChannel(p, q, h, g);
+    Color_StoreHueChannel(p, q, (float)((double)h - 120.0f), b);
 }
 
 // [FUN_4dc910] a segment raised to 4 m when the point 3/4 along it is in range; else the segment unchanged
@@ -2321,7 +2485,7 @@ extern "C" void __stdcall Fx_RaiseSegment(const Vec3* a, const Vec3* b, Vec3* ou
         v.x = (float)(x + a->x);
         v.y = (float)((double)y + a->y);
         v.z = (float)((double)z + a->z);
-        if (Fx_InRange((const float*)&v)) {
+        if (RaisedSegment_ContainsXY((const float*)&v)) {
             outA->x = a->x; outA->y = a->y; outA->z = 4.0f;
             outB->x = b->x; outB->y = b->y; outB->z = 0;
             return;
@@ -2368,7 +2532,7 @@ extern "C" Vec3* __cdecl Triangle_RandomPoint(Vec3* out, const Vec3* a, const Ve
     const float k = 3.0518509447574615e-05f;    // 1/32767
     float u = (float)((double)rand() * k);
     double v = (double)rand() * k;
-    if (v + u > 1.0f) {
+    if (!(x87_compare_status(v + u, 1.0) & (X87_C0 | X87_C3))) {
         u = (float)(1.0f - (double)u);
         v = 1.0f - v;
     }
@@ -2381,7 +2545,17 @@ extern "C" Vec3* __cdecl Triangle_RandomPoint(Vec3* out, const Vec3* a, const Ve
     float sy = (float)((double)vby + uay);
     out->x = (float)((double)sx + wcx);
     out->y = (float)((double)wcy + sy);
-    out->z = (float)((double)wcz + (vbz + uaz));
+    // The original retains the partial Z sum until after the final binary32 store.
+    float z;
+    __asm {
+        fld vbz
+        fadd uaz
+        fld wcz
+        fadd st(0), st(1)
+        fstp z
+        fstp st(0)
+    }
+    memcpy(&out->z, &z, sizeof(z));
     return out;
 }
 
@@ -2450,8 +2624,8 @@ KING_VAR(const double, k_hslEpsilon, 64c410)      // 1e-7
 // [FUN_4be5e0] RGB to HSL: hue in degrees (FLT_MAX for grey), lightness, saturation
 extern "C" void __cdecl Color_ToHsl(float r, float g, float b, float* h, float* l, float* s)
 {
-    float mx = Max3f(r, g, b);
-    float mn = Min3f(r, g, b);
+    float mx = Color_MaxOfThreeComponents(r, g, b);
+    float mn = Color_MinOfThreeComponents(r, g, b);
     float d = (float)((double)mx - mn);
     float sum = (float)((double)mn + mx);
     double light = (double)sum * 0.5f;
@@ -2511,7 +2685,7 @@ extern "C" Matrix* __cdecl Fx_VehicleMatrix(Matrix* out, BYTE* car)
     Ai_GetPositionId((DWORD*)&pos, car);
     int level = 0;
     if ((Player_Flags(car) & 0x4000) || F(int, g_6cec6c, 1316))
-        level = Fx_EvenStep(F(int, car, 728));
+        level = Fx_LevelFromVehicleStep(F(int, car, 728));
     return Fx_LiftedMatrix(out, &pos, level);
 }
 
@@ -2527,7 +2701,7 @@ extern "C" Matrix* __cdecl Fx_VehicleMatrixAt(Matrix* out, BYTE* car, BYTE* h)
         if (n)
             level = n - 1;
     } else
-        level = Fx_EvenStep(F(int, car, 728));
+        level = Fx_LevelFromVehicleStep(F(int, car, 728));
     return Fx_LiftedMatrix(out, &pos, level);
 }
 
@@ -2536,7 +2710,7 @@ extern "C" int __fastcall Fx_LevelForHeight(BYTE* s, void*, double x)
 {
     int id = F(int, F(BYTE*, s, 16576), 20636);
     if (Player_Flags((BYTE*)id) & 0x4000)
-        return Fx_EvenStep(F(int, F(BYTE*, F(BYTE*, s, 16576), 20636), 728));
+        return Fx_LevelFromVehicleStep(F(int, F(BYTE*, F(BYTE*, s, 16576), 20636), 728));
     int n = (int)((x + 1.75) * 0.2857142857142857);
     int level = n;
     if (n) {
@@ -2691,7 +2865,7 @@ extern "C" void __cdecl Fx_SparkBurst(const Vec3* at, const Vec3* v, int send)
     }
 }
 
-extern "C" void FUN_4d57c0(); KING_ALIAS("_FUN_4d57c0", "_Gear_Choose")    // the effect's swing step
+extern "C" void FUN_4d57c0(); KING_ALIAS("_FUN_4d57c0", "_Traffic_SelectLateralSlot")    // the effect's swing step
 extern "C" BYTE* __fastcall Car_543bb0(BYTE* self, void*);
 extern "C" void FUN_5fd5f0(); KING_ALIAS("_FUN_5fd5f0", "@Sound_PlayAt@40")    // a sound at a point (point, distance, volume, flags)
 
@@ -2928,7 +3102,7 @@ extern "C" BYTE* __fastcall Fire_Construct(BYTE* s, void*, BYTE* scene, const Ve
     return s;
 }
 
-extern "C" int __cdecl Fx_TruckStill();
+extern "C" int __cdecl Weather_AllowsWheelDust();
 extern "C" void FUN_59d790(); KING_ALIAS("_FUN_59d790", "@Spark_Construct2@44")
 extern "C" void __cdecl Wasm_Set6f6a70(int v);
 KING_VAR(float, g_fx69603c, 69603c)
@@ -2942,7 +3116,7 @@ KING_VAR(FxLabel, g_fx694a00, 694a00)
 // [FUN_4bb050] dust sparks from a wheel: speed-scaled sizes, a limit by frame time, a random velocity of v
 extern "C" void __cdecl Fx_WheelDust(const Vec3* at, const Vec3* v, float strength)
 {
-    if (!Fx_TruckStill())
+    if (!Weather_AllowsWheelDust())
         return;
     if (!(g_fx69603c >= 0.5f))
         return;
@@ -3029,7 +3203,7 @@ extern "C" void __cdecl Player_SetFlags(BYTE* id, int flags);
 extern "C" void __cdecl Car_Launch(BYTE* c, int p, int* flags, int mark);
 extern "C" void FUN_4cf080(); KING_ALIAS("_FUN_4cf080", "_Car_Launch")
 extern "C" void __fastcall Car_SetInMode(BYTE* car, void*, int mode);
-extern "C" void __fastcall Flags1196_Clear(BYTE* self, void*, int bits);
+extern "C" void __fastcall Body_ClearMotionFlag(BYTE* self, void*, int bits);
 extern "C" void __fastcall Body_SetMoveMode(BYTE* self, void*, int v);
 KING_VAR(int, g_noVehicle68b990, 68b990)
 KING_VAR(BYTE*, g_fx696340, 696340)
@@ -3041,7 +3215,7 @@ extern "C" void __cdecl Fx_ParkVehicle(BYTE* car, int id, DWORD* flags)
 {
     Car_SetInMode(car, 0, 2);
     BYTE* o = car + 16;
-    Flags1196_Clear(o, 0, 1);
+    Body_ClearMotionFlag(o, 0, 1);
     Body_SetMoveMode(o, 0, 0);
     BYTE buf[48];
     memcpy(car + 20640, SceneObj_Matrix1(o, 0, buf), 48);
@@ -3161,7 +3335,7 @@ extern "C" double __cdecl Fx_TurnRate(Bytes32 pos, double d, int id, int back)
 }
 
 extern "C" void FUN_5d3290(); KING_ALIAS("_FUN_5d3290", "@Object_Destroy@4")    // the scene object base destructor
-extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@Node5f1a70_Destroy@4")
+extern "C" void FUN_5f1a70(); KING_ALIAS("_FUN_5f1a70", "@SceneSlotNode_Destroy@4")
 KING_VAR(char, vt_64c90c, 64c90c)
 KING_VAR(char, vt_64d49c, 64d49c)
 KING_VAR(char, vt_64d4c8, 64d4c8)
@@ -3200,11 +3374,11 @@ extern "C" void __fastcall Effect4dd600_Destroy(void** self, int)
 extern "C" void __fastcall Effect4bcbd0_Destroy(void** self, int)
 {
     self[0] = &vt_64c358;
-    Node5f1a70_Destroy((BYTE*)self);
+    SceneSlotNode_Destroy((BYTE*)self);
 }
 
 KING_VAR(char, vt_64c63c, 64c63c)
-extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@Sce5ef660_Destroy@4")
+extern "C" void FUN_5ef660(); KING_ALIAS("_FUN_5ef660", "@SceneNode_DestroyBase@4")
 extern "C" void FUN_60aa60(); KING_ALIAS("_FUN_60aa60", "_Grd_Message")
 KING_VAR(char, g_6724f8, 6724f8)
 KING_VAR(char, g_6726e8, 6726e8)
@@ -3230,11 +3404,11 @@ extern "C" void __fastcall EffectBuf_Destroy(BYTE* self, int)
     void* p = *(void**)(self + 72);
     if (p)
         operator delete(p);
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
-// [FUN_4ba2e0] registers the effects' settings table
-extern "C" int __cdecl Effects_Register()
+// [FUN_4ba2e0] Report the built-in NULL assertion at line 32 of mmt.h.
+extern "C" int __cdecl Mmt_ReportNullAssertion()
 {
     return CallC<int>(FUN_60aa60, 2, &g_6726a4, &g_6726e0, &g_6726e8, 32, &g_6724f8);
 }
@@ -3892,8 +4066,8 @@ extern "C" int __fastcall Eff_4c3840(BYTE* s, void*, BYTE* p, float k)
 
 extern "C" void FUN_4c8af0(); KING_ALIAS("_FUN_4c8af0", "_Fx_Beam")
 extern "C" void __cdecl Switch_Select(BYTE* node, int i);
-extern "C" int __fastcall SceneNode5f98c0_Draw(BYTE* s, void*, int flags, BYTE* b);
-extern "C" void FUN_5f98c0(); KING_ALIAS("_FUN_5f98c0", "@SceneNode5f98c0_Draw@16")
+extern "C" int __fastcall ShadedReference_Draw(BYTE* s, void*, int flags, BYTE* b);
+extern "C" void FUN_5f98c0(); KING_ALIAS("_FUN_5f98c0", "@ShadedReference_Draw@16")
 extern "C" void __fastcall Render_PushMatrix(BYTE* s, void*, const BYTE* m, int multiply);
 extern "C" void __fastcall Clip_Pop(BYTE* self, void*);
 extern "C" int __fastcall Obj_Test(BYTE* self, void*, int a, BYTE* b);
@@ -4053,7 +4227,7 @@ extern "C" int __fastcall Eff_4c4af0(BYTE* s, void*, int a, BYTE* b)
 {
     Switch_Select((BYTE*)(F(int, s, 136)), 1);
     Render_PushMatrix(b, 0, s + 88, 0);
-    int r = SceneNode5f98c0_Draw(s, 0, a, b);
+    int r = ShadedReference_Draw(s, 0, a, b);
     Clip_Pop(b, 0);
     Switch_Select((BYTE*)(F(int, s, 136)), 0);
     return r;
@@ -4990,7 +5164,7 @@ extern "C" int __cdecl Ring50_AddPoint(const BYTE* a, const BYTE* b)
 }
 
 // [$L_4cce30] sort order: by +108, largest first
-extern "C" int __cdecl Cmp4cce30_Desc(const BYTE* a, const BYTE* b)
+extern "C" int __cdecl CompareHardwareLightPriorityDescending(const BYTE* a, const BYTE* b)
 {
     if (F(float, b, 108) > F(float, a, 108))
         return 1;
@@ -5525,7 +5699,7 @@ KING_VAR(AsmLabel, g_pc7025f0, 7025f0)
 extern "C" void __fastcall VecB_FreeStorage(BYTE** v, int);
 extern "C" void __cdecl Ai_GetPresentData(BYTE* player, BYTE* present, BYTE* pd);
 extern "C" int* __fastcall Int_Copy(int* s, void*, const int* src);
-extern "C" int __cdecl Rec_Field8(BYTE* id);
+extern "C" int __cdecl Ai_GetPresentFlags(BYTE* id);
 extern "C" void __cdecl Rec_SetField0(BYTE* id, int v);
 extern "C" void __fastcall Vec1_Free(BYTE** v, int);
 extern "C" int* __cdecl Player_CarId(int* out);
@@ -5598,7 +5772,7 @@ int __cdecl Present_OnEvent(BYTE* it, int kind)
         int id = F(int, F(BYTE*, it, 8), 0);
         if (id < 0) {
             Pc_M48 m = *(Pc_M48*)(p.b + 4);
-            int fl = Rec_Field8(it);
+            int fl = Ai_GetPresentFlags(it);
             if (fl & 16)
                 id = CallC<int>(FUN_571a80, world, F(int, &p, 64), F(int, &p, 68), m, F(int, &p, 272));
             else if (fl & 32)
@@ -5610,7 +5784,7 @@ int __cdecl Present_OnEvent(BYTE* it, int kind)
             Int_Copy(&t, 0, (const int*)&it);
             Rec_SetField0((BYTE*)t, id);
         } else {
-            int fl = Rec_Field8(it);
+            int fl = Ai_GetPresentFlags(it);
             BYTE* r = (BYTE*)Resources_Get((BYTE**)(world + 704), 0, id);
             BYTE* c;
             if (fl & 32) {
@@ -5899,7 +6073,7 @@ void __cdecl Fx_PlaceObjects()
         BYTE* res = (BYTE*)Resources_Get((BYTE**)(g_world + 704), 0, F(int, car, 360));
         int kind = F(int, car, 360) / 1000;
         if (kind == 100 || kind == 101) {
-            BYTE m[48], t1[48], t2[48], w[48], hit[16], st[180];
+            BYTE m[48], t1[48], t2[48], w[48], st[49 * sizeof(float)];
             memcpy(m, car + 708, 48);
             BYTE* body = car + 16;
             BYTE* sm = CallThis<BYTE*>(FUN_57de90, body, t1);
@@ -5907,7 +6081,9 @@ void __cdecl Fx_PlaceObjects()
             memcpy(w, CallC<BYTE*>(FUN_5aba40, t2, CallC<BYTE*>(FUN_5aba40, w, model, m), sm), 48);
             BYTE t3[48];
             BYTE* pos = CallThis<BYTE*>(FUN_57de90, body, t3) + 36;
-            BYTE* q = (BYTE*)Query_HitObject((BYTE*)SceneObj_Get800(body, 0), (const Vec3Bits*)pos, (const Vec3Bits*)hit);
+            // The query follows the body position to the saved frame's position.
+            // Original 4d9193 passes the result matrix at esp+18, plus 36.
+            BYTE* q = (BYTE*)Query_HitObject((BYTE*)SceneObj_Get800(body, 0), (const Vec3Bits*)pos, (const Vec3Bits*)(w + 36));
             DWORD surf = F(DWORD, q, 12);
             Car_GetState(car, 0, (float*)st);
             if (car == F(BYTE*, g_game, 616)) {
@@ -6388,7 +6564,7 @@ static double Cl_Lum(const BYTE* c)
 extern "C" {
 
 // [FUN_4ccf30] lights of set s (+0 the most, +4 count, +12 the 120-byte lights) for world w: each rated (+108) by
-// its kind, its colours and its fade level, a spot also by its distance from the camera in x and y (w+8472 the
+// its kind, its colours and its fade level. Point and spot lights also use camera distance in x and y (w+8472 the
 // range); the best s+0 are switched on (s+8 their count), the rest off; the last failure
 int __fastcall Lights_Choose(DWORD* s, void*, BYTE* w)
 {
@@ -6401,7 +6577,7 @@ int __fastcall Lights_Choose(DWORD* s, void*, BYTE* w)
         int kind = F(int, r, 0);
         double base = kind == 2 ? g_cl64c320 : kind == 3 ? g_cl64c9d4 : g_eff64c264b;
         double pri = base + Cl_Lum(r + 4) + Cl_Lum(r + 20) + Cl_Lum(r + 36);
-        if (kind == 3) {
+        if (kind != 3) { // D3DLIGHT_DIRECTIONAL has no position-dependent falloff.
             float pf = (float)pri;
             BYTE m[48];
             for (int k = 0; k < 4; k++)
@@ -6417,16 +6593,16 @@ int __fastcall Lights_Choose(DWORD* s, void*, BYTE* w)
         }
         F(float, r, 108) = (float)(F(int, F(BYTE*, r, 104), 72) * (double)g_cl64c9c8 + pri);
     }
-    CallC(Cl_qsort, (void*)s[3], s[1], 120, (void*)Cmp4cce30_Desc);
+    CallC(Cl_qsort, (void*)s[3], s[1], 120, (void*)CompareHardwareLightPriorityDescending);
     s[2] = s[0] < s[1] ? s[0] : s[1];
     int hr = 0;
     for (DWORD i = 0; i < s[2]; i++) {
-        int e = Light_Switch((BYTE*)s[3] + i * 120, 0, 1, 0);
+        int e = HardwareLight_ApplyEnableState((BYTE*)s[3] + i * 120, 0, 1, 0);
         if (e < 0)
             hr = e;
     }
     for (DWORD i = s[2]; i < s[1]; i++) {
-        int e = Light_Switch((BYTE*)s[3] + i * 120, 0, 0, 0);
+        int e = HardwareLight_ApplyEnableState((BYTE*)s[3] + i * 120, 0, 0, 0);
         if (e < 0)
             hr = e;
     }
@@ -6825,7 +7001,7 @@ void __fastcall Trail_Follow(BYTE* self, void*, BYTE* h, float t, int i, int a4)
         Tr_Direction(r, r);
         F(Vec3Bits, r, 12) = F(Vec3Bits, r, 0);
         BYTE hit[92];
-        HitRec_Construct(hit, 0, h);
+        HitRecord_InitFromQuery(hit, 0, h);
         memcpy(r + 148, hit, 92);
         F(float, r, 52) = t;
         if (g_tr695c54 > Tr_Dot(r))
@@ -6847,7 +7023,7 @@ void __fastcall Trail_Follow(BYTE* self, void*, BYTE* h, float t, int i, int a4)
         F(Vec3Bits, r, 36) = F(Vec3Bits, h, 52);
         Tr_Direction(r, r + 12);
         BYTE hit[92];
-        HitRec_Construct(hit, 0, h);
+        HitRecord_InitFromQuery(hit, 0, h);
         memcpy(r + 148, hit, 92);
         F(float, r, 52) = t;
         if (g_tr695c54 > Tr_Dot(r))
@@ -6939,8 +7115,11 @@ extern "C" int __cdecl Point_InTriangle(float x, float y, const float* t)
     Vec3 a = {ax, ay, 0}, c = {cx, cy, 0}, p = {x, y, 0}, ac, pc, r;
     Vec3_Diff(&ac, &a, &c);
     Vec3_Diff(&pc, &p, &c);
-    Vec3_Cross2(&r, &pc, &ac);
-    return z1 <= g_tri64c3f0 && z2 <= g_tri64c3f0 && r.z <= g_tri64c3f0;
+    Vec3_CrossProduct(&r, &pc, &ac);
+    const unsigned short atMostOrUnordered = X87_C0 | X87_C3;
+    return (x87_compare_status(z1, g_tri64c3f0) & atMostOrUnordered) &&
+           (x87_compare_status(z2, g_tri64c3f0) & atMostOrUnordered) &&
+           (x87_compare_status(r.z, g_tri64c3f0) & atMostOrUnordered);
 }
 
 // === splitting a triangle in four (FUN_4c7850)
@@ -7023,8 +7202,9 @@ void __cdecl Car_WorldEvent(const int* m, BYTE* c)
         if (st[74])
             lim -= g_ce64c250;
         BYTE t[48];
-        if (F(float, CallThis<BYTE*>(Ce_Matrix1, c + 16, t), 44) < lim)
+        if (F(float, CallThis<BYTE*>(Ce_Matrix1, c + 16, t), 44) < lim) {
             Effect_Call446c80(c);
+        }
         return;
     }
     if (m[0] != 29 || !g_ce696338)
@@ -7089,7 +7269,7 @@ void __cdecl Car_WorldEvent(const int* m, BYTE* c)
 // === launching a car along its road (FUN_4cf080)
 
 extern "C" void __fastcall Car_SetInMode(BYTE* self, void*, int mode);
-extern "C" void __fastcall Mode3976_Set(BYTE* self, void*, int mode);
+extern "C" void __fastcall Body_SetMotionMode(BYTE* self, void*, int mode);
 KING_VAR(double, g_lc64ca88, 64ca88)
 KING_VAR(Vec3, g_lc702650, 702650)
 
@@ -7130,7 +7310,7 @@ void __cdecl Car_Launch(BYTE* c, int p, int* flags, int mark)
     CallVirt(b, 144, &v, 0);
     CallVirt(b, 148, &g_lc702650, 0);
     Car_SetInMode(c, 0, 1);
-    Mode3976_Set(b, 0, 3);
+    Body_SetMotionMode(b, 0, 3);
 }
 
 } // extern "C"
@@ -7417,9 +7597,9 @@ int __cdecl Ground_Below(BYTE* o, const float* p, float* at, float* n)
 
 extern "C" Vec3* __cdecl Vec3_MulMatrix(Vec3* out, const Vec3* p, const Matrix* m);
 extern "C" Vec3* __cdecl Triangle_RandomPoint(Vec3* out, const Vec3* a, const Vec3* b, const Vec3* c);
-extern "C" BYTE* __fastcall HitRec_Construct(BYTE* self, void*, const BYTE* hit);
+extern "C" BYTE* __fastcall HitRecord_InitFromQuery(BYTE* self, void*, const BYTE* hit);
 extern "C" Vec3* __cdecl Vec3_Add(Vec3* out, const Vec3* a, const Vec3* b);
-extern "C" int __cdecl Obj_Lookup4e5b22(int a, int b, int c, char* out);
+extern "C" int __cdecl World_ResolveSegmentDestination(int a, int b, int c, char* out);
 extern "C" double __cdecl Vec3_Length(const Vec3* v);
 extern "C" void Hv_MulAssign(); KING_ALIAS("_Hv_MulAssign", "@Vec3_MulAssign@16")
 extern "C" void Hv_RotZ(); KING_ALIAS("_Hv_RotZ", "_Matrix_RotationZ")
@@ -7469,11 +7649,11 @@ static void Hv_Pick(BYTE* s, BYTE* ctx, bool kinds)
     Vec3* p1 = Vec3_Add(&a1, &B, &R);
     Vec3* p2 = Vec3_Add(&a2, &B, &L);
     H = *Triangle_RandomPoint(&rp, &B, p2, p1);
-    char miss = 0;
+    bool miss;
     BYTE* w = F(BYTE*, ctx, 488);
     if (w)
         w = F(BYTE*, w, 76);
-    BYTE* o = (BYTE*)Obj_Lookup4e5b22((int)w, (int)&B, (int)&H, &miss);
+    BYTE* o = (BYTE*)Effect_ResolveSegmentDestination((int)w, (int)&B, (int)&H, miss);
     if (miss)
         return;
     BYTE q[208];
@@ -7493,7 +7673,7 @@ static void Hv_Pick(BYTE* s, BYTE* ctx, bool kinds)
     unsigned slot = F(unsigned, s, 4) % 50;
     BYTE* rec = s + slot * 92;
     BYTE hr[128];
-    memcpy(rec + 8, HitRec_Construct(hr, 0, q), 92);
+    memcpy(rec + 8, HitRecord_InitFromQuery(hr, 0, q), 92);
     BYTE* next = s + (slot + 1) * 92;
     if (!F(BYTE*, next, 0))
         F(BYTE*, next, 0) = o;
@@ -7553,26 +7733,25 @@ void __fastcall HitSpot_PickKind(BYTE* s, void*, BYTE* ctx) { Hv_Pick(s, ctx, tr
 
 } // extern "C"
 
-// === choosing the next gear (FUN_4d57c0)
+// === choosing a lateral slot on the road (FUN_4d57c0)
 
-extern "C" void Gs_Mask(); KING_ALIAS("_Gs_Mask", "_Car_GearBlockMask")
+extern "C" void Gs_Mask(); KING_ALIAS("_Gs_Mask", "_Traffic_BlockedLateralSlots")
 KING_VAR(double, g_gs64b6d0, 64b6d0)
 KING_VAR(double, g_gs64b6e0, 64b6e0)
 KING_VAR(double, g_gs64b678, 64b678)
 
 // whether gear slot n (two bits at n, wrapping like a shift does) is free in mask m
-static bool Gs_Free(unsigned m, int n)
+static bool LateralSlotIsFree(unsigned m, int n)
 {
     return !(m & (3u << (n & 31)));
 }
 
 extern "C" {
 
-// [FUN_4d57c0] the gear to take after gear g at speed v (window +a, gear step k): the mask of blocked gears
-// from FUN_4d4a90 goes to *mask; when shifting is on (*flags bit 2) a free lower gear first, then a higher one
-// whose speed v reaches, then with the pedal off (pedal below 0, no shift flags 12) lower ones and higher ones
-// within the window; none: *flags bit 8; the gear to *out; the cost from FUN_4d4a90 (1000 by default)
-double __cdecl Gear_Choose(int a0, int g, double v, double win, double k, int shift, double pedal, int a52, int a56,
+// [FUN_4d57c0] Choose a lateral target within the available road width. The current offset g
+// corresponds to mask bit g + 4. If it is occupied, look for another permitted offset.
+// Flag 8 signals that the driver must wait. *d receives the suggested following speed.
+double __cdecl Traffic_SelectLateralSlot(int a0, int g, double v, double win, double k, int shift, double pedal, int a52, int a56,
     int a60, int a64, double* d, unsigned* flags, unsigned* mask, int* out, int a84)
 {
     *flags &= ~8u;
@@ -7582,7 +7761,7 @@ double __cdecl Gear_Choose(int a0, int g, double v, double win, double k, int sh
         ((DWORD*)&k)[1], d, &res, a84);
     *mask = m;
     unsigned f = *flags;
-    if (!(f & 2) && !Gs_Free(m, g + 4))
+    if (!(f & 2) && !LateralSlotIsFree(m, g + 4))
         *flags = f | 2;
     f = *flags;
     if (!(f & 2)) {
@@ -7590,7 +7769,7 @@ double __cdecl Gear_Choose(int a0, int g, double v, double win, double k, int sh
         return res;
     }
     m = *mask;
-    if (Gs_Free(m, g + 4)) {
+    if (LateralSlotIsFree(m, g + 4)) {
         *flags = f & ~2u;
         *out = g;
         return res;
@@ -7600,32 +7779,32 @@ double __cdecl Gear_Choose(int a0, int g, double v, double win, double k, int sh
         return res;
     }
     for (int i = 1; i <= 4; i++)
-        if (g > i - 1 && Gs_Free(m, g + 4 - i)) {
+        if (g > i - 1 && LateralSlotIsFree(m, g + 4 - i)) {
             *out = g - i;
             return res;
         }
     double step[4];
     for (int i = 0; i < 4; i++)
         step[i] = (g + 3 + i) * k * g_gs64b6e0;
-    if (!(step[0] > v) && Gs_Free(m, g + 5)) {
+    if (!(step[0] > v) && LateralSlotIsFree(m, g + 5)) {
         *out = g + 1;
         return res;
     }
     for (int i = 1; i < 4; i++)
-        if (step[i] < v && Gs_Free(m, g + 5 + i)) {
+        if (step[i] < v && LateralSlotIsFree(m, g + 5 + i)) {
             *out = g + 1 + i;
             return res;
         }
     if (!(shift & 12)) {
         for (int i = 1; i <= 4; i++)
-            if (Gs_Free(m, g + 4 - i) && pedal < g_gs64b678) {
+            if (LateralSlotIsFree(m, g + 4 - i) && pedal < g_gs64b678) {
                 *out = g - i;
                 return res;
             }
     }
     double lim = v + win;
     for (int i = 0; i < 4; i++)
-        if (step[i] < lim && Gs_Free(m, g + 5 + i) && pedal < g_gs64b678) {
+        if (step[i] < lim && LateralSlotIsFree(m, g + 5 + i) && pedal < g_gs64b678) {
             *out = g + 1 + i;
             return res;
         }
@@ -7639,9 +7818,9 @@ double __cdecl Gear_Choose(int a0, int g, double v, double win, double k, int sh
 
 extern "C" void Lp_TerrainHeight(); KING_ALIAS("_Lp_TerrainHeight", "@Terrain_HeightAt@16")
 extern "C" void __cdecl Tri_Subdivide(BYTE* v, int* nv, WORD* x, int* nx, BYTE* a, BYTE* b, BYTE* c, int level);
-extern "C" void Lp_PlaneHeight(); KING_ALIAS("_Lp_PlaneHeight", "_Plane_HeightX")
-extern "C" void Lp_TrisHeight(); KING_ALIAS("_Lp_TrisHeight", "_Tris_Height")
-extern "C" void Lp_RecordsHeight(); KING_ALIAS("_Lp_RecordsHeight", "_Records_Height")
+extern "C" void Lp_PlaneHeight(); KING_ALIAS("_Lp_PlaneHeight", "_Plane_HeightAtUnitY")
+extern "C" void Lp_TrisHeight(); KING_ALIAS("_Lp_TrisHeight", "_Triangles_FindFirstHeight")
+extern "C" void Lp_RecordsHeight(); KING_ALIAS("_Lp_RecordsHeight", "_Plane_HeightFromNearestRecord")
 extern "C" void Lp_Inverse(); KING_ALIAS("_Lp_Inverse", "_Matrix_Inverse")
 KING_VAR(BYTE, g_lp694b08, 694b08)    // 40 records of 52 bytes: the object, its inverse frame
 KING_VAR(BYTE*, g_lp694a64, 694a64)   // per triangle: its frame
@@ -7818,7 +7997,7 @@ int __cdecl Fx_Beam(const Vec3* p, float len, float w, const Vec3* dir, int fram
     Vec3_Normalized(&u, &flat);
     Vec3_Normalized(&t, &view2);
     v988 = Bm_Set((double)t.y * u.z - (double)u.y * t.z, (double)u.x * t.z - (double)t.x * u.z, (double)u.y * t.x - (double)u.x * t.y);
-    float bright = (float)((double)dot * F(float, g_truck, 536));
+    float bright = (float)((double)dot * F(float, g_effectWeather, 536));
     Vec3 back = Bm_Set((double)p->x - cam.x, (double)p->y - cam.y, (double)p->z - cam.z);
     float L = (float)(Vec3_Length(&back) * g_bm64c258);
     if (L > g_bm64c200)
@@ -7842,8 +8021,8 @@ int __cdecl Fx_Beam(const Vec3* p, float len, float w, const Vec3* dir, int fram
     }
     else
         memcpy(n880, node, 208);
-    char stop = 0;
-    int o2 = Obj_Lookup4e5b22(obj, (int)&p2, (int)&q, &stop);
+    bool stop;
+    int o2 = Effect_ResolveSegmentDestination(obj, (int)&p2, (int)&q, stop);
     if (stop)
         return 0;
     {
@@ -7922,8 +8101,8 @@ extern "C" double __cdecl Tsc_Now();
 
 extern "C" void Sh_Matrix1(); KING_ALIAS("_Sh_Matrix1", "@SceneObj_Matrix1@12")
 extern "C" Matrix* __fastcall SceneObj_Matrix2(BYTE* self, void*, Matrix* out);
-extern "C" Vec3* __cdecl Fx_BoxCenter(Vec3* out, BYTE* obj);
-extern "C" int __cdecl Fx_Find(int a, int b, int c);
+extern "C" Vec3* __cdecl VehicleShadow_BoxCenter(Vec3* out, BYTE* obj);
+extern "C" int __cdecl Shadow_FindProjectionObject(int a, int b, int c);
 extern "C" double __cdecl Sphere_Visibility(const float* p);
 extern "C" Vec3* __cdecl Vec3_Negated(Vec3* out, const Vec3* v);
 extern "C" int __cdecl Get70ebf8();
@@ -8021,7 +8200,7 @@ void __cdecl Fx_CarShadows(BYTE* car, BYTE* sh1, BYTE* sh2, int mode)
     Node_Init(node, 0);
     Vec3 off = Sh_Set((double)g_axisY.x * g_sh64c32c, (double)g_axisY.y * g_sh64c32c, (double)g_axisY.z * g_sh64c32c);
     Vec3 bc;
-    const Vec3* c = (const Vec3*)Fx_BoxCenter(&bc, car);
+    const Vec3* c = (const Vec3*)VehicleShadow_BoxCenter(&bc, car);
     Vec3 base = Sh_Set((double)off.x + c->x, (double)off.y + c->y, (double)off.z + c->z);
     Vec3 up = Sh_Up();
     double p[3];
@@ -8034,7 +8213,7 @@ void __cdecl Fx_CarShadows(BYTE* car, BYTE* sh1, BYTE* sh2, int mode)
     at.y = (float)((double)z0.z * M[7] + (double)z0.y * M[4] + (double)z0.x * M[1] + M[10]);
     at.z = (float)((double)z0.z * M[8] + (double)z0.y * M[5] + (double)z0.x * M[2] + M[11]);
     at.x = (float)((double)z0.z * M[6] + (double)z0.y * M[3] + (double)z0.x * M[0] + M[9]);
-    obj = (BYTE*)Fx_Find((int)obj, (int)&at, (int)&top);
+    obj = (BYTE*)Shadow_FindProjectionObject((int)obj, (int)&at, (int)&top);
     Vec3 hit = {0, 0, 0}, nrm = {0, 0, 0};
     BYTE* shs[2] = {sh1, sh2};
     for (unsigned i = 0; i < n; i++)
@@ -8075,7 +8254,7 @@ void __cdecl Fx_CarShadows(BYTE* car, BYTE* sh1, BYTE* sh2, int mode)
         BYTE t2[48];
         Vec3_MulMatrix(&r, &base, CallThis<const Matrix*>(Sh_Matrix1, car + 16, t2));
         Vec3 farp = Sh_Set((double)u3.x + r.x, (double)u3.y + r.y, (double)u3.z + r.z);
-        BYTE* next = (BYTE*)Fx_Find((int)obj, (int)&hit, (int)&farp);
+        BYTE* next = (BYTE*)Shadow_FindProjectionObject((int)obj, (int)&hit, (int)&farp);
         float sphere[4] = {hit.x, hit.y, hit.z, radius};
         float vis = (float)Sphere_Visibility(sphere);
         if (!(vis > g_bm64c264))
@@ -8526,7 +8705,7 @@ void __fastcall Fx_ExplosionStep(BYTE* s, void*)
 
 extern "C" void Rq_Find(); KING_ALIAS("_Rq_Find", "_Table124_Find")
 extern "C" Vec3* __cdecl Vec3_Times(Vec3* out, const Vec3* v, float s);
-extern "C" Vec3* __cdecl Vec3_Negate(Vec3* out, const Vec3* v);
+extern "C" Vec3* __cdecl Reflection_NegateVector(Vec3* out, const Vec3* v);
 extern "C" BYTE* __fastcall Fx_Set2Vec(BYTE* s, void*, const Vec3* a, const Vec3* b, int c, int d);
 extern "C" void __fastcall Fx_AddReflection(BYTE* s, void*, const void* src, int a);
 KING_VAR(BYTE*, g_rq6961fc, 6961fc)               // the reflections
@@ -8619,7 +8798,7 @@ int __cdecl Fx_ReflectionQuad(int, BYTE* v, BYTE* obj)
         const float* o = (const float*)(d + 40 + k * 20);
         Vec3 n, corner;
         if (k)
-            Vec3_Negate(&n, &fwd);
+            Reflection_NegateVector(&n, &fwd);
         else
             n = neg;
         Rq_Corner(&corner, &pos, &right, &fwd, &up, o[0], o[1], o[2]);
@@ -8942,7 +9121,7 @@ void __fastcall Fx_FireStep(BYTE* s, void*)
         double k;
         if (t > g_fr64c258)
             k = t;
-        else if (t <= g_fr64c334)
+        else if (t > g_fr64c334)
             k = g_fr64c258;
         else
             k = (double)t + g_fr64c334;
@@ -9930,8 +10109,11 @@ double __cdecl Ai_TargetSpeed(BYTE* player, int f12, double speed, double v24, d
     {
         int* id;
         BYTE* car = (BYTE*)*Ts_CarId(&id);
+        // Signed route progress gap. For a participating vehicle the target
+        // and fallback speeds share this multiplier before road constraints.
         double x = (F(double, car, 504) - F(double, player, 504)) * g_ts64b770;
-        x = x * x87_fabs(x);
+        // Keep the signed square on the x87 stack through the multiplication.
+        x = x < 0.0 ? -(x * x) : x * x;
         if (x < g_ts64b6b8)
             x = g_ts64b6b8 * g_ts64b6e0;
         else if (x > g_ts64b6e0)
@@ -10008,6 +10190,9 @@ extern "C" double __cdecl Ai_TargetSpeed(BYTE* player, int f12, double speed, do
 extern "C" float __fastcall Wheels_MinGrip(BYTE* self, void*);
 extern "C" void Tb_Gear(); KING_ALIAS("_Tb_Gear", "@Car_BestGearNow@8")
 extern "C" double __fastcall Car_SlipRatio(BYTE* s, void*);
+// Stock AI entry points tail-call the vehicle methods with this in ECX.
+extern "C" void FUN_4d2970(); KING_ALIAS("_FUN_4d2970", "@Car_SlipRatio@8")
+extern "C" void FUN_4d2980(); KING_ALIAS("_FUN_4d2980", "@Wheels_MinGrip@8")
 KING_VAR(double, g_tb64b5b8, 64b5b8)
 KING_VAR(double, g_tb64b840, 64b840)
 KING_VAR(double, g_tb64b670, 64b670)
@@ -10122,11 +10307,11 @@ void __cdecl Car_StoreState(BYTE* c)
 // === an AI car's frame on its road (FUN_4cf620)
 
 extern "C" void As_Zero(); KING_ALIAS("_As_Zero", "_Effect_Zero")
-extern "C" void As_HasItems(); KING_ALIAS("_As_HasItems", "_Fx_HasItems")
+extern "C" void As_HasItems(); KING_ALIAS("_As_HasItems", "_Player_HasRouteHops")
 extern "C" void As_M1(); KING_ALIAS("_As_M1", "@SceneObj_Matrix1@12")
-extern "C" int __cdecl Effect_TooFar4cee70(BYTE* car);
+extern "C" int __cdecl Traffic_ShouldLeavePhysics(BYTE* car);
 extern "C" void __cdecl Fx_ParkVehicle(BYTE* car, int id, DWORD* flags);
-extern "C" int __cdecl Fx_NearTruck(BYTE* obj);
+extern "C" int __cdecl Traffic_ShouldEnterPhysics(BYTE* obj);
 extern "C" void __cdecl As_Room(LrPos pos, LrRoom* out); KING_ALIAS("_As_Room", "_Road_GetRoadParameters")
 extern "C" int __fastcall Fx_LevelForHeight(BYTE* s, void*, double x);
 extern "C" BYTE* __cdecl As_Orient(BYTE* out, int player, LrPos pos); KING_ALIAS("_As_Orient", "_Ai_GetOrientationSmoothedF")
@@ -10184,10 +10369,10 @@ int __cdecl Ai_CarFrame(BYTE* c, int* flags)
     Vec3_AddAssign((Vec3*)&M.m[9], 0, &tmp, &off);
     if (*flags & 1)
     {
-        if (Effect_TooFar4cee70(c))
+        if (Traffic_ShouldLeavePhysics(c))
             Fx_ParkVehicle(c, F(int, c, 20636), (DWORD*)flags);
     }
-    else if (Fx_NearTruck(c))
+    else if (Traffic_ShouldEnterPhysics(c))
         Car_Launch(c, F(int, c, 20636), flags, 1);
     BYTE* cab = F(BYTE*, c, 21600);
     F(int, cab, 16504) = (*flags & 0x80) ? 0 : 1;
@@ -10606,7 +10791,7 @@ void __fastcall Ai_DriverStep(BYTE* s, void*)
 
 // === the target speed of a car by its id (FUN_4d5c50)
 
-extern "C" double __cdecl Gear_Choose(int a0, int g, double v, double win, double k, int shift, double pedal, int a52, int a56, int a60, int a64, double* d, unsigned* flags, unsigned* mask, int* out, int a84);
+extern "C" double __cdecl Traffic_SelectLateralSlot(int a0, int g, double v, double win, double k, int shift, double pedal, int a52, int a56, int a60, int a64, double* d, unsigned* flags, unsigned* mask, int* out, int a84);
 KING_VAR(BYTE*, g_sg696ca0, 696ca0)
 KING_VAR(int, g_sg68b990, 68b990)
 KING_VAR(double, g_sg64ca48, 64ca48)
@@ -10648,7 +10833,7 @@ double __cdecl Ai_CarTargetSpeed(int id)
     int lvl2 = Fx_LevelForHeight(cab, 0, hw) << 1;
     double k = F(double, cab, 16552);
     float latf = (float)lat;
-    Gear_Choose((int)car, lvl2, hw, v24, k, fl, pedal, ((int*)&len)[0], ((int*)&len)[1], F(int, cab, 16500), F(int, cab, 16504), &best, (unsigned*)&gflags, (unsigned*)&mask, &lvl2, *(int*)&latf);
+    Traffic_SelectLateralSlot((int)car, lvl2, hw, v24, k, fl, pedal, ((int*)&len)[0], ((int*)&len)[1], F(int, cab, 16500), F(int, cab, 16504), &best, (unsigned*)&gflags, (unsigned*)&mask, &lvl2, *(int*)&latf);
     if (!(Ts_Flags(player) & 0x4000))
     {
         if (best > g_ad64b678 && best < g_sg64d0c0 && F(int, cab, 16504))
@@ -10665,9 +10850,9 @@ double __cdecl Ai_CarTargetSpeed(int id)
 // === a burst of debris and puffs (FUN_4bba00)
 
 extern "C" BYTE* __fastcall Debris2_Construct(BYTE* s, void*, int a0, const Vec3* from, const Vec3* to, int a3, int a4, int n);
-extern "C" BYTE* __fastcall Effect59e9a0_Construct(BYTE* self, void*, int a, int b, int c, int d, int e, int f, int g);
-extern "C" int __cdecl Fx_VehicleIsAaTr();
-extern "C" int __cdecl Fx_VehicleIsDbAc();
+extern "C" BYTE* __fastcall SmokePuff_Construct(BYTE* self, void*, int a, int b, int c, int d, int e, int f, int g);
+extern "C" int __cdecl PlayerVehicle_HasAaOrTrPrefix();
+extern "C" int __cdecl PlayerVehicle_HasDbOrAcPrefix();
 KING_VAR(Vec3, g_fbUp, 702630)
 KING_VAR(Vec3, g_fbDown, 702640)
 KING_VAR(float, g_fb64c348, 64c348)
@@ -10708,7 +10893,7 @@ static BYTE* Fb_NewPuff(const Vec3* pos, const Vec3& e, float w, int table, int 
     pv.y = (float)((double)base.y + e.y);
     pv.z = (float)((double)base.z + e.z);
     float wk = (float)(w * (double)g_fb64c34c);
-    return Effect59e9a0_Construct(q, 0, g_fb696224, (int)pos, (int)&pv, *(int*)&wk, (int)(&(&g_fb6949f8)[table]), 1, last);
+    return SmokePuff_Construct(q, 0, g_fb696224, (int)pos, (int)&pv, *(int*)&wk, (int)(&(&g_fb6949f8)[table]), 1, last);
 }
 
 extern "C" {
@@ -10756,8 +10941,8 @@ void __cdecl Fx_Burst(const Vec3* pos, const Vec3* dir, const Vec3* vel, float s
         {
             if (!a36)
                 continue;
-            if (g_fb69607c > g_fb64c258 && !(int)MarineTask_GetMaterial(g_fb6f33b0, 0) && !Fx_VehicleIsAaTr() &&
-                !Fx_VehicleIsDbAc())
+            if (g_fb69607c > g_fb64c258 && !(int)MarineTask_GetMaterial(g_fb6f33b0, 0) && !PlayerVehicle_HasAaOrTrPrefix() &&
+                !PlayerVehicle_HasDbOrAcPrefix())
             {
                 BYTE* p = Pool_Prepare(204, g_fb6f6aa4);
                 if (p)
@@ -10790,8 +10975,8 @@ void __cdecl Fx_Burst(const Vec3* pos, const Vec3* dir, const Vec3* vel, float s
 
 // === sparks along a scrape (FUN_4cb8d0)
 
-extern "C" int __fastcall Table124_Get104(BYTE* self, void*, int a, int b);
-extern "C" void __fastcall Table124_Add(BYTE* self, void*, int a, int b, const Vec3Bits* v, int d, int e);
+extern "C" int __fastcall LightCones_GetClipCount(BYTE* self, void*, int a, int b);
+extern "C" void __fastcall LightCones_ActivateOrAppend(BYTE* self, void*, int a, int b, const Vec3Bits* v, int d, int e);
 extern "C" void Sc_Spark(); KING_ALIAS("_Sc_Spark", "@Spark_Construct@40")
 KING_VAR(BYTE*, g_sc6f6a78, 6f6a78)
 KING_VAR(BYTE*, g_sc6f6ab8, 6f6ab8)
@@ -10824,8 +11009,8 @@ int __cdecl Car_ScrapeSparks(BYTE* c, const Vec3* pos, const Vec3* dir, int key,
 {
     if (c == F(BYTE*, g_sc6d2078, 616) && !F(int, g_sc6d2078, 1400))
         return 0;
-    unsigned prev = (unsigned)Table124_Get104(g_sc6f6a78, 0, (int)c, key);
-    Table124_Add(g_sc6f6a78, 0, (int)c, (int)pos, (const Vec3Bits*)dir, key, kind);
+    unsigned prev = (unsigned)LightCones_GetClipCount(g_sc6f6a78, 0, (int)c, key);
+    LightCones_ActivateOrAppend(g_sc6f6a78, 0, (int)c, (int)pos, (const Vec3Bits*)dir, key, kind);
     double A = x87_sin(x87_sin(pos->y * (double)g_sc64c328) + pos->x * (double)g_sc64c970);
     double B = x87_sin(x87_sin(pos->x * (double)g_sc64c328) + pos->y * (double)g_sc64c970);
     if (!(A > g_sc64c264))
@@ -10898,13 +11083,13 @@ int __cdecl Car_ScrapeSparks(BYTE* c, const Vec3* pos, const Vec3* dir, int key,
 extern "C" int __fastcall Car_54f000(BYTE* self, void*, int* a, int* b);
 extern "C" int __cdecl Eff_KindFlag(int kind);
 extern "C" int __cdecl Fx_VehicleNear(float x, float y, float z);
-extern "C" void** __cdecl List68cf6c_First(void** out);
-extern "C" void** __cdecl List68cf6c_Next(void** out, void** it);
+extern "C" void** __cdecl Presents_First(void** out);
+extern "C" void** __cdecl Presents_Next(void** out, void** it);
 extern "C" BYTE* __fastcall Fx_InitState(BYTE* s, void*);
 extern "C" void __cdecl Ai_SetPlayerMatrix(int player, const float* m);
 extern "C" void __cdecl Ai_SetPlayerMatrixInRoom(int room, int player, const float* m);
 extern "C" void Ph_M1(); KING_ALIAS("_Ph_M1", "@SceneObj_Matrix1@12")
-extern "C" void* __cdecl AI_Make449c40(void* out, void* x);
+extern "C" void* __cdecl Room_FindIdByName(void* out, void* x);
 extern "C" void Ph_ZeroThis(); KING_ALIAS("_Ph_ZeroThis", "@Vec3_ZeroThis@8")
 KING_VAR(BYTE*, g_ph6d2078, 6d2078)
 KING_VAR(int, g_ph6f33c0, 6f33c0)
@@ -10993,14 +11178,14 @@ void __cdecl Car_HitsAndFrame(BYTE* c, DWORD* flags)
                 if (id == 231)
                 {
                     void* it;
-                    List68cf6c_First(&it);
+                    Presents_First(&it);
                     while (it != g_ph68cf6c)
                     {
-                        int f = Rec_Field8((BYTE*)it);
+                        int f = Ai_GetPresentFlags((BYTE*)it);
                         if ((f & 64) && !(f & 32) && *F(int*, it, 8) == F(int, other, 344))
                             break;
                         void* nx;
-                        it = *List68cf6c_Next(&nx, (void**)it);
+                        it = *Presents_Next(&nx, (void**)it);
                     }
                     if (it == g_ph68cf6c)
                         goto calm;
@@ -11090,7 +11275,7 @@ route:
     const float* p = &CallThis<const Matrix*>(Ph_M1, c + 16, &m2)->m[9];
     BYTE* q = (BYTE*)Query_HitObject(obj, (const Vec3Bits*)p, (const Vec3Bits*)&W.m[9]);
     int room;
-    AI_Make449c40(&room, (void*)(F(int, q, 12)));
+    Room_FindIdByName(&room, (void*)(F(int, q, 12)));
     if (room == -1)
     {
         if (F(BYTE*, g_ph6d2078, 616) == c)
@@ -11445,8 +11630,8 @@ void __fastcall Ring50_DropPoint(BYTE* s, void*, BYTE* scene)
     BYTE* room = F(BYTE*, scene, 488);
     if (room)
         room = F(BYTE*, room, 76);
-    char blocked = 0;
-    Obj_Lookup4e5b22((int)room, (int)&A, (int)&P, &blocked);
+    bool blocked;
+    Effect_ResolveSegmentDestination((int)room, (int)&A, (int)&P, blocked);
     if (blocked)
         return;
     double ux = g_spUp.x * (double)g_sp64c664;
@@ -11778,7 +11963,7 @@ BYTE* __fastcall Snow_Construct(BYTE* s, void*, BYTE* w, BYTE* m)
 // === a parked car's destructor, saving its record first (FUN_4d0bc0)
 
 extern "C" void Pd_M1(); KING_ALIAS("_Pd_M1", "@SceneObj_Matrix1@12")
-extern "C" double __fastcall Car_555500(BYTE* self, void*);
+extern "C" double __fastcall Car_GetWeightedStateMagnitude(BYTE* self, void*);
 extern "C" void __fastcall Truck55ebf0_Destroy(BYTE* s);
 KING_VAR(AsmLabel, g_pd64cbfc, 64cbfc)
 KING_VAR(AsmLabel, g_pd64cb10, 64cb10)
@@ -11816,7 +12001,7 @@ void __fastcall ParkedCar_Destroy(BYTE* s, void*)
             const float* wt = CallThis<const float*>(Pd_M1, it, &W2) + 9;
             BYTE* o = (BYTE*)SceneObj_Get800(it, 0);
             const char* name = F(const char*, (BYTE*)Query_HitObject(o, (const Vec3Bits*)wt, (const Vec3Bits*)&F_.m[9]), 12);
-            float f = (float)Car_555500(s, 0);
+            float f = (float)Car_GetWeightedStateMagnitude(s, 0);
             int pl = F(int, s, 20636);
             int b = Fx_Get9544(s, 0);
             int r = Fx_Get20396(s, 0);
@@ -11825,7 +12010,7 @@ void __fastcall ParkedCar_Destroy(BYTE* s, void*)
         }
         else if ((BYTE*)Resources_Get((BYTE**)(g_pd696ca0 + 704), 0, F(int, s, 360)))
         {
-            float f = (float)Car_555500(s, 0);
+            float f = (float)Car_GetWeightedStateMagnitude(s, 0);
             int pl = F(int, s, 20636);
             Matrix W;
             const Matrix* w = CallThis<const Matrix*>(Pd_M1, it, &W);
@@ -11845,7 +12030,7 @@ void __fastcall ParkedCar_Destroy(BYTE* s, void*)
 
 } // extern "C"
 
-// === the gears blocked by the cars ahead (FUN_4d4a90)
+// === the lateral slots blocked by vehicles ahead (FUN_4d4a90)
 
 struct GmPos { DWORD d[8]; };
 extern "C" GmPos* __cdecl Gm_PosId(GmPos* out, int player); KING_ALIAS("_Gm_PosId", "_Ai_GetPositionId")
@@ -11857,7 +12042,7 @@ extern "C" GmPos* __cdecl Gm_OnTraj2(GmPos* out, int player, const float* v, GmP
 KING_ALIAS("_Gm_OnTraj2", "_Ai_FindPositionOnATrajectory2")
 extern "C" GmPos* __cdecl Gm_Advance(GmPos* out, int player, GmPos pos, double* off, int send);
 KING_ALIAS("_Gm_Advance", "_Ai_AdvancePlayerPosition")
-extern "C" bool __cdecl Gm_HasItems(int player); KING_ALIAS("_Gm_HasItems", "_Fx_HasItems")
+extern "C" bool __cdecl Gm_HasItems(int player); KING_ALIAS("_Gm_HasItems", "_Player_HasRouteHops")
 extern "C" Vec3* __cdecl Vec3_Normalized(Vec3* out, const Vec3* v);
 extern "C" void Gm_Self(); KING_ALIAS("_Gm_Self", "@Obj541960_Self@8")
 KING_VAR(BYTE, g_gmSpecs, 697db8)
@@ -11909,11 +12094,11 @@ static void Gm_Place(const BYTE* o, float* p, bool own)
 
 extern "C" {
 
-// [FUN_4d4a90] AI car c's gears (bit per gear 0 .. 8) that would run it into a car ahead in its lane: for each
+// [FUN_4d4a90] AI car c's lateral positions (bits 0 .. 8) that would run it into a car ahead in its lane: for each
 // other car near along the road (angle limit 64b840, within 64b728) its place on c's route (from the trajectory,
 // or found between 30 back and ahead on c's road), the lateral offset and the closing speed against a margin of
 // both widths; the nearest blocking one sets *d (its speed) and *res (its distance); the mask
-unsigned __cdecl Car_GearBlockMask(BYTE* c, double a52, int rev, int fol, double v, double k, double* d,
+unsigned __cdecl Traffic_BlockedLateralSlots(BYTE* c, double a52, int rev, int fol, double v, double k, double* d,
                                    double* res, float a84)
 {
     int me = F(int, c, 20636);
@@ -12596,11 +12781,11 @@ extern "C" void Ev32_MatrixAt(); KING_ALIAS("_Ev32_MatrixAt", "_Fx_VehicleMatrix
 extern "C" Matrix* __cdecl Fx_VehicleMatrix(Matrix* out, BYTE* car);
 extern "C" int __cdecl Ai_SetPlayerImage(BYTE* player, int image);
 extern "C" BYTE* __fastcall Fx_ObjectInit(BYTE* s, void*, int a, int b, const char* name, const Matrix* m, int c, const void* data, int d, int e, int f);
-extern "C" int __cdecl Player_PlaceField20(BYTE* id);
+extern "C" int __cdecl Ai_GetPlayerImage(BYTE* id);
 extern "C" int __cdecl Surface_Copy16(BYTE* dst, BYTE* src, DWORD flags);
 extern "C" void Ev32_Orient(); KING_ALIAS("_Ev32_Orient", "_Ai_GetOrientationF")
 extern "C" void Ev32_RoadParams(); KING_ALIAS("_Ev32_RoadParams", "_Road_GetRoadParameters")
-extern "C" int __cdecl Player_PlaceAtNode(BYTE* player, int node, int b);
+extern "C" int __cdecl Player_PlaceAtNodeAndReplan(BYTE* player, int node, int b);
 extern "C" int __cdecl Route_Call487230(int a, int b);
 extern "C" int __cdecl Movie_Play(const char* name, int mode);
 extern "C" void __cdecl Notice_Show(int level, const char* text, int a, int b);
@@ -12759,7 +12944,7 @@ int __cdecl Media_AiEvent(BYTE* it, int kind, BYTE* data)
             shown:
                 memcpy(world + 652, mat, 48);
                 ev_last67b734 = id;
-                int k = Player_PlaceField20(it);
+                int k = Ai_GetPlayerImage(it);
                 BYTE* sh = ev_6cecbc;
                 Surface_Copy16(F(BYTE*, F(BYTE*, sh, 672), 72), F(BYTE*, F(BYTE*, sh, k * 4 + 368), 72), 6);
             }
@@ -12804,7 +12989,7 @@ int __cdecl Media_AiEvent(BYTE* it, int kind, BYTE* data)
     if (kind == 9 || kind == 10) {
         if (ev_route696330) {
             if (kind == 9)
-                Player_PlaceAtNode(it, ev_node696274, ev_node696320);
+                Player_PlaceAtNodeAndReplan(it, ev_node696274, ev_node696320);
             else
                 Route_Call487230((int)it, ev_node696274);
             int a = ev_node696274, b = ev_node696320, c = ev_node6962c8;
@@ -12816,7 +13001,7 @@ int __cdecl Media_AiEvent(BYTE* it, int kind, BYTE* data)
         if (!ev_route69632c || type == 1)
             return -1;
         if (kind == 9)
-            Player_PlaceAtNode(it, ev_node696274, ev_node6962c8);
+            Player_PlaceAtNodeAndReplan(it, ev_node696274, ev_node6962c8);
         else
             Route_Call487230((int)it, ev_node696274);
         int a = ev_node696274;

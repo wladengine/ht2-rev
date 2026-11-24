@@ -40,8 +40,10 @@ int CWinApp::Run()
                 bIdle = FALSE;
         }
         do {
-            if (!v_PumpMessage())       // WM_QUIT
-                return v_ExitInstance();
+            if (!v_PumpMessage()) {     // WM_QUIT
+                int result = v_ExitInstance();
+                return result;
+            }
             if (v_IsIdleMessage(&m_msgCur)) {
                 bIdle = TRUE;
                 lIdleCount = 0;

@@ -26,14 +26,16 @@ BOOL Input_GetEvent(InputEvent* ev)                 // [FUN_5aca90]
 BOOL Input_PutEvent(const InputEvent* ev)           // [FUN_5acb60]
 {
     int next = (g_inputWrite + 1) % INPUT_QUEUE_SIZE;
-    if (next == g_inputRead)
+    if (next == g_inputRead) {
         return TRUE;
+    }
     g_inputQueue[g_inputWrite] = *ev;
     g_inputWrite = next;
     return FALSE;
 }
 
-void Input_SetCursorPos(int x, int y)               // [FUN_5acaf0]
+// [FUN_5acaf0] Translate client coordinates to screen coordinates before moving the cursor.
+void Input_SetCursorPos(int x, int y)
 {
     if (!g_hWnd)
         return;

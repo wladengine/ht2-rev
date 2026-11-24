@@ -88,7 +88,8 @@ extern "C" int __fastcall SceneObj_Get800(BYTE* self, void*)
     return F(int, self, 1440) ? F(int, self, 2032) : F(int, self, 800);
 }
 
-extern "C" Matrix* __fastcall SceneObj_Matrix324(BYTE* self, void*, Matrix* out)
+// [FUN_57df10]
+extern "C" Matrix* __fastcall SceneObj_GetAttachedNodeLocalMatrix(BYTE* self, void*, Matrix* out)
 {
     Matrix m;
     for (int i = 0; i < 4; i++)
@@ -99,8 +100,10 @@ extern "C" Matrix* __fastcall SceneObj_Matrix324(BYTE* self, void*, Matrix* out)
     return out;
 }
 
+// [FUN_57df70]
 extern "C" Matrix* __fastcall SceneObj_Matrix548(BYTE* self, void*, Matrix* out) { *out = F(Matrix, self, 548); return out; }
-extern "C" Matrix* __fastcall SceneObj_Matrix644(BYTE* self, void*, Matrix* out) { *out = F(Matrix, self, 644); return out; }
+// [FUN_57df90]
+extern "C" Matrix* __fastcall SceneObj_CopyPreviousInverseTransform(BYTE* self, void*, Matrix* out) { *out = F(Matrix, self, 644); return out; }
 
 extern "C" int __fastcall SceneObj_57e030(BYTE* self, void*, int* out)
 {
@@ -113,7 +116,8 @@ extern "C" int __fastcall SceneObj_57e030(BYTE* self, void*, int* out)
 }
 
 // the velocity at +464 in the frame of the matrix at +644, divided by +404
-extern "C" Vec3* __fastcall SceneObj_LocalVelocity(BYTE* self, void*, Vec3* out)
+// [FUN_581810]
+extern "C" Vec3* __fastcall SceneObj_GetPreviousLocalAngularVelocity(BYTE* self, void*, Vec3* out)
 {
     float v[3];
     v[0] = (float)(((double)F(float, self, 656) * F(float, self, 468) + (double)F(float, self, 668) * F(float, self, 472))
@@ -126,14 +130,16 @@ extern "C" Vec3* __fastcall SceneObj_LocalVelocity(BYTE* self, void*, Vec3* out)
     return out;
 }
 
-extern "C" void __fastcall SceneObj_SetFlags(BYTE* self, void*, unsigned flags)
+// [FUN_5818b0]
+extern "C" void __fastcall SceneObj_SetFlagsAndTimestamp(BYTE* self, void*, unsigned flags)
 {
     F(unsigned, self, 892) |= flags;
     F(float, self, 904) = (float)Game_Time();
 }
 
 // the offset of a from b and the angles of a's rotation relative to m
-extern "C" void __cdecl SceneObj_Relative(const BYTE* a, const BYTE* b, const Matrix* m, float* offset, float* angles)
+// [FUN_5818d0]
+extern "C" void __cdecl SceneObj_GetRelativeMotionDelta(const BYTE* a, const BYTE* b, const Matrix* m, float* offset, float* angles)
 {
     float d[3];
     d[0] = (float)((double)F(float, a, 36) - F(float, b, 36));
@@ -298,7 +304,7 @@ extern "C" int __fastcall SceneObj_DispatchTarget(BYTE* self, void*, const BYTE*
     return CallVirt<int>(self, 192, target, F(DWORD, packet, 12));
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*);
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*);
 
 // ---------------------------------------------------------------------------
 extern "C" void __cdecl Frame_Apply(BYTE* node, int mode, const void* m);
@@ -1685,7 +1691,7 @@ int __cdecl Item_PointContacts(BYTE* s, const float* m, BYTE* w)
                                        (const DWORD*)(w + F(int, w, 2816) * 12 - 12), (BYTE*)faces + 4);
             }
             else if (h)
-                SceneObj_SetFlags(s, 0, 4);
+                SceneObj_SetFlagsAndTimestamp(s, 0, 4);
             total += h;
         }
     }
@@ -1696,7 +1702,7 @@ int __cdecl Item_PointContacts(BYTE* s, const float* m, BYTE* w)
 
 // === an item's flight leg ending (a method at $L_584060)
 
-extern "C" int __cdecl Obj_Lookup4e5b22(int a, int b, int c, char* out);
+extern "C" int __cdecl World_ResolveSegmentDestination(int a, int b, int c, char* out);
 KING_VAR(float, g_il64f7b0, 64f7b0)
 KING_VAR(float, g_il64c32c, 64c32c)
 KING_VAR(float, g_il64c258, 64c258)
@@ -1712,7 +1718,7 @@ void __fastcall Item_EndLeg(BYTE* s, void*, int* done)
     const BYTE* src;
     if (F(int, s, 1432) <= F(int, s, 1684) + F(int, s, 1680))
     {
-        BYTE* o = (BYTE*)Obj_Lookup4e5b22((int)(F(BYTE*, s, 804)), (int)(s + 584), (int)(s + 1732), (char*)(s + 1132));
+        BYTE* o = (BYTE*)World_ResolveSegmentDestination((int)(F(BYTE*, s, 804)), (int)(s + 584), (int)(s + 1732), (char*)(s + 1132));
         F(BYTE*, s, 800) = o;
         if (!o)
         {
@@ -2493,7 +2499,7 @@ outputs:
 
 extern "C" void __cdecl Mx_Check(const void* v, const char* name, float lim); KING_ALIAS("_Mx_Check", "_World_CheckPoint")
 extern "C" double __cdecl Mx_Time(); KING_ALIAS("_Mx_Time", "_Game_Time")
-extern "C" void __cdecl Mx_Relative(const BYTE* a, const BYTE* b, const BYTE* m, float* offset, float* angles); KING_ALIAS("_Mx_Relative", "_SceneObj_Relative")
+extern "C" void __cdecl Mx_Relative(const BYTE* a, const BYTE* b, const BYTE* m, float* offset, float* angles); KING_ALIAS("_Mx_Relative", "_SceneObj_GetRelativeMotionDelta")
 extern "C" int __cdecl Mx_5820c0(const BYTE* o, const BYTE* m, float* a, void* b); KING_ALIAS("_Mx_5820c0", "_SceneObj_5820c0")
 extern "C" void __cdecl Mx_HoldOnRail(BYTE* o, const void* r, void* out); KING_ALIAS("_Mx_HoldOnRail", "_Obj_HoldOnRail")
 extern "C" void __cdecl Mx_Surface(BYTE* b, BYTE* c, const void* m); KING_ALIAS("_Mx_Surface", "_Body_SurfaceResponse")
@@ -2969,7 +2975,9 @@ extern "C" {
 // item's vtable +200 with the frame time and its contact time (+3144)
 void __cdecl MovingItem_BodyContact(BYTE* s, BYTE* c, DWORD fl, float k)
 {
-    BYTE fr[276];
+    // Original 581990: final matrix occupies frame offsets [244, 292).
+    BYTE fr[292];
+    static_assert(sizeof(fr) >= 244 + sizeof(Matrix), "Body contact matrix must fit the frame");
     BYTE* b = Mx_MovingOf(F(BYTE*, c, 116));
     if (!b || (F(int, b, 392) != 2 && F(int, b, 392) != 1))
     {
@@ -2995,6 +3003,7 @@ void __cdecl MovingItem_BodyContact(BYTE* s, BYTE* c, DWORD fl, float k)
         Matrix* a = Matrix_Multiply((Matrix*)(fr + 148), r, (const Matrix*)m1);
         memcpy(b + 3172, Matrix_Multiply((Matrix*)(fr + 244), a, t), 48);
     }
+    // Both poses now match the coordinate frames consumed by the solver.
     Mi3_Impulse(s, c, b);
     if (F(int, b, 392) == 2)
         Mi3_ActivateAll(b, 0);

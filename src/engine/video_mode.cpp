@@ -19,8 +19,8 @@ KING_VAR(BYTE*, g_logPalette, 720918)
 KING_VAR(HDC, g_paletteDc, 72091c)
 KING_VAR(HPALETTE, g_palette, 720924)
 KING_VAR(HPALETTE, g_oldPalette, 720718)
-KING_VAR(int, g_67fcf0, 67fcf0)
-KING_VAR(int, g_67fcf4, 67fcf4)
+KING_VAR(int, g_horizontalScale, 67fcf0)
+KING_VAR(int, g_verticalScale, 67fcf4)
 
 template <class... A>
 static __forceinline int Com(BYTE* com, unsigned off, A... args)
@@ -78,16 +78,19 @@ void __cdecl Video_CreatePalette(HDC dc)
     RealizePalette(dc);
 }
 
-// [FUN_5d3ec0] palette entries first..count-1 from 8-byte RGB records
+// [FUN_5d3ec0] palette entries first..count-1 from four-byte BGR records.
+// Preserve the original doubled initial offset for nonzero first; the loop
+// itself advances by four bytes (the menu AVI uses first == 0).
 void __cdecl Video_SetPalette(const BYTE* rgb, DWORD first, DWORD count)
 {
     if (g_ddMode != 2)
         return;
     BYTE entries[1200];
     for (DWORD i = first; i < count; i++) {
-        entries[i * 4] = rgb[i * 8 + 2];
-        entries[i * 4 + 1] = rgb[i * 8 + 1];
-        entries[i * 4 + 2] = rgb[i * 8];
+        const BYTE* entry = rgb + first * 8 + (i - first) * 4;
+        entries[i * 4] = entry[2];
+        entries[i * 4 + 1] = entry[1];
+        entries[i * 4 + 2] = entry[0];
         entries[i * 4 + 3] = 4;
     }
     if (g_waitVsync) {
@@ -99,15 +102,15 @@ void __cdecl Video_SetPalette(const BYTE* rgb, DWORD first, DWORD count)
 }
 
 // [FUN_5d3f70]
-int __cdecl Video_Get67fcf0()
+int __cdecl Video_GetHorizontalScale()
 {
-    return g_67fcf0;
+    return g_horizontalScale;
 }
 
 // [FUN_5d3f80]
-int __cdecl Video_Get67fcf4()
+int __cdecl Video_GetVerticalScale()
 {
-    return g_67fcf4;
+    return g_verticalScale;
 }
 
 // [FUN_5d3f90]
@@ -115,9 +118,9 @@ int __cdecl Video_SetMode(int w, int h, int bits, int unused, int a, int b)
 {
     g_width = w;
     g_height = h;
-    g_67fcf0 = a;
+    g_horizontalScale = a;
     g_bitDepth = bits;
-    g_67fcf4 = b;
+    g_verticalScale = b;
     return 0;
 }
 
@@ -298,9 +301,9 @@ extern "C" int __cdecl Gdi_DrawFrame(void* bits)
     for (WORD i = 0; i < 256; i++)
         F(WORD, b, 40 + i * 2) = i;
     UINT usage = g_bitDepth == 1;
-    if (g_67fcf0 == 1 && g_67fcf4 == 1)
+    if (g_horizontalScale == 1 && g_verticalScale == 1)
         return SetDIBitsToDevice(g_paletteDc, 0, 0, g_width, g_height, 0, 0, 0, g_height, bits, (BITMAPINFO*)b, usage);
-    return StretchDIBits(g_paletteDc, 0, 0, g_67fcf0 * g_width, g_67fcf4 * g_height, 0, 0, g_width, g_height, bits, (BITMAPINFO*)b, usage, 13369376);
+    return StretchDIBits(g_paletteDc, 0, 0, g_horizontalScale * g_width, g_verticalScale * g_height, 0, 0, g_width, g_height, bits, (BITMAPINFO*)b, usage, 13369376);
 }
 
 

@@ -99,7 +99,7 @@ static int Distance(const DequeIt& a, const DequeIt& b)
 
 #include <stdlib.h>
 extern "C" void* __cdecl Pool32_New(int size);  // evaluator.cpp
-extern "C" void* __cdecl Pool44_New(int size);  // evaluator.cpp
+extern "C" void* __cdecl SchPool_Allocate44(int size);  // evaluator.cpp
 extern "C" void __cdecl SchValue_Release(SchValue* v);  // evaluator.cpp
 extern "C" int __cdecl Sch_Error(int code, int level, const char* a, const char* b);  // evaluator.cpp
 extern "C" int __cdecl Sch_Message1(BYTE* p, int code, int a);  // evaluator.cpp
@@ -240,8 +240,8 @@ static void Elem44_Assign(BYTE* d, const BYTE* s, bool release)
     SchValue_Assign((SchValue*)(d + 32), 0, (const SchValue*)(s + 32));
 }
 
-// a value set from the second of two arguments; other counts are an error
-extern "C" int __cdecl Sch_SecondArg(BYTE* p, SchValue* out, BYTE** args, int where)
+// [FUN_491c00] Extract the sole operand from [operator, operand], assigning a Scheme value.
+extern "C" int __cdecl Sch_GetUnaryArgument(BYTE* p, SchValue* out, BYTE** args, int where)
 {
     BYTE* a = args[0];
     if ((args[1] - a) / 12 != 2) {
@@ -328,10 +328,10 @@ extern "C" BYTE* __fastcall SchBuf4b6160_Construct(BYTE* self, void*);
 extern "C" BYTE* __fastcall SchItem4b6670_Construct(BYTE* self, void*, BYTE* owner);
 extern "C" BYTE* __fastcall SchScope_Construct(BYTE* self, void*, BYTE* outer);
 extern "C" void FUN_4a2d10(); KING_ALIAS("_FUN_4a2d10", "@SchScope_Construct@12")    // SchEnvironment: construct from SchValue*
-extern "C" void* __cdecl Ai_OperatorNew(unsigned n);
-extern "C" void FUN_4581a0(); KING_ALIAS("_FUN_4581a0", "_Ai_OperatorNew")    // allocation failure handler
+extern "C" void* __cdecl Stl_RetryMallocAfterFailure(unsigned n);
+extern "C" void FUN_4581a0(); KING_ALIAS("_FUN_4581a0", "_Stl_RetryMallocAfterFailure")    // allocation failure handler
 extern "C" BYTE* __fastcall Node4b1120_Construct(BYTE* self, void*, BYTE* p, const BYTE* a, const BYTE* b);
-extern "C" BYTE* __fastcall SchItem4b1090_Construct(BYTE* self, void*, BYTE* owner);
+extern "C" BYTE* __fastcall SchPair_ConstructEmpty(BYTE* self, void*, BYTE* owner);
 extern "C" BYTE* __fastcall SchNumber_FromInt(BYTE* self, void*, int exact, int v);
 extern "C" BYTE* __fastcall SchNumber_FromUnsigned(BYTE* self, void*, int exact, unsigned v);
 
@@ -385,20 +385,20 @@ KING_ALIAS("_SchValue_MakeIdent", "FUN_4a2230")
 // make a Pair value (3 args to constructor)                             [FUN_4a2140]
 extern "C" SchValue* __cdecl SchValue_MakePair(SchValue* out, int unused, void* a, void* b, void* c)
 {
-    BYTE* obj = (BYTE*)Pool44_New(44);
+    BYTE* obj = (BYTE*)SchPool_Allocate44(44);
     BYTE* p = obj ? Node4b1120_Construct(obj, 0, (BYTE*)a, (const BYTE*)b, (const BYTE*)c) : 0;
     return SchValue_WrapNew(out, p, 2, "Pair");
 }
 KING_ALIAS("_SchValue_MakePair", "FUN_4a2140")
 
-// make a Pair value (1 arg to constructor)                              [FUN_4a28c0]
-extern "C" SchValue* __cdecl SchValue_MakePairB(SchValue* out, int, void* a)
+// [FUN_4a28c0] Creates an empty Scheme pair and links it into the owner's list.
+extern "C" SchValue* __cdecl SchValue_MakeEmptyPair(SchValue* out, int, void* a)
 {
-    BYTE* obj = (BYTE*)Pool44_New(44);
-    BYTE* p = obj ? SchItem4b1090_Construct(obj, 0, (BYTE*)a) : 0;
+    BYTE* obj = (BYTE*)SchPool_Allocate44(44);
+    BYTE* p = obj ? SchPair_ConstructEmpty(obj, 0, (BYTE*)a) : 0;
     return SchValue_WrapNew(out, p, 2, "Pair");
 }
-KING_ALIAS("_SchValue_MakePairB", "FUN_4a28c0")
+KING_ALIAS("_SchValue_MakeEmptyPair", "FUN_4a28c0")
 
 // make a Number from an exactness flag and a signed integer            [FUN_4a2310]
 extern "C" SchValue* __cdecl SchValue_MakeNumber(SchValue* out, int, const int* a, const int* b)
@@ -472,18 +472,7 @@ KING_ALIAS("@SchValue_AsChar@12", "FUN_4a19c0")
 // ---------------------------------------------------------------------------
 // small helpers
 
-// allocate deque map pages                                              [FUN_4a29e0]
-// The original's shared epilogue at $L_4a2a62 ends with ret 8.
-extern "C" void __stdcall Deque_AllocPages(int** first, int** last)
-{
-    while (first != last) {
-        void* p = malloc(512);
-        if (!p) { Ai_OperatorNew(512); }
-        *first = (int*)p;
-        first++;
-    }
-}
-KING_ALIAS("_Deque_AllocPages@8", "FUN_4a29e0")
+extern "C" void __stdcall IntDeque_AllocatePages(int** first, int** last);
 
 // sch_istr.cpp's Environment and Port value factories. Both return exactly
 // the three words of a Scheme value; the second argument is a compiler slot.
@@ -523,7 +512,7 @@ void __fastcall IntDeque_Construct(int* self, void*, unsigned n)
     self[0] = (int)map;
     int** start = map + ((self[1] - nodes) >> 1);
     int** finish = start + nodes;
-    Deque_AllocPages(start, finish);
+    IntDeque_AllocatePages(start, finish);
     self[5] = (int)start;
     self[3] = (int)*start;
     self[4] = (int)*start + 512;
@@ -633,7 +622,7 @@ BYTE* __fastcall SchScope_Construct(BYTE* self, void*, BYTE* outer)
 
 extern "C" void FUN_4a54e0(); KING_ALIAS("_FUN_4a54e0", "_Sch_Error")    // reports a script error
 extern "C" void __fastcall Deque_ReallocMap(int* d, void*, unsigned add, char front);
-extern "C" void FUN_4581a0(); KING_ALIAS("_FUN_4581a0", "_Ai_OperatorNew")    // malloc retrying through the new handler
+extern "C" void FUN_4581a0(); KING_ALIAS("_FUN_4581a0", "_Stl_RetryMallocAfterFailure")    // malloc retrying through the new handler
 KING_VAR(char, s_type6708e4, 6708e4)
 
 // [FUN_4a1da0] a handle copied from a value of type 10, an error for another type
@@ -667,7 +656,7 @@ extern "C" void __fastcall DequeDw_PushBackAux(BYTE* self, int, const DWORD* x)
         Deque_ReallocMap((int*)self, 0, 1, 0);
     void* p = malloc(512);
     if (!p)
-        p = Ai_OperatorNew(512);
+        p = Stl_RetryMallocAfterFailure(512);
     F(void**, self, 36)[1] = p;
     DWORD* cur = F(DWORD*, self, 24);
     if (cur)
@@ -683,7 +672,7 @@ extern "C" void __fastcall DequeDw_PushBackAux(BYTE* self, int, const DWORD* x)
 // Small virtual methods and static initializers.
 
 extern "C" void FUN_4a3fd0(); KING_ALIAS("_FUN_4a3fd0", "@SchScope_Destroy@8")
-KING_VAR(AsmLabel, g_nat67060c, 67060c)
+KING_VAR(AsmLabel, s_environmentTypeName, 67060c)
 
 static BYTE* Nat_DeleteAfter(BYTE* self, int flags, void (*dtor)())
 {
@@ -695,16 +684,16 @@ static BYTE* Nat_DeleteAfter(BYTE* self, int flags, void (*dtor)())
 // [$L_4a2eb0]
 extern "C" int __fastcall Nat_4a2eb0(BYTE* s) { return 12; }
 // [$L_4a2ec0]
-extern "C" int __fastcall Nat_4a2ec0(BYTE* s) { return (int)g_nat67060c; }
+extern "C" const char* __fastcall SchEnvironment_GetTypeName(BYTE*) { return s_environmentTypeName; }
 // [$L_4a2ed0]
 extern "C" BYTE* __fastcall Nat4a2ed0_DeletingDestructor(BYTE* s, void*, int flags) { return Nat_DeleteAfter(s, flags, FUN_4a3fd0); }
 
 extern "C" void FUN_50d190(); KING_ALIAS("_FUN_50d190", "@Shell_Nop@8")
-extern "C" DWORD* __fastcall Sch_Copy16(DWORD* self, void*, const DWORD* from);
+extern "C" DWORD* __fastcall DequeIterator_Copy(DWORD* self, void*, const DWORD* from);
 static DequeIt Nat201_Copy(const DequeIt& s)
 {
     DequeIt r;
-    Sch_Copy16((DWORD*)&r, 0, (const DWORD*)&s);
+    DequeIterator_Copy((DWORD*)&r, 0, (const DWORD*)&s);
     return r;
 }
 // [FUN_4a2ce0] copies of the iterators a and b handed to an empty call
@@ -730,7 +719,7 @@ extern "C" void __cdecl DequeIt_Pass0(DequeIt a, DequeIt b)
 // The number natives: number? complex? real? rational? integer? exact?
 // inexact?, the comparison chains = < > <= >= and +.
 
-extern "C" int __cdecl Sch_SecondArg(BYTE* p, SchValue* out, BYTE** args, int where);
+extern "C" int __cdecl Sch_GetUnaryArgument(BYTE* p, SchValue* out, BYTE** args, int where);
 extern "C" DWORD* __cdecl SchValue_Make10007(DWORD* out, int unused, DWORD v);
 extern "C" void FUN_492250(); KING_ALIAS("_FUN_492250", "_SchValue_Make10007")      // an immediate value (out, 0, v)
 extern "C" void FUN_40c100(); KING_ALIAS("_FUN_40c100", "@Str_Assign@12")          // value assignment
@@ -741,8 +730,8 @@ extern "C" BYTE* __fastcall SchEmbd_Copy(BYTE* self, void*, const BYTE* o);
 extern "C" void __fastcall SchNumber_Add(BYTE* self, void*, const BYTE* o);
 extern "C" int __cdecl Sch_Message2(BYTE* p, int code, int a, int b);
 extern "C" void FUN_4b0eb0(); KING_ALIAS("_FUN_4b0eb0", "@SchNumber_IsReal@8")
-extern "C" void FUN_4b0ed0(); KING_ALIAS("_FUN_4b0ed0", "@SchNumber_IsInexact@8")
-extern "C" void FUN_4b0ee0(); KING_ALIAS("_FUN_4b0ee0", "@SchNumber_IsExact@8")
+extern "C" void FUN_4b0ed0(); KING_ALIAS("_FUN_4b0ed0", "@SchNumber_IsExact@8")
+extern "C" void FUN_4b0ee0(); KING_ALIAS("_FUN_4b0ee0", "@SchNumber_IsInexact@8")
 extern "C" void FUN_4cef50(); KING_ALIAS("_FUN_4cef50", "_Effect_Zero")             // returns 0
 extern "C" void FUN_4b0fd0(); KING_ALIAS("_FUN_4b0fd0", "_SchNumber_Ne")
 extern "C" void FUN_4b0ff0(); KING_ALIAS("_FUN_4b0ff0", "_SchNumber_Lt")
@@ -779,7 +768,7 @@ static int Nat_Count(BYTE** args)
 static SchValue* Nat_IsNumber(SchValue* out, BYTE* p, BYTE** args, const char* where)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where)) {
         out->obj = 0;
         out->m_4 = 0;
         out->flags = 0;
@@ -793,7 +782,7 @@ static SchValue* Nat_IsNumber(SchValue* out, BYTE* p, BYTE** args, const char* w
 static SchValue* Nat_NumberTest(SchValue* out, BYTE* p, BYTE** args, const char* where, void (*test)())
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where)) {
         out->obj = 0;
         out->m_4 = 0;
         out->flags = 0;
@@ -879,7 +868,7 @@ SchValue* __cdecl Nat_RealP(SchValue* out, BYTE* p, BYTE** args) { return Nat_Nu
 SchValue* __cdecl Nat_RationalP(SchValue* out, BYTE* p, BYTE** args) { return Nat_NumberTest(out, p, args, s_nRationalP, FUN_4b0eb0); }
 // $L_493970: integer? (always false for numbers)
 SchValue* __cdecl Nat_IntegerP(SchValue* out, BYTE* p, BYTE** args) { return Nat_NumberTest(out, p, args, s_nIntegerP, FUN_4cef50); }
-// $L_493ba0: exact? (calls the test the names call IsInexact)
+// $L_493ba0: exact?
 SchValue* __cdecl Nat_ExactP(SchValue* out, BYTE* p, BYTE** args) { return Nat_NumberTest(out, p, args, s_nExactP, FUN_4b0ed0); }
 // $L_493dd0: inexact?
 SchValue* __cdecl Nat_InexactP(SchValue* out, BYTE* p, BYTE** args) { return Nat_NumberTest(out, p, args, s_nInexactP, FUN_4b0ee0); }
@@ -985,8 +974,8 @@ extern "C" void FUN_4090a0(); KING_ALIAS("_FUN_4090a0", "_Str_Member32")        
 extern "C" int __cdecl Sch_Message1(BYTE* p, int code, int a);
 extern "C" SchValue* __fastcall SchValue_AsChar(SchValue* self, void*, const SchValue* src);
 extern "C" void FUN_4a19c0(); KING_ALIAS("_FUN_4a19c0", "@SchValue_AsChar@12")
-extern "C" DWORD* __cdecl SchValue_Make10008(DWORD* out, int unused, DWORD v);
-extern "C" void FUN_49c210(); KING_ALIAS("_FUN_49c210", "_SchValue_Make10008")
+extern "C" DWORD* __cdecl SchValue_MakeCharacter(DWORD* out, int unused, DWORD v);
+extern "C" void FUN_49c210(); KING_ALIAS("_FUN_49c210", "_SchValue_MakeCharacter")
 extern "C" int __fastcall Value_ToInt(BYTE* self, void*);
 KING_VAR(AsmLabel, s_nTimes, 6706b4)
 KING_VAR(AsmLabel, s_nDivide, 670570)
@@ -1077,7 +1066,7 @@ static void Nat_Check(const SchValue* h)
 static SchValue* Nat_IsKind(SchValue* out, BYTE* p, BYTE** args, const char* where, int kind)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where))
         Nat_Zero3(out);
     else
         Nat_Bool(out, (BYTE)v.flags == kind);
@@ -1156,7 +1145,7 @@ static SchValue* Nat_Arith(SchValue* out, BYTE* p, BYTE** args, const char* wher
 static SchValue* Nat_Number1(SchValue* out, BYTE* p, BYTE** args, const char* where)
 {
     SchValue v = {0, 0, 0, 0}, h;
-    if (Sch_SecondArg(p, &v, args, (int)where)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where)) {
         Nat_Zero3(&h);
         Nat_Zero3(out);
         Nat_Release(&h);
@@ -1261,7 +1250,7 @@ static SchValue* Nat_Convert(SchValue* out, BYTE* p, BYTE** args, const char* wh
                              void (*make)())
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where))
         Nat_Zero3(out);
     else if ((BYTE)v.flags == type) {
         SchValue h = {0, 0, 0, 0}, t;
@@ -1357,7 +1346,7 @@ SchValue* __cdecl Nat_ToExact(SchValue* out, BYTE* p, BYTE** args) { return Nat_
 SchValue* __cdecl Nat_NumberToString(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0}, h;
-    if (Sch_SecondArg(p, &v, args, (int)s_nNumToStr)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)s_nNumToStr)) {
         Nat_Zero3(&h);
         Nat_Zero3(out);
         Nat_Release(&h);
@@ -1391,7 +1380,7 @@ SchValue* __cdecl Nat_NumberToString(SchValue* out, BYTE* p, BYTE** args)
 SchValue* __cdecl Nat_StringToNumber(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0}, h;
-    if (Sch_SecondArg(p, &v, args, (int)s_nStrToNum)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)s_nStrToNum)) {
         Nat_Zero3(&h);
         Nat_Zero3(out);
         Nat_Release(&h);
@@ -1482,7 +1471,7 @@ SchValue* __cdecl Nat_CharGe(SchValue* out, BYTE* p, BYTE** args) { return Nat_C
 SchValue* __cdecl Nat_CharToInteger(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)s_nCharToInt))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)s_nCharToInt))
         Nat_Zero3(out);
     else if ((BYTE)v.flags == 8) {
         SchValue c, t;
@@ -1501,13 +1490,13 @@ SchValue* __cdecl Nat_CharToInteger(SchValue* out, BYTE* p, BYTE** args)
 SchValue* __cdecl Nat_IntegerToChar(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)s_nIntToChar))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)s_nIntToChar))
         Nat_Zero3(out);
     else if ((BYTE)v.flags == 6) {
         SchValue h = {0, 0, 0, 0};
         Nat_Typed(&h, &v, 6, s_nNumber);
         Nat_Check(&h);
-        SchValue_Make10008((DWORD*)out, 0, Value_ToInt(h.obj, 0));
+        SchValue_MakeCharacter((DWORD*)out, 0, Value_ToInt(h.obj, 0));
         if (!(h.flags & SCH_IMMEDIATE) && h.obj && --F(int, h.obj, 4) == 0)
             CallVirt(h.obj, 12, 1);
     } else
@@ -1543,7 +1532,7 @@ extern "C" void __fastcall CharVec_InsertRange44c220(BYTE** self, void*, BYTE* p
 extern "C" void __fastcall SchValues_InsertRange(BYTE** v, void*, BYTE* pos, BYTE* first, BYTE* last);
 extern "C" void FUN_4a1a40(); KING_ALIAS("_FUN_4a1a40", "@SchValues_InsertRange@20")    // vector<value>::insert(pos, first, last)
 extern "C" void FUN_4b4c20(); KING_ALIAS("_FUN_4b4c20", "_Port_ReadDatum")    // read (out, p, port by value)
-extern "C" void FUN_4b8070(); KING_ALIAS("_FUN_4b8070", "_Sch4b8070")    // write (out, p, value by value, port by value)
+extern "C" void FUN_4b8070(); KING_ALIAS("_FUN_4b8070", "_Sch_WriteDatum")
 KING_VAR(AsmLabel, s_nStrLen, 670898)
 KING_VAR(AsmLabel, s_nStrRef, 6708a8)
 KING_VAR(AsmLabel, s_nStrSet, 6708b4)
@@ -1583,7 +1572,7 @@ static SchValue* Nat_Length(SchValue* out, BYTE* p, BYTE** args, const char* whe
                             int (*len)(BYTE*))
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where))
         Nat_Zero3(out);
     else if ((BYTE)v.flags == type) {
         SchValue h = {0, 0, 0, 0}, t;
@@ -1604,7 +1593,7 @@ static SchValue* Nat_Length(SchValue* out, BYTE* p, BYTE** args, const char* whe
 static SchValue* Nat_IsProcedure(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nProcP)))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nProcP)))
         Nat_Zero3(out);
     else
         Nat_Bool(out, (BYTE)v.flags == 4 || (BYTE)v.flags == 5);
@@ -1616,7 +1605,7 @@ static SchValue* Nat_IsProcedure(SchValue* out, BYTE* p, BYTE** args)
 static SchValue* Nat_PortIs(SchValue* out, BYTE* p, BYTE** args, const char* where, int mask)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where)) {
         Nat_Zero3(out);
         SchValue_Release(&v);
         return out;
@@ -1638,7 +1627,7 @@ static SchValue* Nat_PortIs(SchValue* out, BYTE* p, BYTE** args, const char* whe
 static SchValue* Nat_OpenFile(SchValue* out, BYTE* p, BYTE** args, const char* where, int mode)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where)) {
         Nat_Zero3(out);
         SchValue_Release(&v);
         return out;
@@ -1689,7 +1678,7 @@ static SchValue* Nat_OpenFile(SchValue* out, BYTE* p, BYTE** args, const char* w
 static SchValue* Nat_ClosePort(SchValue* out, BYTE* p, BYTE** args, const char* where)
 {
     SchValue v = {0, 0, 0, 0};
-    if (!Sch_SecondArg(p, &v, args, (int)where) && (BYTE)v.flags == 11) {
+    if (!Sch_GetUnaryArgument(p, &v, args, (int)where) && (BYTE)v.flags == 11) {
         SchValue h = {0, 0, 0, 0};
         Nat_Typed(&h, &v, 11, s_nPort);
         Nat_Check(&h);
@@ -1712,7 +1701,7 @@ static SchValue* Nat_PortGet(SchValue* out, BYTE* p, BYTE** args, const char* wh
         return out;
     }
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)where)) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)where)) {
         Nat_Zero3(out);
         SchValue_Release(&v);
         return out;
@@ -1774,7 +1763,7 @@ SchValue* __cdecl Nat_StringRef(SchValue* out, BYTE* p, BYTE** args)
             Nat_Zero3(out);
         } else {
             Nat_Check(&hs);
-            SchValue_Make10008((DWORD*)out, 0, (int)F(signed char*, hs.obj, 12)[i]);
+            SchValue_MakeCharacter((DWORD*)out, 0, (int)F(signed char*, hs.obj, 12)[i]);
             Nat_Release(&hn);
             Nat_Release(&hs);
         }
@@ -1863,7 +1852,7 @@ SchValue* __cdecl Nat_MakeVector(SchValue* out, BYTE* p, BYTE** args)
 SchValue* __cdecl Nat_ListToVector(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nListToVector))) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nListToVector))) {
         Nat_Zero3(out);
         SchValue_Release(&v);
         return out;
@@ -2012,7 +2001,7 @@ SchValue* __cdecl Nat_PeekChar(SchValue* out, BYTE* p, BYTE** args) { return Nat
 SchValue* __cdecl Nat_EofObjectP(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nEofP)))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nEofP)))
         Nat_Zero3(out);
     else if ((BYTE)v.flags == 8) {
         SchValue c;
@@ -2080,7 +2069,7 @@ SchValue* __cdecl Nat_Read(SchValue* out, BYTE* p, BYTE** args)
         return out;
     }
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nRead))) {
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nRead))) {
         Nat_Zero3(out);
         SchValue_Release(&v);
         return out;
@@ -2138,7 +2127,7 @@ SchValue* __cdecl Nat_Write(SchValue* out, BYTE* p, BYTE** args)
 SchValue* __cdecl Nat_MacroExpand(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nMacroExpand)))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nMacroExpand)))
         Nat_Zero3(out);
     else
         CopyRef(out, &v);
@@ -2210,8 +2199,8 @@ SchValue* __cdecl Nat_StringAppend(SchValue* out, BYTE* p, BYTE** args)
 // not, null?, list and caar .. cddr.
 
 extern "C" void FUN_409070(); KING_ALIAS("_FUN_409070", "_Str_Same")
-extern "C" SchValue* __cdecl SchValue_MakePairB(SchValue* out, int, void* a);
-extern "C" void FUN_4a28c0(); KING_ALIAS("_FUN_4a28c0", "_SchValue_MakePairB")
+extern "C" SchValue* __cdecl SchValue_MakeEmptyPair(SchValue* out, int, void* a);
+extern "C" void FUN_4a28c0(); KING_ALIAS("_FUN_4a28c0", "_SchValue_MakeEmptyPair")
 KING_VAR(AsmLabel, s_nNot, 670a04)
 KING_VAR(AsmLabel, s_nNullP, 670a08)
 KING_VAR(AsmLabel, s_nCaar, 670a10)
@@ -2267,7 +2256,7 @@ extern "C" {
 SchValue* __cdecl Nat_Not(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nNot)))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nNot)))
         Nat_Zero3(out);
     else
         Nat_Bool(out, (BYTE)v.flags == 7 ? v.obj == 0 : 0);
@@ -2279,7 +2268,7 @@ SchValue* __cdecl Nat_Not(SchValue* out, BYTE* p, BYTE** args)
 SchValue* __cdecl Nat_NullP(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nNullP)))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nNullP)))
         Nat_Zero3(out);
     else
         Nat_Bool(out, !v.obj && !v.flags && !v.m_4);
@@ -2293,7 +2282,7 @@ SchValue* __cdecl Nat_List(SchValue* out, BYTE* p, BYTE** args)
     SchValue acc = {0, 0, 0, 0};
     for (int i = Nat_Count(args) - 1; i; i--) {
         SchValue pr;
-        SchValue_MakePairB(&pr, 0, p);
+        SchValue_MakeEmptyPair(&pr, 0, p);
         BYTE* e = args[0] + i * 12;
         if (!pr.obj)
             Sch_ErrorCode(0, 1);
@@ -2953,7 +2942,7 @@ DWORD* __cdecl Sch_Reverse(DWORD* out, BYTE* ctx, DWORD v0, DWORD v1, DWORD v2)
             return out;
         }
         DWORD t[3], car[3], cdr[3];
-        SchValue_MakePairB((SchValue*)t, 0, ctx);
+        SchValue_MakeEmptyPair((SchValue*)t, 0, ctx);
         CallC(FUN_407f00, car, v);
         CallThis(FUN_40c100, SchValue_Object((const SchValue*)t, 0) + 20, car);
         SchHandle_Release((void**)car, 0);
@@ -2995,7 +2984,7 @@ extern "C" {
 void __fastcall Deque_Destroy(BYTE* d)
 {
     DequeIt a, b;
-    Sch_Copy16((DWORD*)&a, 0, (const DWORD*)(d + 8));
+    DequeIterator_Copy((DWORD*)&a, 0, (const DWORD*)(d + 8));
     memcpy(&b, d + 24, 16);
     DequeIt_Pass0(a, b);
     if (F(void*, d, 0)) {
@@ -3018,7 +3007,7 @@ extern "C" {
 SchValue* __cdecl Nat_Reverse(SchValue* out, BYTE* p, BYTE** args)
 {
     SchValue v = {0, 0, 0, 0};
-    if (Sch_SecondArg(p, &v, args, (int)((const char*)s_nReverse)))
+    if (Sch_GetUnaryArgument(p, &v, args, (int)((const char*)s_nReverse)))
         Nat_Zero3(out);
     else {
         SchValue c, r;

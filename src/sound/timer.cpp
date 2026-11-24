@@ -8,7 +8,9 @@
 
 typedef char AsmLabel[1];
 extern "C" int __cdecl strncmp(const char* a, const char* b, size_t n);
-extern "C" double __cdecl atof(const char* s);
+// Limit the historical decimal grammar and six-digit formatting to INI values.
+extern "C" __declspec(dllimport) double __cdecl IniDecimalRead(const char*);
+extern "C" __declspec(dllimport) int __cdecl IniDecimalPrint(char*, size_t, const char*, ...);
 
 extern "C" void Thread_Main(); KING_ALIAS("_Thread_Main", "_Cached_Get@4")
 
@@ -29,7 +31,7 @@ int __cdecl Ini_GetDouble(const char* section, const char* key, double def, doub
 {
     char buf[96];
     if (Ini_Get(section, key, file, buf))
-        *out = atof(buf);
+        *out = IniDecimalRead(buf);
     else
         *out = def;
     return 0;
@@ -40,7 +42,7 @@ int __cdecl Ini_GetFloat(const char* section, const char* key, double def, float
 {
     char buf[96];
     if (Ini_Get(section, key, file, buf))
-        *out = (float)atof(buf);
+        *out = (float)IniDecimalRead(buf);
     else
         *out = (float)def;
     return 0;
@@ -50,7 +52,7 @@ int __cdecl Ini_GetFloat(const char* section, const char* key, double def, float
 BOOL __cdecl Ini_PutDouble(const char* section, const char* key, double v, const char* file)
 {
     char buf[96];
-    sprintf(buf, s_g, v);
+    IniDecimalPrint(buf, sizeof(buf), s_g, v == 0.0 ? 0.0 : v);
     return WritePrivateProfileStringA(section, key, buf, file);
 }
 

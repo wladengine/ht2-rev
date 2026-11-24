@@ -6,6 +6,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <string.h>
 #include "vecmath.h"
+#include "terrain_view.h"
 
 #define F(type, p, off) (*(type*)((BYTE*)(p) + (off)))
 
@@ -73,6 +74,7 @@ KING_VAR(int, g_noCar, 68b990)                // the id of no vehicle
 KING_VAR(BYTE*, g_6cec70, 6cec70)
 KING_VAR(double, g_6f3410, 6f3410)
 KING_VAR(BYTE*, g_messages, 6f3438)            // the screen messages
+KING_VAR(double, noticeMillisecondsPerSecond, 64b730)
 KING_VAR(BYTE*, g_notice, 6f3430)             // the on-screen notice
 KING_VAR(BYTE*, g_6f3498, 6f3498)
 KING_VAR(int, g_6ce37c, 6ce37c)
@@ -98,16 +100,18 @@ KING_VAR(AsmLabel, g_vtbl64fe34, 64fe34)
 struct Vec3Bits { DWORD x, y, z; };     // a Vec3 copied or passed by value
 
 // ---------------------------------------------------------------------------
-// A stack of 16-bit values: the values from +2 (index 1) on, a flag per
-// entry from +2000 (1: the first of a pair), at +3000 the index of the top
+// Route node IDs start at offset 0. Flags at +2000 mark the first end of a
+// road pair. The signed index at +3000 is -1 for an empty stack.
 
-extern "C" BYTE* __fastcall Stack_Reset(BYTE* self, void*)
+// [FUN_560f10]
+extern "C" BYTE* __fastcall RouteStack_ConstructEmpty(BYTE* self, void*)
 {
     F(int, self, 3000) = -1;
     return self;
 }
 
-extern "C" void __fastcall Stack_Init(BYTE* self, void*, int a, int b)
+// [FUN_560f20]
+extern "C" void __fastcall RouteStack_SetInitialRoadEnds(BYTE* self, void*, int a, int b)
 {
     F(short, self, 0) = (short)a;
     F(short, self, 2) = (short)b;
@@ -117,6 +121,7 @@ extern "C" void __fastcall Stack_Init(BYTE* self, void*, int a, int b)
 }
 
 // the value i below the top
+// [FUN_560f50] Return the signed short at this depth, or zero beyond the top.
 extern "C" short __fastcall Stack_Peek(BYTE* self, void*, int i)
 {
     int top = F(int, self, 3000);
@@ -125,7 +130,8 @@ extern "C" short __fastcall Stack_Peek(BYTE* self, void*, int i)
     return F(short, self, (top - i) * 2);
 }
 
-extern "C" short __fastcall Stack_Below(BYTE* self, void*)
+// [FUN_560f70]
+extern "C" short __fastcall RouteStack_PreviousNode(BYTE* self, void*)
 {
     int top = F(int, self, 3000);
     if (top > 1)
@@ -134,7 +140,8 @@ extern "C" short __fastcall Stack_Below(BYTE* self, void*)
 }
 
 // drops the top (both values of a pair) unless it is the last; the new top
-extern "C" short __fastcall Stack_Pop(BYTE* self, void*)
+// [FUN_560f90]
+extern "C" short __fastcall RouteStack_PopRoad(BYTE* self, void*)
 {
     int top = F(int, self, 3000);
     if (top > 1 && !(self[1999 + top] && top == 2)) {
@@ -149,7 +156,8 @@ extern "C" short __fastcall Stack_Pop(BYTE* self, void*)
     return F(short, self, top * 2);
 }
 
-extern "C" int __fastcall Stack_Push(BYTE* self, void*, int v)
+// [FUN_561030]
+extern "C" int __fastcall RouteStack_PushNode(BYTE* self, void*, int v)
 {
     if (F(int, self, 3000) >= 1000)
         return 0;
@@ -160,7 +168,8 @@ extern "C" int __fastcall Stack_Push(BYTE* self, void*, int v)
     return F(int, self, 3000);
 }
 
-extern "C" int __fastcall Stack_PushPair(BYTE* self, void*, int a, int b)
+// [FUN_561070]
+extern "C" int __fastcall RouteStack_PushRoadEnds(BYTE* self, void*, int a, int b)
 {
     if (F(int, self, 3000) >= 999)
         return 0;
@@ -168,11 +177,12 @@ extern "C" int __fastcall Stack_PushPair(BYTE* self, void*, int a, int b)
     F(int, self, 3000) = top;
     F(short, self, top * 2) = (short)a;
     self[2000 + F(int, self, 3000)] = 1;
-    Stack_Push(self, 0, b);
+    RouteStack_PushNode(self, 0, b);
     return F(int, self, 3000);
 }
 
-extern "C" void __fastcall Stack_SwapTop(BYTE* self, void*)
+// [FUN_5610c0]
+extern "C" void __fastcall RouteStack_SwapTopNodes(BYTE* self, void*)
 {
     int top = F(int, self, 3000);
     short below = F(short, self, top * 2 - 2);
@@ -207,7 +217,8 @@ extern "C" void __fastcall Copter561390_Clear(BYTE* self, void*)
     F(int, self, 116) = 0;
 }
 
-extern "C" BYTE* __fastcall Copter561310_Construct(BYTE* self, void*)
+// [FUN_561310]
+extern "C" BYTE* __fastcall Copter_InitializeControlAxes(BYTE* self, void*)
 {
     F(int, self, 96) = 0;
     F(int, self, 100) = 0;
@@ -254,7 +265,8 @@ extern "C" void __fastcall Copter5615f0_Reset(BYTE* self, void*)
     F(float, self, 3212) = 0.99f;
 }
 
-extern "C" void __fastcall Copter561530_Init(BYTE* self, void*)
+// [FUN_561530]
+extern "C" void __fastcall Copter_ResetFlightState(BYTE* self, void*)
 {
     F(int, self, 3548) = 0;
     F(int, self, 96) = 0;
@@ -314,7 +326,8 @@ extern "C" BYTE* __fastcall Copter_566240(BYTE* self, void*)
 }
 
 // a vehicle's state at +20944; 0 for none and for the states 21..29
-extern "C" int __cdecl Car_State20944(const BYTE* car)
+// [FUN_566000]
+extern "C" int __cdecl Copter_GetTargetWarningCode(const BYTE* car)
 {
     if (!car)
         return 0;
@@ -324,6 +337,7 @@ extern "C" int __cdecl Car_State20944(const BYTE* car)
     return v;
 }
 
+// [FUN_566250]
 extern "C" void __fastcall Copter_Chase6(BYTE* self, void*, BYTE* target)
 {
     if (!target)
@@ -334,6 +348,7 @@ extern "C" void __fastcall Copter_Chase6(BYTE* self, void*, BYTE* target)
     F(float, self, 3280) = (float)Game_Time();
 }
 
+// [FUN_566290]
 extern "C" void __fastcall Copter_Chase10(BYTE* self, void*, BYTE* target)
 {
     if (!target)
@@ -343,7 +358,8 @@ extern "C" void __fastcall Copter_Chase10(BYTE* self, void*, BYTE* target)
     Copter_SetState(self, 0, 10);
 }
 
-extern "C" void __fastcall Copter_Chase7(BYTE* self, void*, BYTE* target)
+// [FUN_5662c0]
+extern "C" void __fastcall Copter_StartBlockingTarget(BYTE* self, void*, BYTE* target)
 {
     if (!target)
         return;
@@ -352,7 +368,8 @@ extern "C" void __fastcall Copter_Chase7(BYTE* self, void*, BYTE* target)
     Copter_SetState(self, 0, 7);
 }
 
-extern "C" void __fastcall Copter_566550(BYTE* self, void*)
+// [FUN_566550]
+extern "C" void __fastcall Copter_AcquireMarkedVehicle(BYTE* self, void*)
 {
     if (F(BYTE*, self, 3248))
         return;
@@ -418,7 +435,8 @@ extern "C" void __cdecl Screen_569150(int id)
     Copter_Send963(F(int, o, 344), 0);
 }
 
-extern "C" int __cdecl Screen_5692e0(int id)
+// [FUN_5692e0]
+extern "C" int __cdecl Screen_GetResourceState(int id)
 {
     BYTE* e = ScreenObject(id);
     if (!e)
@@ -451,9 +469,10 @@ extern "C" void __cdecl Screen_569410(int id, int v)
         F(int, F(BYTE*, e, 28), 408) = v;
 }
 
-extern "C" int __cdecl Messages_Get1292()
+// [FUN_569700]
+extern "C" BYTE* __cdecl Messages_GetIconFont()
 {
-    return F(int, g_messages, 1292);
+    return F(BYTE*, g_messages, 1292);
 }
 
 // returns the messages object, as the original leaves it in EAX
@@ -463,10 +482,10 @@ extern "C" BYTE* __cdecl Messages_Clear1276()
     return g_messages;
 }
 
-extern "C" int __cdecl Messages_Add569720(const char* text)
+// [FUN_569720]
+extern "C" void __cdecl Messages_QueueScreenText(const char* text)
 {
     Messages_AddText(g_messages, 0, text);
-    return 0;
 }
 
 extern "C" int __cdecl Messages_Get1288()
@@ -484,7 +503,8 @@ extern "C" void __cdecl Messages_Add(const char* text)
 // The on-screen notice: +32 the time it was set (ms), +48 its text, +60 its
 // level
 
-extern "C" int __cdecl Notice_Level()
+// [FUN_56ae80]
+extern "C" int __cdecl Notice_GetPriority()
 {
     if (g_notice)
         return F(int, g_notice, 60);
@@ -492,6 +512,7 @@ extern "C" int __cdecl Notice_Level()
 }
 
 // sets the text unless one of a higher level is shown; 1 when set
+// [FUN_56afe0] Replace the on-screen notice if its priority permits.
 extern "C" int __fastcall Notice_Set(BYTE* self, void*, int level, const char* text)
 {
     int cur = F(int, self, 60);
@@ -502,10 +523,11 @@ extern "C" int __fastcall Notice_Set(BYTE* self, void*, int level, const char* t
             operator delete(F(void*, g_notice, 48));
         size_t n = strlen(text) + 1;
         F(char*, g_notice, 48) = (char*)operator new(n);
-        memcpy(F(char*, g_notice, 48), text, n);
+        // Steam measures the source again after the allocation.
+        strcpy(F(char*, g_notice, 48), text);
     }
     F(int, self, 60) = level;
-    F(double, self, 32) = g_pMainView->m_2968 * 1000.0;
+    F(double, self, 32) = g_pMainView->m_2968 * noticeMillisecondsPerSecond;
     return 1;
 }
 
@@ -519,9 +541,11 @@ extern "C" void __cdecl Notice_Show(int level, const char* text, int a, int b)
     }
 }
 
-extern "C" void __cdecl Notice_Banner(int eventId, double value, const char* text)
+// [FUN_56aed0]
+extern "C" void __cdecl Notice_ShowEventBanner(int eventId, double value, const char* text)
 {
-    Notice_Show(10, text, eventId, (int)value);
+    // VC6 first truncates to a signed 64-bit integer and forwards the low 32 bits.
+    Notice_Show(10, text, eventId, static_cast<int>(static_cast<__int64>(value)));
 }
 
 extern "C" void __fastcall Notice_Destruct(BYTE* self, void*)
@@ -535,7 +559,8 @@ extern "C" void __fastcall Notice_Destruct(BYTE* self, void*)
 
 // ---------------------------------------------------------------------------
 
-extern "C" int __cdecl Obj6f3498_Get212()
+// [FUN_56d6c0]
+extern "C" int __cdecl Wipers_GetSwitchState()
 {
     if (g_6f3498)
         return F(int, g_6f3498, 212);
@@ -601,7 +626,8 @@ extern "C" int __cdecl Enum_56f650(int i, int* a, int* b, double* c, int* d, int
     return F(int, p, 68);
 }
 
-extern "C" int __cdecl Obj573fe0(BYTE* o, int a, int b, int c)
+// [FUN_573fe0] Convert RGB to an 8-bit palette index or a packed pixel for this surface.
+extern "C" int __cdecl Surface_ColorFromRGB(BYTE* o, int a, int b, int c)
 {
     int kind = F(int, o, 808);
     if (kind == 1)
@@ -653,13 +679,14 @@ static void Matrix_Construct(Matrix* m)
     *m = g_identity;
 }
 
+// [FUN_5616b0]
 extern "C" BYTE* __fastcall Copter_Construct(BYTE* self, void*, int a, int b, int c)
 {
     Matrix_Construct(&F(Matrix, self, 0));
     Matrix_Construct(&F(Matrix, self, 48));
     for (int i = 100; i <= 120; i += 4)
         F(int, self, i) = 0;
-    Stack_Reset(self + 144, 0);
+    RouteStack_ConstructEmpty(self + 144, 0);
     for (int i = 3172; i <= 3204; i += 4)
         F(int, self, i) = 0;
     F(int, self, 3256) = 0;
@@ -672,7 +699,7 @@ extern "C" BYTE* __fastcall Copter_Construct(BYTE* self, void*, int a, int b, in
     F(int, self, 3360) = 0;
     F(int, self, 3364) = 0;
     F(int, self, 3368) = 0;
-    Copter561310_Construct(self + 3372, 0);
+    Copter_InitializeControlAxes(self + 3372, 0);
     for (int i = 3504; i <= 3536; i += 4)
         F(int, self, i) = 0;
     Copter_Init0(self, 0, (BYTE*)a, (const Matrix*)b);
@@ -680,13 +707,20 @@ extern "C" BYTE* __fastcall Copter_Construct(BYTE* self, void*, int a, int b, in
     return self;
 }
 
-extern "C" int __fastcall Copter_FindLights(BYTE* self, void*, void* model)
+KING_VAR(AsmLabel, copterSearchLightKey, 67b3ac)
+KING_VAR(AsmLabel, copterBlinkLightKey, 67b39c)
+KING_VAR(AsmLabel, copterStaticLightKey, 67b38c)
+KING_VAR(AsmLabel, copterGunLeftKey, 67b380)
+KING_VAR(AsmLabel, copterGunRightKey, 67b374)
+
+// [FUN_561b50]
+extern "C" int __fastcall Copter_BindLightsAndGuns(BYTE* self, void*, void* model)
 {
-    F(void*, self, 3160) = (void*)Scene_FindOrFail((BYTE*)model, "SearchLightKey", 0);
-    F(void*, self, 3164) = (void*)Scene_FindOrFail((BYTE*)model, "BlinkLightKey", 0);
-    F(void*, self, 3168) = (void*)Scene_FindOrFail((BYTE*)model, "StaticLightKey", 0);
-    F(void*, self, 3300) = (void*)Scene_FindOrFail((BYTE*)model, "GunLeftKey", 0);
-    F(void*, self, 3304) = (void*)Scene_FindOrFail((BYTE*)model, "GunRightKey", 0);
+    F(void*, self, 3160) = (void*)Scene_FindOrFail((BYTE*)model, copterSearchLightKey, 0);
+    F(void*, self, 3164) = (void*)Scene_FindOrFail((BYTE*)model, copterBlinkLightKey, 0);
+    F(void*, self, 3168) = (void*)Scene_FindOrFail((BYTE*)model, copterStaticLightKey, 0);
+    F(void*, self, 3300) = (void*)Scene_FindOrFail((BYTE*)model, copterGunLeftKey, 0);
+    F(void*, self, 3304) = (void*)Scene_FindOrFail((BYTE*)model, copterGunRightKey, 0);
     F(int, self, 3544) = -1;
     F(Vec3, self, 3504) = g_zeroVec;
     F(Vec3, self, 3516) = g_axisZ;
@@ -771,7 +805,8 @@ extern "C" void __cdecl Helicopters_Init(void* scene)
 }
 
 // the position of way point i and its object's id
-extern "C" int __cdecl Way_Point(int i, DWORD* pos, int* id)
+// [FUN_568cd0]
+extern "C" int __cdecl Copter_GetWaypointPosition(int i, DWORD* pos, int* id)
 {
     if (i >= g_wayCount || i < 0)
         return -1;
@@ -787,10 +822,12 @@ extern "C" int __cdecl Way_Point(int i, DWORD* pos, int* id)
         pos[2] = F(DWORD, r, 44);
         return 0;
     }
-    BYTE* d = (BYTE*)o[6];
-    pos[0] = F(DWORD, d, 80);
-    pos[1] = F(DWORD, d, 84);
-    pos[2] = F(DWORD, d, 88);
+    // Steam snapshots the entire static resource before writing a possibly overlapping output.
+    const volatile DWORD* resource = (const volatile DWORD*)o[6];
+    DWORD snapshot[40];
+    for (int k = 0; k < 40; ++k)
+        snapshot[k] = resource[k];
+    memcpy(pos, snapshot + 20, 3 * sizeof(DWORD));
     return 0;
 }
 
@@ -808,7 +845,8 @@ extern "C" void __fastcall Messages_AddText(BYTE* self, void*, const char* text)
     if (strcmp(text, (const char*)self + 44 + prev * 128) == 0
         && !(Timer_Now() - F(int, self, 1272) >= g_64b5f0))
         return;
-    F(int, self, 1272) = (int)Timer_Now();
+    // Stock stores the low dword of the truncated 64-bit millisecond count.
+    F(DWORD, self, 1272) = static_cast<DWORD>(static_cast<__int64>(Timer_Now()));
     int n = F(int, self, 1200);
     F(int, self, 1200) = n + 1;
     strcpy((char*)self + 44 + n * 128, text);
@@ -840,32 +878,37 @@ extern "C" void __cdecl Gate_Passed(int id, int side, BYTE* car)
 
 extern "C" void __cdecl Colors_Init(BYTE* surface)
 {
-    g_colors67b73c[0] = Obj573fe0(surface, 255, 0, 255);
-    g_colors67b73c[1] = Obj573fe0(surface, 0, 255, 0);
-    g_colors67b73c[2] = Obj573fe0(surface, 0, 0, 255);
-    g_colors67b73c[3] = Obj573fe0(surface, 255, 255, 0);
-    g_colors67b73c[4] = Obj573fe0(surface, 0, 255, 255);
-    g_colors67b73c[5] = Obj573fe0(surface, 255, 255, 255);
-    g_colors67b73c[6] = Obj573fe0(surface, 255, 128, 0);
-    g_colors67b73c[7] = Obj573fe0(surface, 0, 128, 255);
+    g_colors67b73c[0] = Surface_ColorFromRGB(surface, 255, 0, 255);
+    g_colors67b73c[1] = Surface_ColorFromRGB(surface, 0, 255, 0);
+    g_colors67b73c[2] = Surface_ColorFromRGB(surface, 0, 0, 255);
+    g_colors67b73c[3] = Surface_ColorFromRGB(surface, 255, 255, 0);
+    g_colors67b73c[4] = Surface_ColorFromRGB(surface, 0, 255, 255);
+    g_colors67b73c[5] = Surface_ColorFromRGB(surface, 255, 255, 255);
+    g_colors67b73c[6] = Surface_ColorFromRGB(surface, 255, 128, 0);
+    g_colors67b73c[7] = Surface_ColorFromRGB(surface, 0, 128, 255);
 }
 
+KING_VAR(char, g_fmtInt66c8cc, 66c8cc)     // "%d"
+KING_VAR(AsmLabel, scoreTimeFormat, 67c3e8)
+KING_VAR(AsmLabel, scoreMoneyFormat, 677a74)
+
 // the table of the results: place, name and time or money
+// [FUN_574810]
 extern "C" void __cdecl Scores_Draw(BYTE* surface, int x, int y)
 {
     char buf[64];
     int xx = x + 38;
     for (int i = 0; i < g_scoreCount; i++) {
-        sprintf(buf, "%d", i + 1);
+        sprintf(buf, &g_fmtInt66c8cc, i + 1);
         int yy = y + 15 + (i % 4) * 20;
         Text_Draw((int)surface, xx - 33, yy, (BYTE*)g_fontMenu, buf, 6, 0);
         Font_DrawText(surface, xx, yy, 70, (BYTE*)g_fontMenu, (const BYTE*)g_scoreNames[i], 6, 0);
         double v = g_scoreValues[i];
         if (F(int, g_6cec98, 384) < 2) {
-            int t = (int)v;
-            sprintf(buf, "%d:%02d", t / 60, t % 60);
+            int t = static_cast<int>(static_cast<__int64>(v));
+            sprintf(buf, scoreTimeFormat, t / 60, t % 60);
         } else
-            sprintf(buf, "$%d", (int)v);
+            sprintf(buf, scoreMoneyFormat, static_cast<int>(static_cast<__int64>(v)));
         Text_Draw((int)surface, xx + 74, yy, (BYTE*)g_fontMenu, buf, 6, 0);
         if (i == 3)
             xx += 181;
@@ -1363,7 +1406,6 @@ extern "C" int __cdecl Player_Flags(BYTE* id);
 extern "C" void FUN_43f620(); KING_ALIAS("_FUN_43f620", "_Player_Flags")    // a vehicle's flags by id
 KING_VAR(void*, g_font6ced24, 6ced24)
 KING_VAR(char, g_fmtPercent, 67c3e0)       // "%d%c"
-KING_VAR(char, g_fmtInt66c8cc, 66c8cc)     // "%d"
 KING_VAR(char, g_fmtTenths, 67c3d8)        // "%4.1f"
 typedef void* ImageTable[1];
 KING_VAR(ImageTable, g_images6f2e38, 6f2e38)
@@ -1517,7 +1559,7 @@ extern "C" void FUN_4363f0(); KING_ALIAS("_FUN_4363f0", "_Players_Next")    // t
 extern "C" void FUN_43f620(); KING_ALIAS("_FUN_43f620", "_Player_Flags")    // a player's flags
 extern "C" void __cdecl Player_SetFlags(BYTE* id, int flags);
 extern "C" void FUN_43f690(); KING_ALIAS("_FUN_43f690", "_Player_SetFlags")    // sets a player's flags
-extern "C" int __cdecl AI_EndWaiting();
+extern "C" int __cdecl Ring_StartWaitingDrivers();
 extern "C" int __cdecl Ai_StartRaces();
 KING_VAR(int, g_players68b990h, 68b990)
 KING_VAR(int, g_waiting696328, 696328)
@@ -1535,7 +1577,7 @@ extern "C" void __cdecl Copter_ResetPlayers()
             it = *CallC<int*>(FUN_4363f0, &next, it);
         }
         if (g_waiting696328)
-            AI_EndWaiting();
+            Ring_StartWaitingDrivers();
         else
             Ai_StartRaces();
     }
@@ -1608,7 +1650,8 @@ extern "C" BYTE* __fastcall CopterScreen_Construct(BYTE* self, int, BYTE* game)
     F(void*, self, 1284) = (void*)Objects_Find(&s_67b814);
     F(int, self, 1268) = 0;
     F(int, self, 1276) = 0;
-    F(int, self, 1272) = (int)Timer_Now();
+    // Stock stores the low dword of the truncated 64-bit millisecond count.
+    F(DWORD, self, 1272) = static_cast<DWORD>(static_cast<__int64>(Timer_Now()));
     return self;
 }
 
@@ -1820,7 +1863,7 @@ extern "C" void __cdecl Copter_LoadStreams(void* stg)
 extern "C" void FUN_437220(); KING_ALIAS("_FUN_437220", "_Ai_GetPositionIdV")
 extern "C" void FUN_437390(); KING_ALIAS("_FUN_437390", "_Ai_GetPositionIdRV")
 extern "C" void FUN_438d70(); KING_ALIAS("_FUN_438d70", "_Road_GetRoadParameters")
-extern "C" void* __cdecl AI_Make449c40(void* out, void* x);
+extern "C" void* __cdecl Room_FindIdByName(void* out, void* x);
 extern "C" Matrix* __cdecl Matrix_Translation(Matrix* out, Vec3 t);
 extern "C" void FUN_5abc40(); KING_ALIAS("_FUN_5abc40", "_Matrix_Translation")
 KING_VAR(int, g_hcTypeClass5, 6ce344)
@@ -1885,11 +1928,15 @@ extern "C" BYTE* __cdecl Net_CreatePlacedObject(BYTE* res, const char* name, int
 extern "C" int __fastcall Route_PushRoad(BYTE* self, void*, void* key, Vec3* p)
 {
     int room;
-    AI_Make449c40(&room, key);
+    Room_FindIdByName(&room, key);
     if (room == -1)
         return -1;
-    int node;
-    CallC(FUN_437390, &node, room, *p);
+    // FUN_437390 writes a complete 32-byte PositionId, even though only its
+    // road field is needed here (original FUN_5610f0 reserves the full result).
+    Blob32 position;
+    static_assert(sizeof(position) == 32, "PositionId output must hold 32 bytes");
+    CallC(FUN_437390, &position, room, *p);
+    int node = (int)position.d[0];
     if (node == -1)
         return -2;
     BYTE* r = g_hc68cf38[node];
@@ -1917,7 +1964,7 @@ extern "C" int __fastcall Route_PushRoad(BYTE* self, void*, void* key, Vec3* p)
     y = Stack_Peek(self, 0, 1);
     if (self[F(int, self, 3000) + 1999] && a != x && b != x && (a == y || b == y))
     {
-        Stack_SwapTop(self, 0);
+        RouteStack_SwapTopNodes(self, 0);
         x = Stack_Peek(self, 0, 0);
         y = Stack_Peek(self, 0, 1);
     }
@@ -1930,11 +1977,11 @@ extern "C" int __fastcall Route_PushRoad(BYTE* self, void*, void* key, Vec3* p)
     if (a != x)
     {
         if (b != x)
-            return Stack_PushPair(self, 0, a, b) ? 2 : -3;
-        if (Stack_Push(self, 0, a))
+            return RouteStack_PushRoadEnds(self, 0, a, b) ? 2 : -3;
+        if (RouteStack_PushNode(self, 0, a))
             return 3;
     }
-    if (b != x && Stack_Push(self, 0, b))
+    if (b != x && RouteStack_PushNode(self, 0, b))
         return 4;
     World_Fatal(s_hc67b2cc);
     return -4;
@@ -1982,8 +2029,8 @@ extern "C" void __cdecl HelInit_568e50() { g_hel6f32e8 = 0x0; g_hel6f32ec = 0x0;
 
 extern "C" int __fastcall Queue_PostEvent(BYTE* self, void*, int arg);
 extern "C" void FUN_5e1a10(); KING_ALIAS("_FUN_5e1a10", "_Switch_Select")
-extern "C" int __fastcall SceneNode5f98c0_Draw(BYTE* s, void*, int flags, BYTE* b);
-extern "C" void FUN_5f98c0(); KING_ALIAS("_FUN_5f98c0", "@SceneNode5f98c0_Draw@16")
+extern "C" int __fastcall ShadedReference_Draw(BYTE* s, void*, int flags, BYTE* b);
+extern "C" void FUN_5f98c0(); KING_ALIAS("_FUN_5f98c0", "@ShadedReference_Draw@16")
 extern "C" int __fastcall SceneNode5f9d20_Draw(BYTE* s, void*, void* a1, BYTE* m, BYTE* a3, BYTE* b);
 extern "C" void FUN_5f9d20(); KING_ALIAS("_FUN_5f9d20", "@SceneNode5f9d20_Draw@24")
 extern "C" void __cdecl Copter_Send962(int a, int b);
@@ -2023,7 +2070,7 @@ extern "C" void __cdecl HelInit_576d00() { g_hel6f3520 = g_hel64b670 / (double)g
 extern "C" int __fastcall Hel_5737e0(BYTE* s, void*, int a, int b)
 {
     CallC(FUN_5e1a10, F(int, s, 96), F(int, s, 152));
-    return SceneNode5f98c0_Draw(s, 0, a, (BYTE*)b);
+    return ShadedReference_Draw(s, 0, a, (BYTE*)b);
 }
 
 // [$L_573b30] the same with FUN_5f9d20 (a, b, c, d)
@@ -2041,7 +2088,7 @@ extern "C" int __fastcall Hel_573960(BYTE* s, void*, int a, int b)
     if (!CallThis<char>(FUN_4297b0, s))
         return 0;
     CallC(FUN_5e1a10, F(int, s, 96), F(int, s, 152));
-    return SceneNode5f98c0_Draw(s, 0, a, (BYTE*)b);
+    return ShadedReference_Draw(s, 0, a, (BYTE*)b);
 }
 
 // [$L_573810] once the time (+368) plus 64b788 has passed: FUN_5691c0 on +344 with 1, then with +408 (cleared)
@@ -2061,7 +2108,6 @@ extern "C" int __fastcall Hel_573810(BYTE* s)
 extern "C" void FUN_569380(); KING_ALIAS("_FUN_569380", "_Copter_Send956")
 extern "C" int __fastcall SceneNode5f9b00_Hit(BYTE* s, void*, int flags, BYTE* rec);
 extern "C" void FUN_5f9b00(); KING_ALIAS("_FUN_5f9b00", "@SceneNode5f9b00_Hit@16")
-KING_VAR(double, g_hel64b730, 64b730)
 KING_VAR(double, g_hel64fe58, 64fe58)
 KING_VAR(double, g_hel64b7e0, 64b7e0)
 KING_VAR(AsmLabel, g_hel6f3160, 6f3160)
@@ -2110,11 +2156,11 @@ extern "C" int __fastcall Hel_5739b0(BYTE* s, void*, int a, BYTE* b)
 extern "C" int __fastcall Hel_56b9f0(BYTE* s)
 {
     if (F(int, s, 16) < 2)
-        F(double, s, 32) = F(double, g_hel696ca0, 2968) * g_hel64b730;
+        F(double, s, 32) = F(double, g_hel696ca0, 2968) * noticeMillisecondsPerSecond;
     int m = F(int, s, 60);
     if (m >= 3) {
         double lim = F(double, s, 32) + (m == 5 || m == 10 ? g_hel64b7e0 : g_hel64fe58);
-        if (F(double, g_hel696ca0, 2968) * g_hel64b730 > lim)
+        if (F(double, g_hel696ca0, 2968) * noticeMillisecondsPerSecond > lim)
             F(int, s, 60) = 0;
     }
     return Queue_PostEvent(s, 0, 1);
@@ -2160,7 +2206,7 @@ static void Hel_RotorFrames(BYTE* s)
 extern "C" int __fastcall Hel_573590(BYTE* s, void*, int a, int b)
 {
     Hel_RotorFrames(s);
-    return SceneNode5f98c0_Draw(s, 0, a, (BYTE*)b);
+    return ShadedReference_Draw(s, 0, a, (BYTE*)b);
 }
 // [$L_573630] the same, then fn (the object 256 bytes before, b)
 extern "C" int __fastcall Hel_573630(BYTE* s, void*, HelFn fn, int b)
@@ -2341,13 +2387,15 @@ extern "C" int __fastcall Thunk576c20(BYTE* s, void* d, int a0) { return q198_Dt
 extern "C" int __cdecl Obj56d0d0_Has416(int, int, BYTE* c) { return F(int, c, 416) != 0; }
 
 extern "C" void* __fastcall Camera_Get(BYTE* self, void*, void* out);
-extern "C" void FUN_614f00(); KING_ALIAS("_FUN_614f00", "_Terrain_Call614960@12")
+extern "C" void FUN_614f00(); KING_ALIAS("_FUN_614f00", "@Terrain_Call614960@20")
 extern "C" void __fastcall Terrain615670_Update(BYTE** self, void*, int frame);
 KING_VAR(AsmLabel, g_q214_7025f0, 7025f0)
 KING_VAR(float, g_q214_702620, 702620)
 KING_VAR(float, g_q214_702624, 702624)
 KING_VAR(float, g_q214_702628, 702628)
 KING_VAR(AsmLabel, g_q214_702630, 702630)
+typedef float TerrainAxis[3];
+KING_VAR(TerrainAxis, g_terrainViewUp, 702630)
 KING_VAR(BYTE*, g_q214_6f33b4, 6f33b4)
 // [$L_569450] updates the terrain 6f33b4 for the camera: the direction 702620 turned by the camera's matrix and its
 // position (+36), then the step with b; 1
@@ -2362,7 +2410,7 @@ extern "C" int __cdecl Terrain_FollowCamera(int, int b)
     v[0] = (float)(d2 * m[6] + d0 * m[0] + d1 * m[3]);
     v[1] = (float)(d2 * m[7] + d1 * m[4] + d0 * m[1]);
     v[2] = (float)(d2 * m[8] + d1 * m[5] + d0 * m[2]);
-    CallStd(FUN_614f00, m + 9, v, (void*)g_q214_702630);
+    CallThis(FUN_614f00, g_q214_6f33b4, m + 9, v, (void*)g_q214_702630);
     Terrain615670_Update((BYTE**)g_q214_6f33b4, 0, b);
     return 1;
 }
@@ -2456,7 +2504,7 @@ extern "C" void __fastcall CopterPanel_Draw(BYTE* self, void*);
 extern "C" void FUN_56bc80(); KING_ALIAS("_FUN_56bc80", "@CopterPanel_Draw@8")
 extern "C" void __cdecl Bitmap_Draw(BYTE* dst, int x, int y, BYTE* bmp);
 extern "C" int __cdecl Player_GetState(BYTE* player, void* dest);
-extern "C" double __cdecl Player_Value136(BYTE* id);
+extern "C" double __cdecl Player_GetBalance(BYTE* id);
 extern "C" double __cdecl Player_CargoValueOf(BYTE* p);
 extern "C" double __cdecl Player_ProfitOf(BYTE* p);
 extern "C" int __cdecl Ai_GetPlayerOrderInfo(BYTE* p, unsigned idx, BYTE* oi);
@@ -2464,8 +2512,8 @@ extern "C" int __cdecl Ai_GetMerchandiseProperties(int id, BYTE* mp);
 extern "C" int __fastcall Font_TextWidth(BYTE* self, void*, const char* s);
 extern "C" float __fastcall Ramp_Position(BYTE* self, void*);
 extern "C" BYTE* __fastcall Node_Next(BYTE* self, void*);
-extern "C" void __cdecl Carat_DrawMovie();
-extern "C" void __fastcall Wasm_595260(BYTE* self, void*);
+extern "C" void __cdecl Screen_DrawBackdrop();
+extern "C" void __fastcall MirrorView_UpdateWithMirrorsDisabled(BYTE* self, void*);
 extern "C" void __cdecl CarList_Draw(void* surface, int x, int y, int lines);
 extern "C" void __cdecl Scores_Draw(BYTE* surface, int x, int y);
 extern "C" int __cdecl Messages_Get1288();
@@ -2681,7 +2729,7 @@ void __cdecl Hud_DrawOverlays()
         Map_Draw((BYTE*)g_hd_6ce4f8, 0, surf, F(int, w, 1292) - 1);
 
     if (F(int, g_hd_wnd, 1296)) {
-        Carat_DrawMovie();
+        Screen_DrawBackdrop();
         Bitmap_Draw(surf, g_hd_x, g_hd_y, g_hd_bmpKeys);
         int xx = g_hd_x + 25, yy = g_hd_y + 462;
         int* keys = (int*)(g_hd_wnd + 528);
@@ -2710,7 +2758,7 @@ void __cdecl Hud_DrawOverlays()
     }
 
     if (F(int, g_hd_wnd, 1284)) {
-        Carat_DrawMovie();
+        Screen_DrawBackdrop();
         if (F(int, g_hd_wnd, 1316) == 0) {
             Bitmap_Draw(surf, g_hd_x, g_hd_y, g_hd_bmpCars);
             CarList_Draw(surf, g_hd_x + 17, g_hd_y + 471, 10);
@@ -2721,7 +2769,7 @@ void __cdecl Hud_DrawOverlays()
     }
 
     if (F(int, g_hd_wnd, 1288)) {
-        Carat_DrawMovie();
+        Screen_DrawBackdrop();
         int r[4] = {0, 0, 0, 0};        // left, top, right, bottom
         int load1 = 0, load2 = 0;
         Bitmap_Draw(surf, g_hd_x, g_hd_y, g_hd_bmpStatus);
@@ -2734,13 +2782,13 @@ void __cdecl Hud_DrawOverlays()
         Font_DrawText(surf, bx + 30, by + 228, 145, g_hd_font, F(BYTE*, pd, 20), 5, 0);
 
         Player_CarId(&id);
-        double value = Player_Value136((BYTE*)id);
+        double value = Player_GetBalance((BYTE*)id);
         Player_CarId(&id);
         double total = Player_CargoValueOf((BYTE*)id) + value;
         if (!(total >= g_hd_one))
             total = 1.0;
         Player_CarId(&id);
-        int bar1 = (int)(Player_Value136((BYTE*)id) * g_hd_barScale / total);
+        int bar1 = (int)(Player_GetBalance((BYTE*)id) * g_hd_barScale / total);
         Player_CarId(&id);
         int bar2 = (int)(Player_ProfitOf((BYTE*)id) * g_hd_barScale / total);
         if (bar1 < 0)
@@ -2762,7 +2810,7 @@ void __cdecl Hud_DrawOverlays()
 
         char buf[160];
         Player_CarId(&id);
-        sprintf(buf, s_hd_intFmt, (int)Player_Value136((BYTE*)id));
+        sprintf(buf, s_hd_intFmt, (int)Player_GetBalance((BYTE*)id));
         Text_Draw((int)surf, g_hd_x + 23, g_hd_y + 605, (BYTE*)(Messages_Get1288()), buf, 5, 0);
         Player_CarId(&id);
         sprintf(buf, s_hd_intFmt, (int)Player_CargoValueOf((BYTE*)id));
@@ -2865,7 +2913,7 @@ void __cdecl Hud_DrawOverlays()
 
     if (g_hd_6f3434)
         CopterPanel_Draw(g_hd_6f3434, 0);
-    Wasm_595260((BYTE*)g_hd_6f68b0, 0);
+    MirrorView_UpdateWithMirrorsDisabled((BYTE*)g_hd_6f68b0, 0);
     dev = g_hd_device;
     (*(int(__stdcall**)(BYTE*, int, int))(*(BYTE**)dev + 80))(dev, 14, 1);
 }
@@ -3768,7 +3816,7 @@ extern "C" BYTE* __fastcall Fx_InitState(BYTE* s, void*);
 extern "C" void __cdecl Ai_GetPresentData(BYTE* player, BYTE* present, BYTE* pd);
 extern "C" int __cdecl Ai_GetOrderInfo(int player, int town, int order, BYTE* oi);
 extern "C" int __cdecl Ai_GetTownInfo(int player, int id, BYTE* ti);
-extern "C" int __cdecl Player_PlaceField20(BYTE* id);
+extern "C" int __cdecl Ai_GetPlayerImage(BYTE* id);
 extern "C" BYTE* __fastcall Obj576c00_DeletingDestructor(BYTE* self, void*, int flags);
 extern "C" void __fastcall Vec1_Free(BYTE** v, int);
 extern "C" void __fastcall VecB_FreeStorage(BYTE** v, int);
@@ -3874,7 +3922,7 @@ void __fastcall CopterPanel_Draw(BYTE* self, void*)
         Cp_Text(tx + 44, ty + 95, g_cpFont, buf);
         sprintf(buf, s_cp66c8cc, Cp_Int(g_cp6f2da8));
         Cp_Text(tx + 44, ty + 115, g_cpFont, buf);
-        int k = Player_PlaceField20((BYTE*)g_cp6f2dc0);
+        int k = Ai_GetPlayerImage((BYTE*)g_cp6f2dc0);
         Cp_Image(x + 98, g_cpY + 454, F(BYTE*, g_cpImages, k * 4 + 368));
         Cp_Notice(72);
         break;
@@ -4553,7 +4601,8 @@ void __cdecl Copter_BoardNearby()
     g_bc6f33f4 = 0;
     int car;
     Player_CarId(&car);
-    BYTE data[176];
+    // Ai_GetPlayerData writes through +187; the original reserves 192 bytes.
+    BYTE data[192];
     Ai_GetPlayerData((BYTE*)(Bc_Copy(&id)), data);
     if (id == g_bc68b990)
         return;
@@ -4580,7 +4629,9 @@ void __cdecl Copter_BoardNearby()
         F(int, F(BYTE*, me, 21600), 10080) = 0;
         F(int, me, 20636) = g_bc6f2dc0;
     } else if (Bc_Flags(id) & 0x400) {
-        int a = Bc_Copy(&id);
+        // Original 56ffaf copies Player_CarId's local (ESP+14h before pushes),
+        // not the candidate at ESP+10h. Passing id twice silently rejects self-hire.
+        int a = Bc_Copy(&car);
         Player_Hire((BYTE*)a, (BYTE*)id);
     }
 }
@@ -4864,7 +4915,6 @@ extern "C" void __fastcall Room_Each(BYTE* self, void*, void* a, void* b);
 extern "C" BYTE* __fastcall Room_FindObject(BYTE* self, void*, const char* name);
 extern "C" void FUN_5a9d40(); KING_ALIAS("_FUN_5a9d40", "@Wave_Value@16")
 extern "C" void __fastcall Terrain616770_SetCorners(BYTE** self, void*, BYTE** c, int n);
-extern "C" void FUN_615230(); KING_ALIAS("_FUN_615230", "_Terrain_Call614f70@12")
 extern "C" int __cdecl Ai_OnModuleLoadX(const char* name);
 KING_VAR(BYTE*, g_ml6f3420, 6f3420)
 KING_VAR(char*, g_ml6f3424, 6f3424)
@@ -4908,7 +4958,8 @@ void __fastcall Copter_OnModuleLoad(BYTE* s, void*, BYTE* r)
         v[0] = (float)(d2 * m[6] + d0 * m[0] + d1 * m[3]);
         v[1] = (float)(d2 * m[7] + d1 * m[4] + d0 * m[1]);
         v[2] = (float)(m[8] * d2 + m[5] * d1 + m[2] * d0);
-        CallStd(FUN_615230, m + 9, v, (void*)g_q214_702630);
+        const float* cameraPosition = m + 9;
+        Terrain_PlaceCameraView(g_terrain6f33b4, 0, cameraPosition, v, g_terrainViewUp);
     }
     Ai_OnModuleLoadX(F(char*, r, 60));
     if (g_ml7208cc)
@@ -5462,7 +5513,7 @@ int __fastcall Copter_HeadForTarget(BYTE* s, void*)
     double t = x87_fabs((double)F(float, s, 108) * F(float, s, 76) + (double)F(float, s, 104) * F(float, s, 64)
                         + (double)F(float, s, 52) * F(float, s, 100)) + g_hel64b788;
     F(float, s, 3448) = (float)(g_ht64b660 / t * ((double)L + g_ht64c450) / ((double)L + g_ht64c2f8));
-    short idx = Stack_Below(s + 144, 0);
+    short idx = RouteStack_PreviousNode(s + 144, 0);
     Vec3* P = &F(Vec3, s, 3468);
     if (idx != -1)
     {
@@ -5473,7 +5524,7 @@ int __fastcall Copter_HeadForTarget(BYTE* s, void*)
         *P = F(Vec3, s, 3256);
     Vec3 d2 = Ht_Set((double)P->x - F(float, s, 36), (double)P->y - F(float, s, 40), (double)P->z - F(float, s, 44));
     if (Vec3_Length(&d2) < g_bc64c32c)
-        Stack_Pop(s + 144, 0);
+        RouteStack_PopRoad(s + 144, 0);
     return 0;
 }
 
@@ -5616,16 +5667,16 @@ void __fastcall Copter_Frame(BYTE* s, void*)
     case 4:
         if (Copter_HeadForTarget(s, 0))
             Copter_SetState(s, 0, 3);
-        Copter_566550(s, 0);
+        Copter_AcquireMarkedVehicle(s, 0);
         break;
     case 11:
         if (Copter_HeadForTarget(s, 0))
             Copter_ClimbState(s);
-        Copter_566550(s, 0);
+        Copter_AcquireMarkedVehicle(s, 0);
         break;
     case 3:
         Copter_ClimbState(s);
-        Copter_566550(s, 0);
+        Copter_AcquireMarkedVehicle(s, 0);
         break;
     case 5:
         Cs_ClearSteer(s);
@@ -5809,13 +5860,13 @@ void __fastcall Copter_Frame(BYTE* s, void*)
 
 // === the helicopter's warnings to its target (FUN_568090)
 
-extern "C" int __cdecl Car_State20944(const BYTE* car);
+extern "C" int __cdecl Copter_GetTargetWarningCode(const BYTE* car);
 extern "C" void __fastcall Copter_Chase6(BYTE* self, void*, BYTE* target);
 extern "C" void __fastcall Copter_Chase10(BYTE* self, void*, BYTE* target);
-extern "C" void __fastcall Copter_Chase7(BYTE* self, void*, BYTE* target);
+extern "C" void __fastcall Copter_StartBlockingTarget(BYTE* self, void*, BYTE* target);
 extern "C" void __cdecl Copter_RadioCommand(int c);
 extern "C" void Cw_Matrix2(); KING_ALIAS("_Cw_Matrix2", "@SceneObj_Matrix2@12")
-extern "C" double __fastcall Car_555500(BYTE* self, void*);
+extern "C" double __fastcall Car_GetWeightedStateMagnitude(BYTE* self, void*);
 KING_VAR(BYTE*, g_cw6d2078, 6d2078)               // the player
 KING_VAR(BYTE*, g_cw6ef1fc, 6ef1fc)               // the game (its clock +2968)
 KING_VAR(float, g_cw64c448, 64c448)
@@ -5850,7 +5901,7 @@ extern "C" {
 void __fastcall Copter_Warnings(BYTE* s, void*)
 {
     BYTE* car = F(BYTE*, s, 3248);
-    if (!car || !Car_State20944(car))
+    if (!car || !Copter_GetTargetWarningCode(car))
     {
         F(int, s, 3344) = 0;
         Cw_GiveUp(s);
@@ -5990,7 +6041,7 @@ void __fastcall Copter_Warnings(BYTE* s, void*)
         }
     }
     c = F(BYTE*, s, 3248);
-    if (c && F(int, c, 20944) > 30 && F(int, c, 20944) < 40 && Car_555500(c, 0) > g_cw64da58)
+    if (c && F(int, c, 20944) > 30 && F(int, c, 20944) < 40 && Car_GetWeightedStateMagnitude(c, 0) > g_cw64da58)
     {
         F(int, F(BYTE*, s, 3248), 20944) = 0;
         F(int, s, 3248) = 0;
@@ -6001,7 +6052,7 @@ void __fastcall Copter_Warnings(BYTE* s, void*)
     if (mode == 3)
     {
         if (F(int, s, 3236) != 7)
-            Copter_Chase7(s, 0, F(BYTE*, s, 3248));
+            Copter_StartBlockingTarget(s, 0, F(BYTE*, s, 3248));
         return;
     }
     if (mode == 2)
@@ -6038,7 +6089,7 @@ extern "C" int __fastcall Route_PushRoad(BYTE* self, void*, void* key, Vec3* p);
 extern "C" CpPos* __cdecl Cp_PosIdRV(CpPos* out, int room, float x, float y, float z); KING_ALIAS("_Cp_PosIdRV", "_Ai_GetPositionIdRV")
 extern "C" void __cdecl Cp_Room(CpPos pos, CpRoom* out); KING_ALIAS("_Cp_Room", "_Road_GetRoadParameters")
 extern "C" float* __cdecl Cp_Coords(float* out, CpPos pos); KING_ALIAS("_Cp_Coords", "_Ai_GetCoordinatesPos")
-extern "C" const char* __cdecl Name68d0d8(int i);
+extern "C" const char* __cdecl Room_NameById(int i);
 extern "C" void __fastcall Copter_SetMatrix(BYTE* self, void*, int a, const Matrix* m);
 extern "C" void __fastcall Copter_SetVec100(BYTE* self, void*, const Vec3Bits* v);
 extern "C" void __fastcall Copter_SetVec112(BYTE* self, void*, const Vec3Bits* v);
@@ -6074,7 +6125,7 @@ void __fastcall Copter_FindLanding(BYTE* s, void*)
     if (!F(int, s, 3148))
         Route_PushRoad(s + 144, 0, (void*)(F(int, F(BYTE*, s, 96), 12)), (Vec3*)(s + 36));
     int room;
-    AI_Make449c40(&room, (void*)(F(int, F(BYTE*, s, 96), 12)));
+    Room_FindIdByName(&room, (void*)(F(int, F(BYTE*, s, 96), 12)));
     if (room == -1)
     {
         if (F(int, s, 3236) != 4)
@@ -6113,7 +6164,7 @@ void __fastcall Copter_FindLanding(BYTE* s, void*)
     }
     if (Cp_Dist2(F(Vec3, s, 3256), p) < g_cp64fd48)
         return;
-    BYTE* obj = Scene_FindObject(0, Name68d0d8(F(int, s, 3272)));
+    BYTE* obj = Scene_FindObject(0, Room_NameById(F(int, s, 3272)));
     if (!obj)
         return;
     Matrix T;
@@ -6221,7 +6272,7 @@ void __cdecl Bullet_Fly(int o, BYTE* from, BYTE* to, int mask, float power)
         Vec3_MulAssign(&J, 0, &tmp, kr);
         CallVirt(body, 164, &P, &J);
         float rr = (float)(rand() * (double)g_sh64c254);
-        Car_555500(c, 0);
+        Car_GetWeightedStateMagnitude(c, 0);
         double lim = g_sh64b670 - Ramp_Value(ramp, 0) * power * g_sh64d668 / (power + g_sh64d0f0);
         if (lim < rr)
             CarEffect_StartFlasher(c + 21568);
@@ -6257,22 +6308,22 @@ void __cdecl Bullet_Fly(int o, BYTE* from, BYTE* to, int mask, float power)
 
 // === the game's messages to the player's side (FUN_56ffd0)
 
-extern "C" void __cdecl AI_MarkHuman(int id);
+extern "C" void __cdecl Ring_MarkFirstLapInMode2(int lap);
 extern "C" int __cdecl Ai_FinishPlayer(int player);
 extern "C" int __cdecl Ai_HumanFinished();
 extern "C" void __cdecl Notice_Show(int level, const char* text, int a, int b);
 extern "C" float __fastcall Ramp_High(BYTE* self, void*);
 extern "C" void __fastcall Ramp_SetValue(BYTE* self, void*, float v);
 extern "C" void Gm_Set136(); KING_ALIAS("_Gm_Set136", "_Player_Set136")
-extern "C" int __cdecl Messages_Add569720(const char* text);
+extern "C" void __cdecl Messages_QueueScreenText(const char* text);
 extern "C" void __cdecl Messages_Add(const char* text);
 extern "C" double __cdecl Driver_CargoFactor(BYTE* x);
 extern "C" void __cdecl Player_ClearFlags(BYTE* p);
 extern "C" void Gm_53b3c0(); KING_ALIAS("_Gm_53b3c0", "@King_53b3c0@12")
 extern "C" void Gm_M1(); KING_ALIAS("_Gm_M1", "@SceneObj_Matrix1@12")
-extern "C" void** __cdecl List68cf6c_First(void** out);
-extern "C" void** __cdecl List68cf6c_Next(void** out, void** it);
-extern "C" int __cdecl Rec_Field8(BYTE* id);
+extern "C" void** __cdecl Presents_First(void** out);
+extern "C" void** __cdecl Presents_Next(void** out, void** it);
+extern "C" int __cdecl Ai_GetPresentFlags(BYTE* id);
 extern "C" int __fastcall Resources_AddRecord(BYTE* self, void*, int a, BYTE* rec, int c);
 extern "C" int __fastcall Resources_Delete(BYTE* self, void*, int id);
 extern "C" int __cdecl Ai_LoadPresent(BYTE* player, BYTE* present, int* playerorderid);
@@ -6492,7 +6543,7 @@ int __cdecl Game_PlayerMessage(int* m)
                 Notice_Show(6, 0, 0, 0);
             return 1;
         }
-        AI_MarkHuman(lap);
+        Ring_MarkFirstLapInMode2(lap);
         gm_6f33b8 = m[1];
         int last = 4, laps = 3;
         if (F(int, gm_6cec6c, 1316) && F(int, gm_6cec98, 384) == 1)
@@ -6534,7 +6585,7 @@ int __cdecl Game_PlayerMessage(int* m)
         if (!(x > gm_64b6d0))
             return 1;
         int n = (int)(x + x);
-        double money = Player_Value136((BYTE*)(Gm_Me()));
+        double money = Player_GetBalance((BYTE*)(Gm_Me()));
         if (!(money > gm_64b670))
             return 1;
         double sub = gm_64b678;
@@ -6547,7 +6598,7 @@ int __cdecl Game_PlayerMessage(int* m)
         CallC(Gm_Set136, Gm_Me(), money - n);
         char buf[400];
         sprintf(buf, Gm_T(11), n);
-        Messages_Add569720(buf);
+        Messages_QueueScreenText(buf);
         Gm_Sound("refuelSound");
         return 1;
     }
@@ -6565,7 +6616,7 @@ int __cdecl Game_PlayerMessage(int* m)
         double dmg = CallVirt<double>(car, 84);
         if (!(dmg > gm_64b5a0))
             return 1;
-        double money = Player_Value136((BYTE*)(Gm_Me()));
+        double money = Player_GetBalance((BYTE*)(Gm_Me()));
         int n = (int)(dmg * gm_64b848);
         CallVirt(car, 116);
         CallVirt(Gm_Car(), 120);
@@ -6596,7 +6647,7 @@ int __cdecl Game_PlayerMessage(int* m)
             CallC(Gm_Set136, Gm_Me(), money - n);
             char buf[400];
             sprintf(buf, Gm_T(10), n);
-            Messages_Add569720(buf);
+            Messages_QueueScreenText(buf);
         }
         Gm_Sound("repairSound");
         return 1;
@@ -6621,10 +6672,10 @@ int __cdecl Game_PlayerMessage(int* m)
         void* best = gm_68cf6c;
         double bestd = 1000.0;
         void* it;
-        List68cf6c_First(&it);
+        Presents_First(&it);
         while (it != gm_68cf6c)
         {
-            if (Rec_Field8((BYTE*)it) & 32)
+            if (Ai_GetPresentFlags((BYTE*)it) & 32)
             {
                 BYTE* rec = (BYTE*)Resources_Get((BYTE**)(F(BYTE*, gm_6cec6c, 1356) + 704), 0, *F(int*, it, 8));
                 BYTE* o = F(BYTE*, rec, 28);
@@ -6639,11 +6690,11 @@ int __cdecl Game_PlayerMessage(int* m)
                 }
             }
             void* nx;
-            it = *List68cf6c_Next(&nx, (void**)it);
+            it = *Presents_Next(&nx, (void**)it);
         }
         if (best == gm_68cf6c)
             return 1;
-        int f = Rec_Field8((BYTE*)best) & 64;
+        int f = Ai_GetPresentFlags((BYTE*)best) & 64;
         if (f)
         {
             F(int, gm_6f3434, 32) = m[0];
@@ -6670,12 +6721,12 @@ int __cdecl Game_PlayerMessage(int* m)
         if (F(int, gm_6cec6c, 1300) > 1)
             return 0;
         void* it;
-        List68cf6c_First(&it);
+        Presents_First(&it);
         for (;;)
         {
             if (it == gm_68cf6c)
                 return 1;
-            int f = Rec_Field8((BYTE*)it);
+            int f = Ai_GetPresentFlags((BYTE*)it);
             if ((f & 64) && !(f & 32))
             {
                 BYTE* rec = (BYTE*)Resources_Get((BYTE**)(F(BYTE*, gm_6cec6c, 1356) + 704), 0, *F(int*, it, 8));
@@ -6685,7 +6736,7 @@ int __cdecl Game_PlayerMessage(int* m)
                     break;
             }
             void* nx;
-            it = *List68cf6c_Next(&nx, (void**)it);
+            it = *Presents_Next(&nx, (void**)it);
         }
         __declspec(align(8)) BYTE P[288];
         Gm_PresentInit(P);
@@ -7250,9 +7301,9 @@ void __fastcall Dash_Draw(BYTE* d, void*)
 
 // === the helicopter's first initialization (FUN_561800 with its tails up to $L_561a7c)
 
-extern "C" void __fastcall Copter561530_Init(BYTE* self, void*);
+extern "C" void __fastcall Copter_ResetFlightState(BYTE* self, void*);
 extern "C" void Hi_RotX(); KING_ALIAS("_Hi_RotX", "_Matrix_RotationX")
-extern "C" void __fastcall Stack_Init(BYTE* self, void*, int a, int b);
+extern "C" void __fastcall RouteStack_SetInitialRoadEnds(BYTE* self, void*, int a, int b);
 struct HiPos { int d[8]; };
 extern "C" int __cdecl Hi_PosRV(HiPos* out, int room, Vec3 p); KING_ALIAS("_Hi_PosRV", "_Ai_GetPositionIdRV")
 extern "C" int __cdecl Hi_PosV(HiPos* out, Vec3 p); KING_ALIAS("_Hi_PosV", "_Ai_GetPositionIdV")
@@ -7267,7 +7318,7 @@ KING_VAR(BYTE**, g_hiRoads, 68cf38)
 static int Hi_RoomOf(BYTE* a)
 {
     int r[8];
-    AI_Make449c40(r, F(void*, a, 12));
+    Room_FindIdByName(r, F(void*, a, 12));
     return r[0];
 }
 
@@ -7279,7 +7330,7 @@ extern "C" {
 // the stack (+144) of the road's ends
 void __fastcall Copter_Init0(BYTE* s, void*, BYTE* a, const Matrix* m)
 {
-    Copter561530_Init(s, 0);
+    Copter_ResetFlightState(s, 0);
     F(BYTE*, s, 96) = a;
     F(Vec3, s, 3256) = F(Vec3, m, 36);
     F(int, s, 3272) = Hi_RoomOf(a);
@@ -7329,7 +7380,7 @@ void __fastcall Copter_Init0(BYTE* s, void*, BYTE* a, const Matrix* m)
         }
     }
     BYTE* e = g_hiRoads[pos.d[0]];
-    Stack_Init(s + 144, 0, (int)F(short, F(BYTE*, e, 112), 16), (int)F(short, F(BYTE*, e, 116), 16));
+    RouteStack_SetInitialRoadEnds(s + 144, 0, (int)F(short, F(BYTE*, e, 112), 16), (int)F(short, F(BYTE*, e, 116), 16));
 }
 
 } // extern "C"
@@ -7569,7 +7620,7 @@ void __fastcall Vehicle573d10_Destroy(BYTE* s, void*)
     F(void*, it, 0) = &g_vd650164;
     __declspec(align(8)) BYTE state[196];
     memset(state, 0, sizeof state);
-    float f = (float)Car_555500(s, 0);
+    float f = (float)Car_GetWeightedStateMagnitude(s, 0);
     int pl = F(int, s, 20636);
     Matrix W;
     const Matrix* w = (const Matrix*)SceneObj_Matrix1(it, 0, &W);

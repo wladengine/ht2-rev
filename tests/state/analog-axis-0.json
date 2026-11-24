@@ -1,0 +1,27 @@
+{
+  "description": "Read vehicle input axis 0 with two analog bindings at 0.25 and 0.75. The floating-point return is 0.5.",
+  "entry": "0x53b4b0",
+  "args": [],
+  "result": "st0",
+  "globals": [
+    {
+      "name": "binding_1",
+      "address": "0x6d2038",
+      "hex": "00100001",
+      "observe_reads": true
+    },
+    {
+      "name": "binding_2",
+      "address": "0x6d2044",
+      "hex": "04100001",
+      "observe_reads": true
+    }
+  ],
+  "objects": [
+    {
+      "offset": "0x1000",
+      "hex": "0000803e0000403f"
+    }
+  ],
+  "symbol": "_Axis0"
+}

@@ -1,0 +1,21 @@
+# Regression catalog
+
+Run `dev.cmd test -GameExe PATH` from a Windows checkout after installing the dependencies listed in the README. Cases run sequentially and use the production objects. The suite writes each log and its machine-readable result to a fresh `.local/regressions/suite-*/` directory. A comparison failure or an unexpected negative-control result fails the suite. A fixed-address mapping conflict can prevent the x86 host from exercising the reference and is reported separately. A skipped case has no acceptance result.
+
+| Group | What it checks |
+|---|---|
+| Gameplay and physics | Player hiring and purchase arguments, transformed body contacts, object placement/destruction, routes, suspension, terrain/grid ABI, Ring starts and ranks, companies, lights and vehicle damage. The solo runner includes paired runs against the reference and negative controls for prior defects. |
+| Presentation and services | Palettes, room rendering, UI state, deferred audio, network address and connection callbacks, math error handling and gzip round trips. The gzip comparator accepts two independently generated packed streams. |
+| Numeric behavior and shared state | The x87 PE harness checks hitch, copter and small helpers. Native state fixtures exercise the argument ABI, terrain flags, camera zoom, route declarations and road returns. Eight declarative PE comparisons cover writes, aliasing, list updates, startup state, control axes and wheel contacts. |
+| World scripts and campaign | The world-event runner requires the game assets next to the resource donor. It compares both hosts on Scheme, ambush approaches, fuel orders, fleets, saves and service behavior. The standalone AI-company runner accepts an explicit host, disposable game copy and output directory for longer simulations. |
+| Address audit | The call100 runner also exercises scalar accessors, three direct-call groups and declarative contracts for file, script and body operations against a separately linked audit host. Negative controls call deliberately different functions and must be rejected. The broader inventory in `tests/audit/functions.tsv` contains 5,076 original addresses and ABI metadata. Use the typed sweep for additional comparisons. Inlined entries, incomplete calls and raw differences need interpretation. |
+
+## Additional scenarios
+
+- Run `pwsh -File tests/run.ps1 -GameExe PATH -RespawnProfile PROFILE_COPY -CampaignClock` to include the private driver-respawn fixture and the long campaign-clock scenario. The stock executable and private profile are checked by hash. The generic suite records omissions in its report.
+- Use `python tests/tanker_queue_test/run.py --game-dir GAME_COPY --fixture PRIVATE_ZIP --route PRIVATE_ROUTE_JSON --profile-name PROFILE.pl1` for the long skid and short tanker impact. A rebuilt host also requires its matching `--map`. Inputs and trajectory stay in `.local/fixtures/tanker/`. The runner stages a disposable game and writes its report below `.local/regressions/`. This opens the game and is a separate road test.
+- The Bukhta queue and reverse analyzers in `tests/traffic/` read a private run directory containing the safety trace, capture and already decoded files. The projection and bridge analyzers in `tests/solo_audit_test/` also take private inputs. Their command-line help lists the input format. Store redirected output under `.local/`.
+- The optional x87 translation check accepts three locally supplied inline-assembly references via `pwsh -File tests/x87_test/run-source.ps1 -GameExe PATH -ReferenceDir PRIVATE_DIRECTORY`. The regular PE comparison reads the stock procedures directly from the supplied game.
+- Run `python tests/audit/typed_state.py --original ORIGINAL --candidate .local/build/king.exe --map .local/build/king.map --pairs tests/audit/functions.tsv --address 0x5bc320 --out .local/regressions/typed.jsonl` for a single-address comparison. Omit `--address` for the production inventory. Keep the resulting observations private.
+
+A synthetic state comparison, running a caller in an initialized host, and observing the outcome in a manual game exercise different paths. Record which one establishes each claim. For ABI or memory fixes, keep a focused case and verify that the previous implementation fails it.

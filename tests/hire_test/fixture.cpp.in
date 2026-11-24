@@ -1,0 +1,122 @@
+// x86 dispatcher contract fixture; no game resources, window or input.
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <stdlib.h>
+#define F(T,p,o) (*(T*)((BYTE*)(p)+(o)))
+struct Matrix { float m[12]; };
+struct Vec3 { float x,y,z; };
+struct Bc_M48 { DWORD d[12]; };
+static BYTE shell[1400], viewer[624], parkingUI[40], parkingInfo[256], world[800];
+static BYTE me[22000], other[22000], myCab[10200], otherCab[10200];
+static BYTE player[1024], candidate[1024], resource[8], iterator[12], owner[16];
+static BYTE* g_wsShell=shell;
+static BYTE* g_bc6d2078=viewer;
+static BYTE* g_bc6f3434=parkingUI;
+static BYTE* g_bc6f2d98=parkingInfo;
+static BYTE* g_bc6f68b0=owner;
+static Matrix identity={{1,0,0,0,1,0,0,0,1,0,0,0}};
+static BYTE* g_bc7025f0=(BYTE*)&identity;
+static int g_bc68b990=0, g_bc6f2dc0=0, g_bc6f33f4;
+static float g_bc64c32c=50;
+static bool present;
+static BYTE* nearby;
+static int flags, parkingResult, hireResult, swapResult, hireCalls, swapCalls, dataCalls, effects;
+static BYTE *hireA,*hireB,*swapA,*swapB;
+static void require(bool ok,const char* reason) {
+    if(!ok) { fprintf(stderr,"fixture dependency violation: %s\n",reason);exit(2); }
+}
+static int* Int_Copy(int* out,void*,const int* p) { *out=*p;return out; }
+static int Bc_Flags(int id) { require(id==(int)candidate,"candidate ID");return flags; }
+static BYTE* Obj541970_First(BYTE* car,void*) { require(car==me,"iterator owner");return present?iterator:0; }
+static BYTE* FUN_541960(BYTE*,void*) { return nearby; }
+static BYTE* FUN_57de90(BYTE* object,void*,BYTE* out) {
+    require(object==other+16,"candidate transform");
+    memcpy(out,other+500,48);return out;
+}
+static Matrix* SceneObj_Matrix1(BYTE* object,void*,Matrix* out) {
+    require(object==me+16,"player transform");memcpy(out,me+500,48);return out;
+}
+template<class R,class Fn,class... A> R CallThis(Fn fn,BYTE* s,A... args) { return fn(s,0,args...); }
+template<class Fn,class... A> void CallC(Fn fn,A... args) { fn(args...); }
+static void* Resources_Get(BYTE** table,void*,int key) {
+    require((BYTE*)table==world+704 && key==123,"resource lookup");return resource;
+}
+static double Vec3_Length(const Vec3* v) { return sqrt(v->x*v->x+v->y*v->y+v->z*v->z); }
+static int Ai_GetParkingInfo(BYTE* p,BYTE* out) {
+    require(p==candidate && out==parkingInfo,"parking candidate");return parkingResult;
+}
+static void Player_CarId(int* out) { *out=(int)player; }
+static void Ai_GetPlayerData(BYTE* p,BYTE* out) {
+    require(p==candidate,"player data candidate");++dataCalls;memset(out,0,192);F(int,out,36)=777;
+}
+static int Player_Hire(BYTE* a,BYTE* b) {
+    ++hireCalls;hireA=a;hireB=b;
+    // Independent documented contract: the real implementation rejects self-hire.
+    return a==b?-5:hireResult;
+}
+static int Player_SwapVehicles(BYTE* a,BYTE* b,int v) {
+    require(v==0,"swap mode");++swapCalls;swapA=a;swapB=b;return swapResult;
+}
+static void Fx_PlaceObjects() { ++effects; }
+static void World_ClearHits() { ++effects; }
+static void Vehicle_FindTaker(BYTE*,void*) { ++effects; }
+static void FUN_56fae0(int a,int b,int c,int d,Bc_M48) {
+    require(a==777 && b==456 && c==0 && d==0,"swap message");++effects;
+}
+static void Viewer_AttachVehicle(BYTE* v,void*,BYTE* c) { require(v==viewer && c==other,"viewer attach");++effects; }
+static void WorldObj_Attach(BYTE*,void*,BYTE* c) { require(c==other,"object attach");++effects; }
+static void Engine_SetKeys(BYTE* cab,void*,int a,int b) { require(cab==myCab+9984 && a==1 && b==1,"cab controls");++effects; }
+
+// PRODUCTION
+
+static void Reset() {
+    memset(shell,0,sizeof shell);memset(viewer,0,sizeof viewer);
+    memset(me,0,sizeof me);memset(other,0,sizeof other);
+    memset(iterator,0,sizeof iterator);memset(parkingUI,0,sizeof parkingUI);
+    memset(myCab,0,sizeof myCab);memset(otherCab,0,sizeof otherCab);
+    F(BYTE*,shell,1356)=world;F(BYTE*,viewer,616)=me;
+    F(int,other,20636)=(int)candidate;F(int,candidate,84)=123;F(int,resource,4)=456;
+    F(BYTE*,me,21600)=myCab;F(BYTE*,other,21600)=otherCab;
+    memcpy(me+500,&identity,48);memcpy(other+500,&identity,48);F(float,other,536)=10;
+    nearby=other;present=true;g_bc6f33f4=1;flags=0x400;
+    parkingResult=hireResult=swapResult=hireCalls=swapCalls=dataCalls=effects=0;
+    hireA=hireB=swapA=swapB=0;
+}
+static int Run(int test) {
+    Reset();const char* name="hire-success";int wantHire=0,wantSwap=0,wantEffects=0;
+    switch(test) {
+    case 0:wantHire=1;break;
+    case 1:name="hire-refusal";wantHire=1;hireResult=-6;break;
+    case 2:name="card-without-action";g_bc6f33f4=0;break;
+    case 3:name="parking-refusal";parkingResult=1;break;
+    case 4:name="multiplayer";F(int,shell,1300)=2;break;
+    case 5:name="blocked-shell";F(int,shell,1316)=1;break;
+    case 6:name="empty-list";present=false;break;
+    case 7:name="no-driver";F(int,other,20636)=0;break;
+    case 8:name="own-car";nearby=me;break;
+    case 9:name="hidden";flags|=0x100;break;
+    case 10:name="ordinary-driver";flags=0;break;
+    case 11:name="range-boundary";F(float,other,536)=50;break;
+    case 12:name="swap-success";flags=64;wantSwap=1;wantEffects=6;break;
+    case 13:name="swap-refusal";flags=64;swapResult=-1;wantSwap=1;wantEffects=2;break;
+    case 14:name="swap-precedence";flags=64|0x400;wantSwap=1;wantEffects=6;break;
+    }
+    Copter_BoardNearby();
+    bool bad=hireCalls!=wantHire || swapCalls!=wantSwap || effects!=wantEffects;
+    if(wantHire) {
+        bad |= hireA!=player || hireB!=candidate || g_bc6f33f4!=0 || dataCalls!=1;
+        // Old source may have no telemetry: still fail on its incorrect arguments.
+        Copter_BoardNearby();bad |= hireCalls!=1; // consume request once
+    }
+    if(wantSwap) bad |= swapA!=player || swapB!=candidate || g_bc6f33f4!=0;
+    if(wantSwap && !swapResult) bad |= F(int,other,20636)!=(int)player || F(int,me,20636)!=g_bc6f2dc0;
+    printf("%s: hire=%d swap=%d correct_hirer=%d %s\n",name,hireCalls,swapCalls,hireA==player,bad?"FAIL":"PASS");
+    return bad;
+}
+int main() {
+    static_assert(sizeof(void*)==4,"x86 fixture required");
+    int failures=0;for(int i=0;i<15;i++)failures+=Run(i);
+    printf("%d failures in 15 cases\n",failures);return failures?1:0;
+}

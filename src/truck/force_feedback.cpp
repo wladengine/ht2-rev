@@ -23,7 +23,7 @@ extern "C" void FUN_5799c0(); KING_ALIAS("_FUN_5799c0", "@Triangles_Init@8")
 extern "C" int __fastcall Node_Remove(BYTE* self, void*);
 extern "C" void __fastcall Pool6928_Free(BYTE** self, void*);
 extern "C" void FUN_579850(); KING_ALIAS("_FUN_579850", "@Pool6928_Free@8")
-extern "C" void __fastcall Sce5ef660_Destroy(BYTE* s);
+extern "C" void __fastcall SceneNode_DestroyBase(BYTE* s);
 KING_VAR(AsmLabel, s_67cfc0, 67cfc0)
 KING_VAR(AsmLabel, s_67d04c, 67d04c)
 KING_VAR(AsmLabel, g_vtbl650340, 650340)
@@ -36,8 +36,8 @@ extern "C" int __cdecl Point_InTriangleXY(float x, float y, const float* xs, con
 extern "C" void FUN_57c5f0(); KING_ALIAS("_FUN_57c5f0", "_Point_InTriangleXY")
 
 typedef void (__cdecl* LogFn)(const char* text);
-KING_VAR(int, g_6f4ba4, 6f4ba4)
-KING_VAR(int, g_6f4ba8, 6f4ba8)
+KING_VAR(int, joyBeforeAcquire, 6f4ba4)
+KING_VAR(int, joyAfterAcquire, 6f4ba8)
 KING_VAR(LogFn, g_joyLog, 6f4bac)
 KING_VAR(void*, g_joyDevice, 6f4b88)          // IDirectInputDevice2
 KING_VAR(int, g_joyForceFeedback, 6f4b80)
@@ -74,12 +74,14 @@ enum { E_NOTREADY = 0x80070015 };
 // COM method at vtbl+off of o, stdcall with o first
 static void (*Method(void* o, int off))() { return *(void (**)())(*(BYTE**)o + off); }
 
-extern "C" void __cdecl Mmt_Set6f4ba4(int a, int b)
+// [FUN_576d30]
+extern "C" void __cdecl Joy_SetAcquisitionCallbacks(int before, int after)
 {
-    g_6f4ba4 = a;
-    g_6f4ba8 = b;
+    joyBeforeAcquire = before;
+    joyAfterAcquire = after;
 }
 
+// [FUN_576d50] Forward a driver diagnostic to the registered joystick log callback.
 extern "C" void __cdecl Joy_Log(const char* text)
 {
     if (g_joyLog)
@@ -99,6 +101,7 @@ extern "C" void __fastcall JoyEffect_Stop(BYTE* self, void*)
     }
 }
 
+// [FUN_577350]
 extern "C" int __fastcall JoyEffect_GetParameters(BYTE* self, void*, DWORD* params, int flags)
 {
     params[0] = 56;
@@ -108,6 +111,7 @@ extern "C" int __fastcall JoyEffect_GetParameters(BYTE* self, void*, DWORD* para
     return CallStd<int>(Method(e, 20), e, params, flags);
 }
 
+// [FUN_577380] Query the DirectInput effect status.
 extern "C" int __fastcall JoyEffect_GetStatus(BYTE* self, void*, int* status)
 {
     *status = 0;
@@ -123,16 +127,23 @@ extern "C" int __fastcall JoyEffect_GetStatus(BYTE* self, void*, int* status)
     return r;
 }
 
-// starts the effect once; sends v * 10000 when it differs from the last
-// value by more than part of it
+KING_VAR(float, forceFeedbackScale, 64da74)
+KING_VAR(double, gainChangeFraction, 64d338)
+KING_VAR(double, magnitudeChangeFraction, 64b958)
+
+// The original uses 32-bit subtraction and negation. INT_MIN keeps its sign.
+static int EffectAbs32(unsigned bits)
+{
+    return static_cast<int>(bits) < 0 ? static_cast<int>(0u - bits) : static_cast<int>(bits);
+}
+
+// Update the device when the change exceeds the fraction of the last value.
 static void SetMagnitude(BYTE* self, int v, double part, DWORD* params, int flags)
 {
     int old = F(int, self, 8);
-    int diff = v - old;
-    if (diff < 0)
-        diff = -diff;
-    int prev = old < 0 ? -old : old;
-    if ((double)prev * part < diff) {
+    int diff = EffectAbs32(static_cast<unsigned>(v) - static_cast<unsigned>(old));
+    int prev = EffectAbs32(static_cast<unsigned>(old));
+    if (!((double)prev * part >= diff)) {
         F(int, self, 8) = v;
         CallStd(Method(F(void*, self, 4), 24), F(void*, self, 4), params, flags);
     }
@@ -143,17 +154,19 @@ static void SetMagnitude(BYTE* self, int v, double part, DWORD* params, int flag
     }
 }
 
+// [FUN_577a10]
 extern "C" void __fastcall JoyEffect_SetGain(BYTE* self, void*, float v)
 {
     if (!F(void*, self, 4))
         return;
     DWORD params[14] = {0};
     params[0] = 56;
-    int i = (int)(v * (double)10000.0f);
+    int i = static_cast<int>(static_cast<__int64>(v * (double)forceFeedbackScale));
     params[4] = i;
-    SetMagnitude(self, i, 0.05, params, 4);
+    SetMagnitude(self, i, gainChangeFraction, params, 4);
 }
 
+// [FUN_577c20]
 extern "C" void __fastcall JoyEffect_SetMagnitude(BYTE* self, void*, float v)
 {
     if (!F(void*, self, 4))
@@ -163,11 +176,12 @@ extern "C" void __fastcall JoyEffect_SetMagnitude(BYTE* self, void*, float v)
     params[0] = 56;
     params[11] = 4;
     params[12] = (DWORD)&magnitude;
-    magnitude = (int)(v * (double)10000.0f);
-    SetMagnitude(self, magnitude, 0.02, params, 256);
+    magnitude = static_cast<int>(static_cast<__int64>(v * (double)forceFeedbackScale));
+    SetMagnitude(self, magnitude, magnitudeChangeFraction, params, 256);
 }
 
 // releases the effects of the list and deletes its nodes
+// [FUN_577f80]
 extern "C" void __fastcall JoyEffects_Clear(BYTE* self, void*)
 {
     for (BYTE* n = F(BYTE*, self, 4); n;) {
@@ -180,6 +194,7 @@ extern "C" void __fastcall JoyEffects_Clear(BYTE* self, void*)
     Chain_DeleteAll(self, 0);
 }
 
+// [FUN_578230] Log and forward the force feedback command if the device is ready.
 extern "C" int __cdecl Joy_SendCommand(int command)
 {
     if (!g_joyDevice || !g_joyForceFeedback)
@@ -190,6 +205,7 @@ extern "C" int __cdecl Joy_SendCommand(int command)
     return CallStd<int>(Method(g_joyDevice, 88), g_joyDevice, command);
 }
 
+// [FUN_579260]
 extern "C" void __cdecl Joy_ClearEffects()
 {
     JoyEffects_Clear((BYTE*)g_joyEffects, 0);
@@ -199,6 +215,7 @@ extern "C" void __cdecl Joy_ClearEffects()
     g_6f4bb0 = 0;
 }
 
+// [FUN_579290]
 extern "C" int __cdecl Joy_Shutdown()
 {
     g_6f4b94 = 0;
@@ -234,13 +251,15 @@ extern "C" BYTE* __fastcall Pooled_Construct(BYTE* self, void*)
     return self;
 }
 
-extern "C" void __fastcall Pooled_Set4(BYTE* self, void*)
+// [FUN_579370] The pool sweep calls the deleting destructor on marked objects.
+extern "C" void __fastcall Pooled_MarkForRelease(BYTE* self, void*)
 {
     F(int, self, 4) = 1;
 }
 
 // a free object of the pool moved to the used ones, NULL if there is none
-extern "C" BYTE* __fastcall Pool_Take(BYTE* self, void*)
+// [FUN_579480]
+extern "C" BYTE* __fastcall Pool_AcquireFreeObject(BYTE* self, void*)
 {
     BYTE* e = F(BYTE*, self, 4);
     if (!e)
@@ -271,7 +290,8 @@ static void Assert(const char* expr, int line)
 }
 
 // moves e back to the free objects
-extern "C" void __fastcall Pool_Return(BYTE* self, void*, BYTE* e)
+// [FUN_5794f0]
+extern "C" void __fastcall Pool_ReturnUsedObject(BYTE* self, void*, BYTE* e)
 {
     if (!e)
         Assert(g_strThisNotNull, 108);
@@ -294,13 +314,13 @@ extern "C" void __fastcall Pool_Return(BYTE* self, void*, BYTE* e)
     F(BYTE*, self, 4) = e;
 }
 
-// takes an object of the pool for the next Pooled_Construct (operator new
+// [FUN_579380] Takes an object of the pool for the next Pooled_Construct (operator new
 // of the pooled classes); the object, NULL if the pool is empty
 extern "C" BYTE* __cdecl Pool_Prepare(int size, BYTE* pool)
 {
     if (!pool)
         Assert(g_strPoolNotNull, 25);
-    BYTE* e = Pool_Take(pool, 0);
+    BYTE* e = Pool_AcquireFreeObject(pool, 0);
     if (!e)
         return 0;
     g_poolLast8 = 0;
@@ -314,7 +334,7 @@ extern "C" BYTE* __cdecl Pool_Prepare(int size, BYTE* pool)
 
 extern "C" void __cdecl Pooled_Release(BYTE* e)
 {
-    Pool_Return(F(BYTE*, e, 16), 0, e);
+    Pool_ReturnUsedObject(F(BYTE*, e, 16), 0, e);
 }
 
 extern "C" BYTE* __fastcall Pool_Construct(BYTE* self, void*, int size)
@@ -413,11 +433,13 @@ extern "C" void __fastcall Triangles_Draw(BYTE* self, void*, void* texture, void
             F(int, self, 6912), 0);
 }
 
-extern "C" void __fastcall Vec3_DivideBy(float* self, void*, float d)
+// [FUN_57c260]
+extern "C" float* __fastcall Vec3_DivideBy(float* self, void*, float d)
 {
     self[0] = self[0] / d;
     self[1] = self[1] / d;
     self[2] = self[2] / d;
+    return self;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,7 +448,8 @@ extern "C" void __fastcall Vec3_DivideBy(float* self, void*, float d)
 
 struct PlaneBits { float a, b, c, d; };     // a Plane
 
-extern "C" double __cdecl Plane_HeightAfter(float x, float y, const PlaneBits* plane, const Matrix* m)
+// [FUN_57c740]
+extern "C" double __cdecl Plane_HeightAtXYAfterTransform(float x, float y, const PlaneBits* plane, const Matrix* m)
 {
     PlaneBits p = *plane;
     Matrix local = *m;
@@ -436,14 +459,16 @@ extern "C" double __cdecl Plane_HeightAfter(float x, float y, const PlaneBits* p
     return -(((double)p.a * x + (double)p.b * y + p.d) / p.c);
 }
 
-extern "C" double __cdecl Plane_Height(float x, float y, float a, float b, float c, float d)
+// [FUN_57c7c0]
+extern "C" double __cdecl Plane_HeightAtXY(float x, float y, float a, float b, float c, float d)
 {
     if (!(x87_fabs(c) > g_epsilon))
         return g_noHeight;
     return -(((double)a * x + (double)b * y + d) / c);
 }
 
-extern "C" double __cdecl Plane_HeightX(float x, int unused, const float* p)
+// [FUN_57c800]
+extern "C" double __cdecl Plane_HeightAtUnitY(float x, int unused, const float* p)
 {
     if (!(x87_fabs(p[2]) > g_epsilon))
         return g_noHeight;
@@ -452,21 +477,22 @@ extern "C" double __cdecl Plane_HeightX(float x, int unused, const float* p)
 
 // the height in the first of the n triangles (12 bytes apart from tris)
 // that contains (x, y)
-extern "C" int __cdecl Tris_Height(float* out, float x, float y, BYTE* tris, BYTE* tris2, const PlaneBits** planes,
+// [FUN_57c830]
+extern "C" int __cdecl Triangles_FindFirstHeight(float* out, float x, float y, BYTE* tris, BYTE* tris2, const PlaneBits** planes,
                                    const Matrix** matrices, unsigned n)
 {
     for (unsigned i = 0; i < n; i++, tris += 12, tris2 += 12) {
         if (Point_InTriangleXY(x, y, (const float*)tris, (const float*)tris2)) {
-            *out = (float)Plane_HeightAfter(x, y, planes[i], matrices[i]);
+            *out = (float)Plane_HeightAtXYAfterTransform(x, y, planes[i], matrices[i]);
             return 1;
         }
     }
     return 0;
 }
 
-// the height on the plane of the nearest of the n 208-byte records (point
+// [FUN_57c8b0] The height on the plane of the nearest of the n 208-byte records (point
 // at +52, normal at +64)
-extern "C" double __cdecl Records_Height(float x, float y, BYTE* recs, unsigned n)
+extern "C" double __cdecl Plane_HeightFromNearestRecord(float x, float y, BYTE* recs, unsigned n)
 {
     unsigned best = 0;
     float bestDist = 3.40282347e+38f;
@@ -483,7 +509,7 @@ extern "C" double __cdecl Records_Height(float x, float y, BYTE* recs, unsigned 
     BYTE* r = recs + best * 208;
     float d = (float)-(((double)F(float, r, 72) * F(float, r, 60) + (double)F(float, r, 68) * F(float, r, 56))
                        + (double)F(float, r, 64) * F(float, r, 52));
-    return Plane_Height(x, y, F(float, r, 64), F(float, r, 68), F(float, r, 72), d);
+    return Plane_HeightAtXY(x, y, F(float, r, 64), F(float, r, 68), F(float, r, 72), d);
 }
 
 // ---------------------------------------------------------------------------
@@ -591,7 +617,7 @@ void __fastcall PoolNode_Destroy(BYTE* self, void*)
     Pool6928_Free((BYTE**)(self + 76), 0);
     if (F(void*, self, 72))
         operator delete(F(void*, self, 72));
-    Sce5ef660_Destroy(self);
+    SceneNode_DestroyBase(self);
 }
 
 }
@@ -1661,9 +1687,9 @@ int __cdecl Joy_Acquire(int on)
     BYTE* dev = (BYTE*)g_joyDevice;
     if (!dev)
         return 1;
-    if (g_6f4ba4) {
+    if (joyBeforeAcquire) {
         Joy_Log((const char*)s_acqStart);
-        ((AcqCallback)g_6f4ba4)(on);
+        ((AcqCallback)joyBeforeAcquire)(on);
     }
     int hr;
     if (on) {
@@ -1673,9 +1699,9 @@ int __cdecl Joy_Acquire(int on)
         Joy_Log((const char*)s_acqUnacquire);
         hr = ComCall577(g_joyDevice, 32);
     }
-    if (g_6f4ba8) {
+    if (joyAfterAcquire) {
         Joy_Log((const char*)s_acqCallback2);
-        ((AcqCallback)g_6f4ba8)(on);
+        ((AcqCallback)joyAfterAcquire)(on);
     }
     char buf[100];
     CallC(Acq_sprintf, buf, (const char*)s_acqResult, hr);
@@ -1700,7 +1726,7 @@ int __cdecl Joy_Acquire(int on)
 KING_VAR(float, g_ff64c3f0, 64c3f0)
 extern "C" Vec3* __fastcall Vec3_SetThis(Vec3* self, void*, float x, float y, float z);
 extern "C" Vec3* __cdecl Vec3_Diff(Vec3* out, const Vec3* a, const Vec3* b);
-extern "C" Vec3* __cdecl Vec3_Cross2(Vec3* out, const Vec3* a, const Vec3* b);
+extern "C" Vec3* __cdecl Vec3_CrossProduct(Vec3* out, const Vec3* a, const Vec3* b);
 
 extern "C" {
 
@@ -1716,7 +1742,7 @@ int __cdecl Point_InTriangleXY(float x, float y, const float* xs, const float* y
     Vec3 a = {ax, ay, 0}, c = {cx, cy, 0}, p = {x, y, 0}, ac, pc, r;
     Vec3_Diff(&ac, &a, &c);
     Vec3_Diff(&pc, &p, &c);
-    Vec3_Cross2(&r, &pc, &ac);
+    Vec3_CrossProduct(&r, &pc, &ac);
     return z1 <= g_ff64c3f0 && z2 <= g_ff64c3f0 && r.z <= g_ff64c3f0;
 }
 
@@ -1735,8 +1761,8 @@ extern "C" void Dg_Sum(); KING_ALIAS("_Dg_Sum", "_Vec3_Sum")
 extern "C" void Dg_Times(); KING_ALIAS("_Dg_Times", "_Vec3_Times")
 extern "C" void Dg_DivideBy(); KING_ALIAS("_Dg_DivideBy", "@Vec3_DivideBy@12")
 extern "C" void Dg_Set2Vec(); KING_ALIAS("_Dg_Set2Vec", "@Fx_Set2Vec@24")
-extern "C" double __cdecl Records_Height(float x, float y, BYTE* recs, unsigned n);
-extern "C" void Dg_RecordsHeight(); KING_ALIAS("_Dg_RecordsHeight", "_Records_Height")
+extern "C" double __cdecl Plane_HeightFromNearestRecord(float x, float y, BYTE* recs, unsigned n);
+extern "C" void Dg_RecordsHeight(); KING_ALIAS("_Dg_RecordsHeight", "_Plane_HeightFromNearestRecord")
 extern "C" void Dg_TerrainHeight(); KING_ALIAS("_Dg_TerrainHeight", "@Terrain_HeightAt@16")
 KING_VAR(BYTE*, g_dg6cec98, 6cec98)
 KING_VAR(BYTE*, g_dg6f33b4, 6f33b4)
@@ -1920,8 +1946,8 @@ int __fastcall Decal_Build(BYTE* s, void*, BYTE* arr, unsigned n, const float* c
 // === a ground decal over objects and meshes (FUN_579aa0)
 
 extern "C" double __fastcall Terrain_HeightAt(BYTE** s, void*, float x, float y);
-extern "C" int __cdecl Tris_Height(float* out, float x, float y, BYTE* tris, BYTE* tris2, const PlaneBits** planes, const Matrix** matrices, unsigned n);
-extern "C" void Dm_PlaneHeightX(); KING_ALIAS("_Dm_PlaneHeightX", "_Plane_HeightX")
+extern "C" int __cdecl Triangles_FindFirstHeight(float* out, float x, float y, BYTE* tris, BYTE* tris2, const PlaneBits** planes, const Matrix** matrices, unsigned n);
+extern "C" void Dm_PlaneHeightX(); KING_ALIAS("_Dm_PlaneHeightX", "_Plane_HeightAtUnitY")
 extern "C" Vec3* __cdecl Vec3_MulMatrix(Vec3* out, const Vec3* p, const Matrix* m);
 extern "C" void Dm_Inverse(); KING_ALIAS("_Dm_Inverse", "_Matrix_Inverse")
 KING_VAR(double, g_dm64b788, 64b788)
@@ -1958,7 +1984,7 @@ static void Dm_Unit(float* out, double x, double y)
 // the height of a vertex from the objects, plus 64c304
 static float Dm_ObjHeight(float x, float y, BYTE* arr, unsigned n)
 {
-    return (float)(Records_Height(x, y, arr, n) + g_dg64c304);
+    return (float)(Plane_HeightFromNearestRecord(x, y, arr, n) + g_dg64c304);
 }
 
 extern "C" {
@@ -2193,7 +2219,7 @@ int __fastcall Decal_BuildOnObjects(BYTE* s, void*, BYTE* arr, unsigned n, const
     {
         float* V = (float*)(s + v * 32);
         float h;
-        if (Tris_Height(&h, V[0], V[1], (BYTE*)&g_dmTris, (BYTE*)&g_dmTris2, (const PlaneBits**)&g_dmPlanes, (const Matrix**)&g_dmMats, tris))
+        if (Triangles_FindFirstHeight(&h, V[0], V[1], (BYTE*)&g_dmTris, (BYTE*)&g_dmTris2, (const PlaneBits**)&g_dmPlanes, (const Matrix**)&g_dmMats, tris))
             V[2] = (float)((double)h + g_dg64c304);
         else if (terrain)
             V[2] = (float)(Terrain_HeightAt((BYTE**)terrain, 0, V[0], V[1]) + g_dg64c304);
@@ -2244,7 +2270,7 @@ int __fastcall Decal_BuildOnObjects(BYTE* s, void*, BYTE* arr, unsigned n, const
                 {
                     double zc = colz[(i - 3) * 48];
                     if (colz[(i - 3) * 48] == g_dm6503d0)
-                        zc = Records_Height(colz[(i - 3) * 48 - 2], colz[(i - 3) * 48 - 1], arr, n) + g_dg64c304;
+                        zc = Plane_HeightFromNearestRecord(colz[(i - 3) * 48 - 2], colz[(i - 3) * 48 - 1], arr, n) + g_dg64c304;
                     if (x87_fabs((double)za - zb) > x87_fabs(zc - zb))
                     {
                         za = zb;
@@ -2267,7 +2293,7 @@ int __fastcall Decal_BuildOnObjects(BYTE* s, void*, BYTE* arr, unsigned n, const
                 {
                     double zc = colz[(e + 2) * 48];
                     if (colz[(e + 2) * 48] == g_dm6503d0)
-                        zc = Records_Height(colz[(e + 2) * 48 - 2], colz[(e + 2) * 48 - 1], arr, n) + g_dg64c304;
+                        zc = Plane_HeightFromNearestRecord(colz[(e + 2) * 48 - 2], colz[(e + 2) * 48 - 1], arr, n) + g_dg64c304;
                     if (x87_fabs((double)za - zb) > x87_fabs(zc - zb))
                     {
                         za = zb;

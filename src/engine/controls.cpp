@@ -43,7 +43,7 @@ extern "C" void __cdecl Surface_VLine(BYTE* s, int x, int y1, int y2, int color,
 extern "C" void __cdecl Surface_HLine(BYTE* s, int y, int x1, int x2, int color, int raw);
 extern "C" void FUN_5b7ce0(); KING_ALIAS("_FUN_5b7ce0", "_Surface_HLine")    // horizontal line
 extern "C" int __fastcall Font_TextWidth(BYTE* self, void*, const char* s);   // framework.cpp
-extern "C" int __fastcall Window_Set80(BYTE* self, void*, int v);               // renderer.cpp
+extern "C" int __fastcall Surface_SetDrawMode(BYTE* self, void*, int v);               // renderer.cpp
 extern "C" void __cdecl Bitmap_Draw(BYTE* dst, int x, int y, BYTE* bmp);       // renderer.cpp
 
 extern "C" {
@@ -55,16 +55,18 @@ void __fastcall Poly_Destroy(BYTE* self, void*)
     operator delete(F(void*, self, 12));
     BYTE* o = F(BYTE*, self, 36);
     if (o && g_720904)
-        CallVirt(o, 8);
+        // IUnknown::Release uses stdcall, with the interface on the stack.
+        // A thiscall here consumes a saved register as this and shifts ESP.
+        CallStd<ULONG>((void(*)())F(void*, F(BYTE*, o, 0), 8), o);
 }
 
-// [FUN_5bc320] copies the 48-byte record i out
-void __fastcall Poly_GetRecord(BYTE* self, void*, int i, DWORD* out)
+// [FUN_5bc320] Store the point transform at index i, copying words forward.
+void __fastcall Poly_SetRecord(BYTE* self, void*, int i, const DWORD* transform)
 {
     if (i < F(int, self, 4) && i >= 0) {
-        const DWORD* s = (DWORD*)(F(BYTE*, self, 8) + i * 48);
+        DWORD* record = (DWORD*)(F(BYTE*, self, 8) + i * 48);
         for (int k = 0; k < 12; k++)
-            out[k] = s[k];
+            record[k] = transform[k];
     }
 }
 
@@ -119,9 +121,16 @@ void __cdecl Gui_Reset702f24()
 // [FUN_5bd5a0] copies a 36-byte style
 DWORD __fastcall Style_Assign(DWORD* self, void*, const DWORD* s)
 {
-    for (int k = 0; k < 9; k++)
-        self[k] = s[k];
-    return s[5];
+    // Preserve the original field order for overlapping style records.
+    self[2] = s[2];
+    self[3] = s[3];
+    self[1] = s[1];
+    self[0] = s[0];
+    self[7] = s[7];
+    self[6] = s[6];
+    self[8] = s[8];
+    self[4] = s[4];
+    return self[5] = s[5];
 }
 
 // [FUN_5bdb50] the descendant with this id
@@ -348,25 +357,25 @@ void __cdecl Ctl_DrawFrame(BYTE* dst, const int* r, DWORD flags, int color, int 
     } else if (flags & 8) {
         CallC(FUN_5b8980, dst, r[0] + dx, r[1] + dy, pattern, 0);
     } else if (flags & 32) {
-        old = Window_Set80(dst, 0, 2);
+        old = Surface_SetDrawMode(dst, 0, 2);
         F(int, dst, 88) = fill;
         Image_Tile(dst, (int*)r, bmp);
-        Window_Set80(dst, 0, old);
+        Surface_SetDrawMode(dst, 0, old);
     } else if (flags & 64) {
-        old = Window_Set80(dst, 0, 2);
+        old = Surface_SetDrawMode(dst, 0, 2);
         F(int, dst, 88) = fill;
         CallC(FUN_5b8980, dst, r[0], r[1], pattern, 0);
-        Window_Set80(dst, 0, old);
+        Surface_SetDrawMode(dst, 0, old);
     } else if (flags & 1) {
-        old = Window_Set80(dst, 0, 2);
+        old = Surface_SetDrawMode(dst, 0, 2);
         F(int, dst, 88) = fill;
         Surface_FillRect(dst, r, color, 0);
-        Window_Set80(dst, 0, old);
+        Surface_SetDrawMode(dst, 0, old);
     } else if (flags & 16) {
-        old = Window_Set80(dst, 0, 3);
+        old = Surface_SetDrawMode(dst, 0, 3);
         F(BYTE, dst, 92) = (BYTE)color;
         Bitmap_Draw(dst, r[0], r[1], bmp);
-        Window_Set80(dst, 0, old);
+        Surface_SetDrawMode(dst, 0, old);
     }
     if (flags & 0x100) {
         Surface_VLine(dst, r[0], r[1], r[3], light, 0);
@@ -374,13 +383,13 @@ void __cdecl Ctl_DrawFrame(BYTE* dst, const int* r, DWORD flags, int color, int 
         Surface_VLine(dst, r[2], r[3], r[1], dark, 0);
         Surface_HLine(dst, r[1], r[2], r[0], light, 0);
     } else if (flags & 0x200) {
-        old = Window_Set80(dst, 0, 2);
+        old = Surface_SetDrawMode(dst, 0, 2);
         F(int, dst, 88) = fill;
         Surface_VLine(dst, r[0], r[1], r[3], light, 0);
         Surface_HLine(dst, r[3], r[0], r[2], dark, 0);
         Surface_VLine(dst, r[2], r[3], r[1], dark, 0);
         Surface_HLine(dst, r[1], r[2], r[0], light, 0);
-        Window_Set80(dst, 0, old);
+        Surface_SetDrawMode(dst, 0, old);
     }
 }
 

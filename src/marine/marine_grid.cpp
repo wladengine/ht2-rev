@@ -42,11 +42,12 @@ extern "C" BYTE* __fastcall MarineParticlePool_Construct(BYTE*,void*,DWORD,DWORD
 extern "C" void __fastcall MarineParticlePool_SetFloor(BYTE*,void*,DWORD);
 extern "C" void __fastcall MarineParticlePool_SetLifetime(BYTE*,void*,DWORD);
 extern "C" void __fastcall MarineParticlePool_Render(BYTE*,void*,BYTE*,BYTE*,DWORD);
-extern "C" DWORD __fastcall MarineGrid_ClassifyTriangle(BYTE*,void*,BYTE*);
+extern "C" DWORD __fastcall MarineGrid_ClassifyTriangleAgainstLimits(BYTE*,void*,BYTE*);
 extern "C" void __fastcall MarineGreed_RemoveNode(BYTE*,void*,BYTE*);
 extern "C" DWORD __fastcall MarineMesh_DrainEdges(BYTE*,void*);
 extern "C" DWORD __fastcall MarineMesh_PruneVertices(BYTE*,void*);
 
+// [FUN_610860]
 extern "C" void __fastcall MarineGrid_Destruct(BYTE* self,void*)
 {
     F(void*,self,0)=g_gridVtable;
@@ -73,6 +74,7 @@ extern "C" BYTE* __fastcall MarineGrid_Delete(BYTE* self,void*,DWORD flags)
     if(flags&1) operator delete(self);
     return self;
 }
+// [FUN_6114d0]
 extern "C" BYTE* __fastcall MarineGrid_WriteVertex(BYTE* self,void*,const DWORD* position,const DWORD* normal,DWORD a,DWORD b,DWORD c,DWORD d,DWORD e,DWORD f)
 {
     // Keep sequential copies: callers can pass overlapping records.
@@ -118,14 +120,15 @@ extern "C" void __fastcall MarineGrid_Draw(BYTE* self,void*,BYTE* device,BYTE* e
     CallVirt(event,8,F(DWORD,g_gridState,468));
     MarineParticlePool_Render(F(BYTE*,self,112),0,device,event,F(DWORD,self,116));
 }
-extern "C" __declspec(noinline) double __cdecl MarineGrid_QualityScale(float,float) { return g_gridOne; }
+// [FUN_613810]
+extern "C" __declspec(noinline) double __cdecl MarineGrid_GetQualityScale(float,float) { return g_gridOne; }
 extern "C" DWORD __fastcall MarineGrid_DesiredWork(BYTE* self,void*)
 {
     double dx=(double)F(float,self,4)-F(float,self,168);
     double dy=(double)F(float,self,8)-F(float,self,172);
     float distance=(float)x87_sqrt(((dx*dx+dy*dy)+F(float,self,12))+F(float,self,12));
     int budget=g_gridBudget;
-    return (DWORD)(__int64)(MarineGrid_QualityScale(distance,4096.0f)*budget);
+    return (DWORD)(__int64)(MarineGrid_GetQualityScale(distance,4096.0f)*budget);
 }
 extern "C" void __fastcall MarineGrid_TrackCamera(BYTE* self,void*,const DWORD* position,const DWORD* direction)
 {
@@ -148,11 +151,12 @@ extern "C" void __fastcall MarineGrid_TrackCamera(BYTE* self,void*,const DWORD* 
     if(delta>(double)F(float,self,196)*g_gridTrackUpper || !(delta>=(double)F(float,self,192)*g_gridTrackLower))
         F(DWORD,self,156)=F(DWORD,self,148);
 }
+// [FUN_612880]
 extern "C" DWORD __fastcall MarineGrid_TrimBranch(BYTE* self,void*,BYTE* branch)
 {
     BYTE* triangle=F(BYTE*,branch,12);
     if(triangle) {
-        DWORD kind=MarineGrid_ClassifyTriangle(self,0,triangle);
+        DWORD kind=MarineGrid_ClassifyTriangleAgainstLimits(self,0,triangle);
         if(kind==1) { MarineGreed_RemoveNode(self,0,F(BYTE*,branch,12));return 1; }
         if(kind==4) return 1;
         if(kind!=2) {
@@ -168,6 +172,7 @@ extern "C" DWORD __fastcall MarineGrid_TrimBranch(BYTE* self,void*,BYTE* branch)
     if(child) right=MarineGrid_TrimBranch(self,0,child);
     return left&right;
 }
+// [FUN_612970]
 extern "C" void __fastcall MarineGrid_Trim(BYTE* self,void*,DWORD argument)
 {
     if(!F(DWORD,self,4)) CallC(FUN_60aa60,2,g_gridAssert,g_gridMissingMesh,g_gridTrimFile,270,g_gridDate);
@@ -216,6 +221,7 @@ extern "C" void __fastcall MarineGrid_Trim(BYTE* self,void*,DWORD argument)
     }
     MarineMesh_DrainEdges(self,0);MarineMesh_PruneVertices(self,0);
 }
+// [FUN_613860]
 extern "C" void __cdecl MarineGrid_BuildRandomDirections(DWORD seed)
 {
     srand(seed);

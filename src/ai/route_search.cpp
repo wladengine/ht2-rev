@@ -75,7 +75,8 @@ DBox* DBox::Extend(const DVec3* p)
 typedef unsigned CrcTable[256];
 KING_VAR(CrcTable, g_crcTable, 6918c0)
 
-extern "C" void __cdecl Crc_InitTable()
+// [FUN_487fe0]
+extern "C" void __cdecl Crc32_BuildMsbFirstTable()
 {
     for (unsigned i = 0; i < 256; i++) {
         unsigned c = i << 24;
@@ -85,11 +86,12 @@ extern "C" void __cdecl Crc_InitTable()
     }
 }
 
-extern "C" void __cdecl Crc_Update(unsigned* crc, const unsigned char* data, int len)
+// [FUN_488020]
+extern "C" void __cdecl Crc32_UpdateMsbFirst(unsigned* crc, const unsigned char* data, int len)
 {
     unsigned c = *crc;
     if (g_crcTable[1] == 0)
-        Crc_InitTable();
+        Crc32_BuildMsbFirstTable();
     for (; len > 0; len--)
         c = (c << 8) ^ g_crcTable[(c >> 24) ^ *data++];
     *crc = c;
@@ -107,7 +109,7 @@ extern "C" int __cdecl Crc_File(unsigned* crc, unsigned* size, const char* path)
         return 1;                       // the buffer leaks, as in the game
     for (int n; (n = _read(fd, buf, 16384)) != 0; ) {
         *size += n;
-        Crc_Update(crc, buf, n);
+        Crc32_UpdateMsbFirst(crc, buf, n);
     }
     *crc = ~*crc;
     _close(fd);
@@ -201,42 +203,52 @@ void Filter2::SetResponse(double t)
     SetPoles(re, im);
 }
 
+// 0x4881b0 retains the extended result after storing the new binary64 history.
+// An x87 multiply with a memory operand can set different exception flags than two register loads.
+#pragma warning(push)
+#pragma warning(disable: 4035)
 double Filter2::Update(double x)
 {
-    double old = y2;
-    y2 = y1;
-    double r = (y1 * c1 + old * c2) + x * c0;
-    y1 = r;
-    return r;
+    __asm {
+        mov ecx, this
+        fld qword ptr [ecx + 32]
+        fld qword ptr [ecx + 24]
+        fst qword ptr [ecx + 32]
+        fmul qword ptr [ecx + 8]
+        fxch st(1)
+        fmul qword ptr [ecx + 16]
+        faddp st(1), st(0)
+        fld x
+        fmul qword ptr [ecx]
+        faddp st(1), st(0)
+        fst qword ptr [ecx + 24]
+    }
 }
+#pragma warning(pop)
 
 
 // Clears the route tables of one side: a fresh table for every node that
 // has one, and no cost on any edge.
-extern "C" void __cdecl Road_ResetSide(int side)
+// [FUN_484140]
+extern "C" void __cdecl Road_ResetRouteCacheForSide(int side)
 {
     for (RoadNode** n = g_roadNodes; n != g_roadNodesEnd; n++) {
         if ((*n)->routeTable[side])
             operator delete((*n)->routeTable[side]);
         (*n)->routeTable[side] = 0;
         if (!((*n)->flags & 8)) {
-            unsigned count = RoadNodeCount();
-            (*n)->routeTable[side] = (BYTE*)operator new(count);
-            memset((*n)->routeTable[side], 0xff, count);
+            (*n)->routeTable[side] = (BYTE*)operator new(RoadNodeCount());
+            memset((*n)->routeTable[side], 0xff, RoadNodeCount());
         }
     }
-    RoadCost none;
-    memset(&none, 0, sizeof none);
-    for (RoadEdge** e = g_roadEdges; e != g_roadEdgesEnd; e++) {
-        (*e)->cost[0][side] = none;
-        (*e)->cost[1][side] = none;
-    }
+    for (RoadEdge** e = g_roadEdges; e != g_roadEdgesEnd; ++e)
+        memset((*e)->cost[side], 0, sizeof((*e)->cost[side]));
 }
 
 extern "C" void __cdecl Road_ResetSides()
 {
     for (int side = 0; side < 2; side++)
-        Road_ResetSide(side);
+        Road_ResetRouteCacheForSide(side);
 }
 
 extern "C" void __cdecl Road_ResetCosts()
@@ -293,23 +305,31 @@ extern "C" double __cdecl Road_MinTurnCos(const HopVec* hops)
 }
 
 // Debug dumps of a route
-extern "C" void __cdecl Road_PrintEdge(const RoadEdge* e, FILE* f)
+typedef const char RouteText[1];
+KING_VAR(RouteText, s_nullEdge, 670194)
+KING_VAR(RouteText, s_lineBreak, 66c4e4)
+KING_VAR(RouteText, s_edgeObjectId, 67018c)
+KING_VAR(RouteText, s_edgeNames, 670178)
+KING_VAR(RouteText, s_hopNodeAndDirection, 67019c)
+// [FUN_484550]
+extern "C" void __cdecl Road_WriteEdgeDescription(const RoadEdge* e, FILE* f)
 {
     if (!e) {
-        fprintf(f, "(NULL)");
-        fprintf(f, "\n");
+        fprintf(f, s_nullEdge);
+        fprintf(f, s_lineBreak);
         return;
     }
-    fprintf(f, " 0x%x ", e->objects[0]->id);
-    fprintf(f, "( %s <- %s -> %s )", Str(&e->from->name), Str(&e->name), Str(&e->to->name));
-    fprintf(f, "\n");
+    fprintf(f, s_edgeObjectId, e->objects[0]->id);
+    fprintf(f, s_edgeNames, Str(&e->from->name), Str(&e->name), Str(&e->to->name));
+    fprintf(f, s_lineBreak);
 }
 
-extern "C" void __cdecl Road_PrintHops(const HopVec* hops, FILE* f)
+// [FUN_484600]
+extern "C" void __cdecl Road_WriteHopList(const HopVec* hops, FILE* f)
 {
     for (const Hop* h = hops->begin; h != hops->end; h++) {
-        fprintf(f, "%s %x ", Str(&g_roadNodes[h->node]->name), (int)h->dir);
-        Road_PrintEdge(h->edge, f);
+        fprintf(f, s_hopNodeAndDirection, Str(&g_roadNodes[h->node]->name), (int)h->dir);
+        Road_WriteEdgeDescription(h->edge, f);
     }
 }
 
@@ -317,13 +337,14 @@ extern "C" void __cdecl Road_DumpHops(const HopVec* hops, const char* path)
 {
     FILE* f = fopen(path, "wt");
     if (f) {
-        Road_PrintHops(hops, f);
+        Road_WriteHopList(hops, f);
         fclose(f);
     }
 }
 
-static const char s_trceId[] = "$Id: ai_trce.cpp 2001/5/23 19:48:54";
-static const char s_trceFile[] = "C:\\Nek\\Vrappl\\Gi\\Htai\\ai_trce.cpp";
+KING_VAR(RouteText, s_trceId, 6700c8)
+KING_VAR(RouteText, s_trceFile, 6701e0)
+KING_VAR(RouteText, s_uncachedStepError, 670244)
 
 // Sets the direction bit of every hop from how its edge joins the next
 // node; reports a route whose hops don't connect.
@@ -368,15 +389,18 @@ extern "C" void __cdecl Road_OrientHops(HopVec* hops)
 // node; Road_FindRoute searches and fills them.
 
 
+KING_VAR(const double, g_unreachableRouteCost, 64bc30)
+
 // The cost of the known route from one node to another, following the
 // route tables; DBL_MAX where a table says the route is still unknown.
-extern "C" double __cdecl Road_RouteCost(int side, int node, int to)
+// [FUN_484ae0]
+extern "C" double __cdecl Road_SumCachedRouteCost(int side, int node, int to)
 {
     double sum = 0;
     BYTE code = g_roadNodes[node]->routeTable[side][to];
     while (code != 127) {
         if (code == 255)
-            AiError(0, 1, s_trceFile, s_trceId, 408, "Internal error 7893", &g_aiEmpty, &g_aiEmpty);
+            AiError(0, 1, s_trceFile, s_trceId, 408, s_uncachedStepError, &g_aiEmpty, &g_aiEmpty);
         int dir = code >> 7;
         RoadEdge* e = g_roadNodes[node]->edges[dir].begin[code & 127];
         sum = Road_EdgeCost(side, e, dir) + sum;
@@ -386,11 +410,12 @@ extern "C" double __cdecl Road_RouteCost(int side, int node, int to)
         node = next;
         code = g_roadNodes[node]->routeTable[side][to];
     }
-    return s_noRoute;
+    return g_unreachableRouteCost;
 }
 
 // remembers the first step of a route at every node it passes
-extern "C" void __cdecl Road_StoreRoute(int side, const HopVec* hops)
+// [FUN_484be0]
+extern "C" void __cdecl Road_CacheFirstHopCodes(int side, const HopVec* hops)
 {
     const Hop* begin = hops->begin;
     const Hop* end = hops->end;
@@ -403,7 +428,8 @@ extern "C" void __cdecl Road_StoreRoute(int side, const HopVec* hops)
     }
 }
 
-extern "C" void __cdecl Road_MarkUnknown(int side, int node, int to)
+// [FUN_484c50]
+extern "C" void __cdecl Road_MarkDestinationUnreachable(int side, int node, int to)
 {
     g_roadNodes[node]->routeTable[side][to] = 127;
 }
@@ -419,7 +445,7 @@ extern "C" void __cdecl Road_NodeCost(int side, int from, int to, double* cost)
     if (from == to)
         return;
     if (g_roadNodes[from]->routeTable[side][to] != 255) {
-        *cost = Road_RouteCost(side, from, to);
+        *cost = Road_SumCachedRouteCost(side, from, to);
         return;
     }
     HopVecFull route;
@@ -429,15 +455,18 @@ extern "C" void __cdecl Road_NodeCost(int side, int from, int to, double* cost)
         StlDeallocate(route.begin, n * sizeof(Hop));
 }
 
+KING_VAR(const double, g_sideOneCostMultiplier, 64b780)
+
 // the cost for the side, replaced by the cost for side 1 when that is less
 // than a tenth of it
-extern "C" void __cdecl Road_NodeCostBest(int side, int from, int to, double* cost)
+// [FUN_487590]
+extern "C" void __cdecl Road_SelectNodeCostWithSideOneFallback(int side, int from, int to, double* cost)
 {
     double other;
     Road_NodeCost(side, from, to, cost);
     Road_NodeCost(1, from, to, &other);
-    if (!(other * 10.0 >= *cost))
-        *cost = other;
+    if (!(other * g_sideOneCostMultiplier >= *cost))
+        memcpy(cost, &other, sizeof(other));
 }
 
 extern "C" void __cdecl Road_PositionCostBest(int side, PositionId from, PositionId to, double* cost)
@@ -445,36 +474,39 @@ extern "C" void __cdecl Road_PositionCostBest(int side, PositionId from, Positio
     double other;
     Road_PositionCost(side, from, to, cost);
     Road_PositionCost(1, from, to, &other);
-    if (!(other * 10.0 >= *cost))
-        *cost = other;
+    if (!(other * g_sideOneCostMultiplier >= *cost))
+        memcpy(cost, &other, sizeof(other));
 }
 
 // ---------------------------------------------------------------------------
 // The AI's view of the game
 
-KING_VAR(void*, g_aiTruck, 6f33ac)
-KING_VAR(int, g_6ced70, 6ced70)
+KING_VAR(void*, g_switchWeather, 6f33ac)
+extern "C" int __cdecl Graphics_IsDetailLevelAtLeastThree();
 extern "C" double __fastcall Wave_Value(void* self, void*, double phase);   // engine.cpp
 
-extern "C" int __cdecl AI_TruckGripLow()
+// [FUN_484010]
+extern "C" int __cdecl Weather_IsWaveLevelLow()
 {
-    double grip = Wave_Value(g_aiTruck, 0, 0.0);
-    return !(grip >= 0.2);
+    double level = Wave_Value(g_switchWeather, 0, 0.0);
+    return !(level >= 0.2);
 }
 
-// the truck's value at +88 between 8 and 21
-extern "C" int __cdecl AI_TruckInRange()
+// Module switches use the weather clock's open interval from 08:00 to 21:00.
+// [FUN_484040]
+extern "C" int __cdecl Weather_IsBetweenDaytimeSwitchHours()
 {
-    BYTE* t = (BYTE*)g_aiTruck;
+    BYTE* t = (BYTE*)g_switchWeather;
     if (!t)
         return 0;
     double v = *(double*)(t + 88);
     return v > 8.0 && !(v >= 21.0);
 }
 
-extern "C" int __cdecl AI_Level3()
+// [FUN_484080] Enable the conditional switches in the module-load handler.
+extern "C" int __cdecl AI_UseHighDetailModuleSwitches()
 {
-    return g_6ced70 >= 3;
+    return Graphics_IsDetailLevelAtLeastThree() != 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -735,7 +767,7 @@ HopVecFull* __cdecl Road_FindRoute(HopVecFull* out, int side, int from, int to, 
                 best = p;
         int u = *best;
         if (!(costs[u] < s_noRoute)) {
-            Road_MarkUnknown(side, from, to);
+            Road_MarkDestinationUnreachable(side, from, to);
             *cost = s_noRoute;
             out->begin = out->end = out->capacityEnd = 0;
             for (int i = 0; i < routes.count; i++)
@@ -750,7 +782,7 @@ HopVecFull* __cdecl Road_FindRoute(HopVecFull* out, int side, int from, int to, 
             HopVecFull* r = &routes.v[u];
             Route_Push(r, &h);
             *cost = costs[u];
-            Road_StoreRoute(side, (HopVec*)r);
+            Road_CacheFirstHopCodes(side, (HopVec*)r);
             if (*cost < s_noRoute)
                 Route_Copy(out, r);
             else
@@ -764,7 +796,7 @@ HopVecFull* __cdecl Road_FindRoute(HopVecFull* out, int side, int from, int to, 
         nOpen--;
         done[u] = 1;
         HopVecFull* ru = &routes.v[u];
-        Road_StoreRoute(side, (HopVec*)ru);
+        Road_CacheFirstHopCodes(side, (HopVec*)ru);
         for (int k = 0; k < 2; k++) {
             RoadNode* nu = g_roadNodes[u];
             for (RoadEdge** it = nu->edges[k].begin; it != g_roadNodes[u]->edges[k].end; it++) {

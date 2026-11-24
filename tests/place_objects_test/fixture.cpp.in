@@ -1,0 +1,97 @@
+#include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define F(t,p,o) (*(t*)((BYTE*)(p)+(o)))
+struct Matrix { float m[12]; };
+struct Vec3Bits { DWORD v[3]; };
+static BYTE world[4096], game[1024], car1[22000], car2[22000], link1[16], link2[16];
+static BYTE record1[32], record2[32], room[64], module[4096];
+static BYTE* g_world=world;
+static BYTE* g_game=game;
+static BYTE* g_po6f653c=0;
+static BYTE g_po697868[2416];
+static Matrix bodyMatrix, composed;
+static int setFull, setMatrix, queries, states, binds;
+static void check(bool ok,const char* what) { if(!ok) { printf("FAIL: %s\n",what); exit(1); } }
+static BYTE* Obj541970_First(BYTE* c,int) { check(c==car1,"list starts at player"); return link1; }
+static BYTE* FUN_541960(BYTE* p) { return p==link1 ? car1 : car2; }
+static BYTE* FUN_57de90(BYTE*,BYTE* out) { memcpy(out,&bodyMatrix,48); return out; }
+template<class R=void,class Fn,class... A> static R CallThis(Fn fn,A... a) { return (R)fn(a...); }
+template<class R=void,class Fn,class... A> static R CallC(Fn fn,A... a) { return (R)fn(a...); }
+static BYTE* FUN_5aba40(BYTE* out,BYTE*,BYTE*) { memcpy(out,&composed,48); return out; }
+static BYTE* Resources_Get(BYTE**,int,int id) { return id==100100 ? record1 : record2; }
+static int SceneObj_Get800(BYTE*,int) { return (int)room; }
+static void* Query_HitObject(BYTE* obj,const Vec3Bits* p,const Vec3Bits* d) {
+    check(obj==room,"query starts in body room");
+    check(!memcmp(p,bodyMatrix.m+9,12),"query start is body position");
+    check(!memcmp(d,composed.m+9,12),"query end is saved frame position");
+    ++queries; return room;
+}
+static int Car_GetState(BYTE*,int,float* out) { for(int i=0;i<49;++i)out[i]=(float)(i+10); ++states; return 49; }
+static void validate(const Matrix* m,const void* data) {
+    check(!memcmp(m,&composed,48),"saved matrix preserved");
+    for(int i=0;i<49;++i)check(((const float*)data)[i]==(float)(i+10),"complete state preserved");
+}
+static void Fx_SetObject(BYTE*,const char* name,const Matrix* m,const void* st) {
+    check(!strcmp(name,"room_fixture"),"query room saved"); validate(m,st); ++setFull;
+}
+static void Fx_SetObjectMatrix(BYTE*,const Matrix* m,const void* st) { validate(m,st); ++setMatrix; }
+static void Resources_AddRecord(BYTE*,int,int name,BYTE*,int) { check(!strcmp((const char*)name,"module_fixture"),"rebind module"); ++binds; }
+static bool returnRoom = true;
+static int massQueries, placed, fallback;
+static Matrix* Matrix_Multiply(Matrix* out,const Matrix*,const Matrix*) { *out=composed; return out; }
+static BYTE* FUN_4e5ba7(BYTE* from,BYTE* start,const float* end) {
+    check(from==room,"mass query initial room");
+    check(start==car1+552,"mass query previous position");
+    check(!memcmp(end,composed.m+9,12),"mass query composed endpoint");
+    ++massQueries; return returnRoom ? module : 0;
+}
+static void CallVirt(BYTE* body,int offset,int arg) { check(body==car1+16 && offset==28 && arg==1,"mass fallback flags"); ++fallback; }
+static void Car_Place(BYTE* car,int,BYTE* where,const BYTE* matrix) {
+    check(car==car1 && where==(returnRoom ? module : room),"mass target room");
+    check(!memcmp(matrix,&composed,48),"mass target matrix"); ++placed;
+}
+// Extract the production composition/query/placement block; unrelated inertia
+// calculations are outside this fixture's claim. The endpoint contract comes
+// from independent original 545bbd/545bd5 machine code, not from this stub.
+static void massPlacement(BYTE* s) {
+    Matrix m192 = {};
+// ADD_MASS_PLACEMENT
+}
+static void townFields() {
+    // Independent TNDE layout: index already consumed, 28 field bytes,
+    // 8 ignored bytes, 4-byte alternate cargo; next chunk must not be read.
+    DWORD input[12]={25,0xffffffff,5,0x1234,0x5678,0x9abc,0xdef0,111,222,7,0x45444e54,44};
+    DWORD node[8]={}; BYTE* cursor=(BYTE*)input; BYTE** cur=&cursor;
+// TOWN_FIELDS
+    check(node[0]==25 && node[1]==0xffffffff && node[3]==5,"town ordinary fields");
+    check(node[2]==7 && cursor==(BYTE*)input+40,"town alternate cargo and cursor boundary");
+    check(node[4]==0x1234 && node[7]==0xdef0,"town double fields");
+}
+// PRODUCTION
+int main() {
+    static_assert(sizeof(void*)==4,"x86 fixture");
+    F(BYTE*,game,616)=car1;
+    F(BYTE*,link1,8)=link2+4;
+    F(int,car1,360)=100100;
+    F(int,car2,360)=101001;
+    F(BYTE*,record1,12)=module;
+    F(const char*,module,4016)="module_fixture";
+    F(const char*,room,12)="room_fixture";
+    F(BYTE*,room,36)=module;
+    F(const char*,module,60)="module_fixture";
+    for(int i=0;i<12;++i) {bodyMatrix.m[i]=(float)(i+100);composed.m[i]=(float)(i+200);}
+    Fx_PlaceObjects();
+    check(queries==2 && states==2 && setFull==2 && !setMatrix && !binds,"player and kind101 branches");
+    queries=states=setFull=setMatrix=0;
+    F(int,car2,360)=100101;
+    F(const char*,module,4016)="old_module";
+    Fx_PlaceObjects();
+    check(queries==2 && states==2 && setFull==1 && setMatrix==1 && binds==1,"kind100 and module change branches");
+    F(BYTE*,car1,816)=room;
+    massPlacement(car1); returnRoom=false; massPlacement(car1);
+    check(massQueries==2 && placed==2 && fallback==1,"mass normal and fallback branches");
+    townFields();
+    puts("PASS: saved-frame endpoint; 49-float capacity/content; player, 100/101 and module-change branches; mass placement/fallback; TNDE fields/cursor");
+}

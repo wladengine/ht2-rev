@@ -21,6 +21,7 @@ extern "C" void __fastcall GridBase_SetCamera(BYTE* self,void*,const DWORD* posi
     for(unsigned i=0;i<3;++i) F(volatile DWORD,self,4+i*4)=position[i];
     for(unsigned i=0;i<3;++i) F(volatile DWORD,self,16+i*4)=direction[i];
 }
+// [FUN_607190]
 extern "C" void __fastcall GridBase_Destruct(BYTE* self,void*)
 {
     BYTE* child=F(BYTE*,self,52); F(void*,self,0)=g_gb_vtable;
@@ -37,6 +38,7 @@ extern "C" BYTE* __fastcall GridBase_DeleteAlternate(BYTE* self,void*,DWORD flag
 {
     GridBase_Destruct(self,0); if(flags&1) operator delete(self); return self;
 }
+// [FUN_607220]
 extern "C" void __fastcall GridBase_SetCameraAndOrigin(BYTE* self,void*,const DWORD* position,const float* direction,const DWORD* origin)
 {
     for(unsigned i=0;i<3;++i) F(volatile DWORD,self,4+i*4)=position[i];
@@ -44,6 +46,7 @@ extern "C" void __fastcall GridBase_SetCameraAndOrigin(BYTE* self,void*,const DW
     for(unsigned i=0;i<3;++i) F(volatile DWORD,self,16+i*4)=F(DWORD,normal,i*4);
     for(unsigned i=0;i<3;++i) F(volatile DWORD,self,28+i*4)=origin[i];
 }
+// [FUN_607350]
 extern "C" DWORD __fastcall TerrainCell_SetTriangles(BYTE* self,void*,BYTE* first,BYTE* second)
 {
     F(DWORD,self,16)=F(DWORD,self,12)=F(DWORD,self,8)=0;

@@ -12,7 +12,7 @@ extern "C" void __cdecl Switch_Select(BYTE* node, int i);
 extern "C" char* __cdecl CopyBytes(const char* first, const char* last, char* to);   // aiordr.cpp
 extern "C" void __fastcall CharVec_InsertRange44c220(BYTE** self, void*, BYTE* pos, BYTE* first, BYTE* last);
 extern "C" void __cdecl Notice_Show(int level, const char* text, int a, int b);              // copter.cpp
-extern "C" void __cdecl Notice_Banner(int eventId, double value, const char* text);       // copter.cpp
+extern "C" void __cdecl Notice_ShowEventBanner(int eventId, double value, const char* text);       // copter.cpp
 
 typedef CharVec* ModuleNames[];
 KING_VAR(ModuleNames*, g_aiModuleNames, 68d0c8)
@@ -55,8 +55,8 @@ void* AI_483a50()
     return (BYTE*)g_pWnd6cec6c->m_1356 + 8336;
 }
 
-// Sets a switch of a module of the game screen.
-void updateSwitch(const char* moduleName, const char* switchName, int v)
+// [FUN_483a70] Find a named switch in the module and select its requested state.
+void Ai_SetModuleSwitchByName(const char* moduleName, const char* switchName, int v)
 {
     StateTrace trace("updateSwitch(char const * moduleName, char const * switchName, int v)");
     if (!moduleName || !switchName || !strlen(moduleName) || !strlen(switchName))
@@ -74,7 +74,7 @@ void AI_UpdateSwitch(const AiSwitch* s)
     if (s->module == -1)
         return;
     const CharVec* module = (*g_aiModuleNames)[s->module];
-    updateSwitch(module->begin != module->end ? module->begin : NULL, s->name, s->value != 0);
+    Ai_SetModuleSwitchByName(module->begin != module->end ? module->begin : NULL, s->name, s->value != 0);
 }
 
 void displayScreenMessage(const char* message)
@@ -99,14 +99,14 @@ void AI_AddToBanner(double value)
 void eventBanner(int xEventId, char* message)
 {
     StateTrace trace("eventBanner(int xEventId, char * message)");
-    Notice_Banner(xEventId, g_bannerValue, message);
+    Notice_ShowEventBanner(xEventId, g_bannerValue, message);
     g_bannerValue = 0;
 }
 
 // ---------------------------------------------------------------------------
 // Entry points for the assembly. The cdecl functions declared in ai.h replace
 // their labels themselves: AI_StartXCycleTask [FUN_483990], AI_Time
-// [FUN_483a20], AI_483a50 [FUN_483a50], updateSwitch [FUN_483a70],
+// [FUN_483a20], AI_483a50 [FUN_483a50], Ai_SetModuleSwitchByName [FUN_483a70],
 // AI_UpdateSwitch [FUN_483c10], displayScreenMessage [FUN_483cb0],
 // AI_AddToBanner [FUN_483e60], eventBanner [FUN_483e80].
 
@@ -144,7 +144,8 @@ extern "C" void __cdecl AI_ShuffleState_Init()
     g_aiShuffleOtherIndex = 31;
 }
 
-extern "C" CharVec* __cdecl AI_MessageBuffer_Construct()
+// [FUN_483c70] Clear all three pointers of the static screen message vector.
+extern "C" CharVec* __cdecl AI_ConstructScreenMessageBuffer()
 {
     g_screenMessage.begin = 0;
     g_screenMessage.end = 0;
@@ -164,6 +165,6 @@ extern "C" int __cdecl AI_MessageBuffer_RegisterDestructor()
 
 extern "C" int __cdecl AI_MessageBuffer_Init()
 {
-    AI_MessageBuffer_Construct();
+    AI_ConstructScreenMessageBuffer();
     return AI_MessageBuffer_RegisterDestructor();
 }

@@ -12,10 +12,13 @@
 
 #include "king.h"
 #include <stdarg.h>
+#include <corecrt_stdio_config.h>
 #include <float.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <process.h>
 #include <math.h>
 #include "x87.h"
 
@@ -27,6 +30,37 @@
 
 typedef char AsmLabel[1];
 
+extern "C" int __cdecl __stdio_common_vsprintf(unsigned __int64, char*, size_t,
+                                               const char*, _locale_t, va_list);
+
+// The original diagnostic logs use the VC6 spellings of NaN and infinity.
+static int FormatLegacyNumbers(char* buffer, size_t size, const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    int result = __stdio_common_vsprintf(_CRT_INTERNAL_PRINTF_LEGACY_MSVCRT_COMPATIBILITY,
+                                         buffer, size, format, nullptr, args);
+    va_end(args);
+    if (result < 0 && size)
+        buffer[size - 1] = '\0';
+    return result;
+}
+
+static double DiagnosticCoordinate(float value)
+{
+    DWORD bits;
+    memcpy(&bits, &value, sizeof bits);
+    return bits == 0x80000000u ? 0.0 : static_cast<double>(value);
+}
+
+extern "C" int __cdecl OldCrt_FormatCoordinates(char* buffer, size_t size, const char* format,
+                                                const char* name, float limit, const float* position)
+{
+    return FormatLegacyNumbers(buffer, size, format, name, DiagnosticCoordinate(limit),
+                               DiagnosticCoordinate(position[0]), DiagnosticCoordinate(position[1]),
+                               DiagnosticCoordinate(position[2]));
+}
+
 // The old runtime's C++ initializers: function pointers from $L_66c000 up
 // to $L_66c488 (game statics, MFC statics), zeros skipped
 KING_VAR(AsmLabel, g_xcBegin, 66c000)
@@ -34,7 +68,43 @@ KING_VAR(AsmLabel, g_xcEnd, 66c488)
 
 extern "C" int __stdcall Afx_WinMain(HINSTANCE h, HINSTANCE prev, char* cmdLine, int show);
 
+static LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter;
+
+// Stock GUI CRT path for an uncaught rope length_error (622d61 -> 61e1f8).
+// Preserve the installed runtime policy for every other exception.
+static LONG WINAPI LegacyLengthErrorFilter(EXCEPTION_POINTERS* info)
+{
+    const EXCEPTION_RECORD* rec = info->ExceptionRecord;
+    if (rec->ExceptionCode != 0xe06d7363 || rec->NumberParameters != 3 ||
+        rec->ExceptionInformation[0] != 0x19930520 ||
+        rec->ExceptionInformation[2] != reinterpret_cast<ULONG_PTR>(KING_ADDR(0x65c548)))
+        return previousExceptionFilter ? previousExceptionFilter(info) : EXCEPTION_CONTINUE_SEARCH;
+
+    char path[MAX_PATH + 1] = {};
+    if (!GetModuleFileNameA(0, path, MAX_PATH))
+        strcpy(path, "<program name unknown>");
+    char* display = path;
+    size_t length = strlen(path);
+    if (length > 59) {
+        display += length - 59;
+        memcpy(display, "...", 3);
+    }
+    char message[160];
+    sprintf(message, "Runtime Error!\n\nProgram: %s\n\n\r\nabnormal program termination\r\n", display);
+    HWND window = GetActiveWindow();
+    MessageBoxA(window ? GetLastActivePopup(window) : 0, message,
+                "Microsoft Visual C++ Runtime Library", MB_ICONERROR | MB_TASKMODAL | MB_SETFOREGROUND);
+    raise(SIGABRT);
+    _exit(3);
+}
+
+extern "C" void __cdecl Crt_InstallLengthErrorFilter()
+{
+    previousExceptionFilter = SetUnhandledExceptionFilter(LegacyLengthErrorFilter);
+}
+
 extern "C" int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdLine, int show) {
+    Crt_InstallLengthErrorFilter();
     _controlfp(_PC_53, _MCW_PC);                                   // as the old _fpmath
     typedef void (__cdecl* Init)();
     for (Init* f = (Init*)g_xcBegin; f < (Init*)g_xcEnd; f++)
@@ -98,6 +168,14 @@ extern "C" void __fastcall Eh_EmptyDtor(void*) {}
 // sent to the game's _matherr, which makes sqrt of a negative 0
 
 extern "C" int __cdecl World_MathErr(int* e);
+
+// The original CRT calls the game's handler at 0x4e4671. Defining _matherr
+// also connects the UCRT intrinsics (not only our sqrt/cos shims) to it.
+extern "C" int __cdecl _matherr(struct _exception* e) {
+    static_assert(sizeof(*e) == 32 && offsetof(_exception, arg1) == 8 &&
+                  offsetof(_exception, retval) == 24, "x86 math exception ABI");
+    return World_MathErr((int*)e);
+}
 
 struct MathException { int type; const char* name; double arg1, arg2, retval; };
 

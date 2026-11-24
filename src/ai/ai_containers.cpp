@@ -42,7 +42,8 @@ static void PushBack(Vec* v, const void* x, int n, void (*proc)())
 // ---------------------------------------------------------------------------
 // Lists
 
-extern "C" BYTE** __stdcall List64_Erase(BYTE** out, BYTE** node)
+// [FUN_459a90]
+extern "C" BYTE** __stdcall RoadAnchors_EraseNode(BYTE** out, BYTE** node)
 {
     BYTE** prev = (BYTE**)node[1];
     BYTE** next = (BYTE**)node[0];
@@ -122,7 +123,8 @@ extern "C" BYTE* __cdecl Copy12s(const BYTE* first, const BYTE* last, BYTE* dest
     return dest;
 }
 
-extern "C" DWORD* __cdecl UniqueCopyDwords(const DWORD* first, const DWORD* last, DWORD* dest)
+// [FUN_45b390]
+extern "C" DWORD* __cdecl CopyAdjacentUniqueDwords(const DWORD* first, const DWORD* last, DWORD* dest)
 {
     if (first == last)
         return dest;
@@ -145,7 +147,8 @@ extern "C" DWORD* __cdecl CopyBackwardDwords2(const DWORD* first, const DWORD* l
     return CopyBackwardDwords(first, last, destEnd);
 }
 
-extern "C" BYTE* __cdecl CopyBackward32s(const BYTE* first, const BYTE* last, BYTE* destEnd)
+// [FUN_465d50]
+extern "C" BYTE* __cdecl LoadEntries_CopyBackward(const BYTE* first, const BYTE* last, BYTE* destEnd)
 {
     for (int n = (last - first) >> 5; n > 0; n--) {
         last -= 32;
@@ -174,18 +177,21 @@ extern "C" DVec3* __cdecl DVec3_Sub(DVec3* out, const DVec3* a, const DVec3* b)
 
 extern "C" const int* __cdecl MinPtr(const int* a, const int* b) { return *b < *a ? b : a; }
 
-extern "C" void __cdecl Destroy16s(BYTE* first, BYTE* last)
+// [FUN_460cf0]
+extern "C" void __cdecl Order_DestroyBufferRange(BYTE* first, BYTE* last)
 {
     for (; first != last; first += 16)
         MsgBuf_FreeStorage(first, 0);
 }
 
 // placement copies
-extern "C" void __cdecl Construct8(DWORD* d, const DWORD* s) { if (d) { d[0] = s[0]; d[1] = s[1]; } }
+extern "C" void __cdecl CopyConstructTwoWords(DWORD* d, const DWORD* s) { if (d) { d[0] = s[0]; d[1] = s[1]; } }
 extern "C" void __cdecl Construct4(DWORD* d, const DWORD* s) { if (d) d[0] = s[0]; }
 extern "C" void __cdecl Construct24(DWORD* d, const DWORD* s) { if (d) memcpy(d, s, 24); }
+// [FUN_4616a0]
 extern "C" void __cdecl Construct32(DWORD* d, const DWORD* s) { if (d) memcpy(d, s, 32); }
-extern "C" void __cdecl Construct32Skip1(DWORD* d, const DWORD* s)
+// [FUN_461640] Copy the vehicle, weight, distance and owner fields, preserving padding.
+extern "C" void __cdecl LoadEntry_CopyConstruct(DWORD* d, const DWORD* s)
 {
     if (!d)
         return;
@@ -236,6 +242,7 @@ extern "C" void __cdecl Sort_FinalInsertion12(BYTE* first, BYTE* last, void* cmp
         Sort_LinearInsert12(first, i, 0, cmp);
 }
 
+// [FUN_463fe0] Ascending unsigned insertion sort of a half-open range.
 extern "C" void __cdecl Sort_InsertionDwords(unsigned* first, unsigned* last)
 {
     if (first == last)
@@ -346,7 +353,8 @@ BYTE* __fastcall Vec_EndMinus4(Vec* s, void*) { return s->end - 4; }            
 void __fastcall Vec4_PushBackH(Vec* s, void*, const void* x) { PushBack(s, x, 4, FUN_45cb00); }        // [FUN_459be0]
 void __fastcall Vec4_PushBackI(Vec* s, void*, const void* x) { PushBack(s, x, 4, FUN_45d8f0); }        // [FUN_45a000]
 void __fastcall Vec4_PushBackJ(Vec* s, void*, const void* x) { PushBack(s, x, 4, FUN_4604b0); }        // [FUN_45a030]
-void __fastcall Str_FreeBoth(BYTE* s, void*)                                                            // [FUN_459c10]
+// [FUN_459c10] Release the cached string and the rounded leaf buffer when present.
+void __fastcall Str_FreeBoth(BYTE* s, void*)
 {
     void* data = F(void*, s, 16);
     if (F(void*, s, 20) != data && data && F(int, s, 0) + 1 != 0)
@@ -420,7 +428,7 @@ DWORD* __fastcall Rec60_Copy(DWORD* s, void*, const DWORD* src)                 
 // ---------------------------------------------------------------------------
 // Batch 2
 
-extern "C" double __cdecl Players_NearestTo(const int* const* node, const BYTE** list);   // aimain.cpp
+extern "C" double __cdecl PlayerNodes_MinDistance(const int* const* node, const BYTE** list);   // aimain.cpp
 extern "C" void __cdecl Rope_AddLeafToForest(BYTE* r, BYTE** forest);  // ai_containers.cpp, below
 extern "C" void __fastcall Rec40cc50_Destroy(BYTE* self, int);
 extern "C" void FUN_40cc50(); KING_ALIAS("_FUN_40cc50", "@Rec40cc50_Destroy@8")    // a 24-byte record's destructor
@@ -428,13 +436,14 @@ extern "C" void* __cdecl Stl_Allocate(unsigned bytes);
 
 struct Elem32 { DWORD w[2]; double key; DWORD w4[4]; };
 
-static double NearestTo(void* const* it, const BYTE** list) { return Players_NearestTo((const int* const*)it, list); }
+static double NearestTo(void* const* it, const BYTE** list) { return PlayerNodes_MinDistance((const int* const*)it, list); }
 
 // the comparison some sorts use: the difference of two doubles is not zero
 static bool Differs(double a, double b) { return !x87_eq(a - b, 0.0); }
 static double At504(void* p) { return F(double, p, 504); }
 
-extern "C" Elem32* __cdecl Sort_MedianByKey(Elem32* a, Elem32* b, Elem32* c)
+// [FUN_465d90]
+extern "C" Elem32* __cdecl LoadEntries_MedianByWeight(Elem32* a, Elem32* b, Elem32* c)
 {
     if (a->key > b->key) {
         if (b->key > c->key)
@@ -451,7 +460,8 @@ extern "C" Elem32* __cdecl Sort_MedianByKey(Elem32* a, Elem32* b, Elem32* c)
 }
 
 // partition of 32-byte elements, descending by the double at +8
-extern "C" Elem32* __cdecl Sort_PartitionByKey(Elem32* first, Elem32* last, Elem32 pivot)
+// [FUN_465df0]
+extern "C" Elem32* __cdecl LoadEntries_PartitionByWeight(Elem32* first, Elem32* last, Elem32 pivot)
 {
     double k = pivot.key;
     for (;;) {
@@ -462,6 +472,8 @@ extern "C" Elem32* __cdecl Sort_PartitionByKey(Elem32* first, Elem32* last, Elem
         while (k > last->key);
         if (!(first < last))
             return first;
+        // The load record has four padding bytes after its vehicle ID. Stock
+        // leaves these unspecified in the temporary used by this swap.
         Elem32 t = *first;
         *first = *last;
         *last = t;
@@ -523,6 +535,7 @@ extern "C" BYTE* __cdecl UninitFill4s(BYTE* d, int n, const DWORD* v)
     return d;
 }
 
+// [FUN_4693e0]
 extern "C" DWORD* __cdecl FillDwords(DWORD* d, unsigned n, const DWORD* v)
 {
     for (; n; n--)
@@ -537,8 +550,16 @@ extern "C" char* __cdecl FillBytes(char* d, unsigned n, const char* v)
     return d;
 }
 
-extern "C" void __stdcall Stl_Free4s(void* p, unsigned n) { if (n) List_FreeNode(p, n * 4); }
-extern "C" void __stdcall Stl_FreeBytes(void* p, unsigned n) { if (n) List_FreeNode(p, n); }
+// [FUN_466540]
+extern "C" void __stdcall Pool_FreeDwords(void* p, unsigned n)
+{
+    if (n) List_FreeNode(p, n * 4);
+}
+// [FUN_467420]
+extern "C" void __stdcall Pool_FreeBytes(void* p, unsigned n)
+{
+    if (n) List_FreeNode(p, n);
+}
 
 extern "C" BYTE** __cdecl CopyN(BYTE** out, BYTE* first, int n, BYTE* dest)
 {
@@ -548,17 +569,18 @@ extern "C" BYTE** __cdecl CopyN(BYTE** out, BYTE* first, int n, BYTE* dest)
     return out;
 }
 
-// erases a subtree of the STL's red-black tree (+12: is nil, +20 left, +24 right)
-extern "C" void __cdecl Tree_EraseRight(BYTE* node, void* x)
+// [FUN_466740] Submit balanced pieces left to right. A balanced subtree is one piece.
+extern "C" void __cdecl Rope_AddSubtreeToForest(BYTE* node, BYTE** forest)
 {
     while (!F(BYTE, node, 12)) {
-        Tree_EraseRight(F(BYTE*, node, 20), x);
+        Rope_AddSubtreeToForest(F(BYTE*, node, 20), forest);
         node = F(BYTE*, node, 24);
     }
-    Rope_AddLeafToForest((BYTE*)node, (BYTE**)x);
+    Rope_AddLeafToForest(node, forest);
 }
 
 // lexicographical compare of signed chars: -1, 0 or 1
+// [FUN_466780]
 extern "C" int __cdecl LexCompare(const signed char* a, const signed char* aEnd, const signed char* b, const signed char* bEnd)
 {
     for (; a != aEnd; a++, b++) {
@@ -574,7 +596,8 @@ extern "C" int __cdecl LexCompare(const signed char* a, const signed char* aEnd,
     return a != aEnd;
 }
 
-extern "C" void __cdecl Destroy24s(BYTE* first, BYTE* last)
+// [FUN_466fe0]
+extern "C" void __cdecl NamedRecords_DestroyRange(BYTE* first, BYTE* last)
 {
     for (; first != last; first += 24)
         Rec40cc50_Destroy(first, 0);
@@ -590,10 +613,11 @@ extern "C" DWORD* __cdecl UninitCopyStrRefs(const DWORD* first, const DWORD* las
 extern "C" DWORD* __cdecl UninitCopy32Skip1(const DWORD* first, const DWORD* last, DWORD* dest)
 {
     for (; first != last; first += 8, dest += 8)
-        Construct32Skip1(dest, first);
+        LoadEntry_CopyConstruct(dest, first);
     return dest;
 }
 
+// [FUN_4699e0]
 extern "C" BYTE* __cdecl UninitCopy1592(const BYTE* first, const BYTE* last, BYTE* dest)
 {
     for (; first != last; first += 1592, dest += 1592)
@@ -610,7 +634,8 @@ extern "C" DWORD* __cdecl UninitCopyDwords(const DWORD* first, const DWORD* last
     return dest;
 }
 
-extern "C" void __cdecl Sort_UnguardedInsertionDwords(unsigned* first, unsigned* last)
+// [FUN_4677e0]
+extern "C" void __cdecl UnsignedRange_UnguardedInsertionSort(unsigned* first, unsigned* last)
 {
     for (unsigned* i = first; i != last; i++) {
         unsigned v = *i;
@@ -667,20 +692,29 @@ template <int OFF> static void** MergeByField(void** f1, void** l1, void** f2, v
 extern "C" void __cdecl Sort_UnguardedInsertionBy24(void** f, void** l) { UnguardedInsertionByField<24>(f, l); }
 extern "C" void __cdecl Sort_UnguardedInsertionBy328(void** f, void** l) { UnguardedInsertionByField<328>(f, l); }
 extern "C" void __cdecl Sort_LinearInsertBy328(void** f, void** i) { LinearInsertByField<328>(f, i); }
-extern "C" void __cdecl Sort_LinearInsertBy28(void** f, void** i) { LinearInsertByField<28>(f, i); }
+// [FUN_469d60]
+extern "C" void __cdecl DriverIdentities_InsertByOccupancy(void** f, void** i) { LinearInsertByField<28>(f, i); }
+// [FUN_467cf0]
 extern "C" void __cdecl Sort_InsertionBy28(void** f, void** l) { InsertionByField<28>(f, l); }
+// [FUN_468210]
 extern "C" void __cdecl Sort_InsertionBy32(void** f, void** l) { InsertionByField<32>(f, l); }
+// [FUN_46a1a0]
 extern "C" void** __cdecl Sort_MergeBy28(void** f1, void** l1, void** f2, void** l2, void** d) { return MergeByField<28>(f1, l1, f2, l2, d); }
+// [FUN_46a550]
 extern "C" void** __cdecl Sort_MergeBy32(void** f1, void** l1, void** f2, void** l2, void** d) { return MergeByField<32>(f1, l1, f2, l2, d); }
 
-extern "C" void __cdecl Distance_Add(void** first, void** last, int* n) { *n += last - first; }
-extern "C" void __cdecl Iter_Advance(BYTE** it, int n) { *it += n * 4; }
+// [FUN_467fc0] Add the signed distance between two pointer iterators to the accumulator.
+extern "C" void __cdecl DwordIterator_AddDistance(void** first, void** last, int* n) { *n += last - first; }
+// [FUN_469dc0] Advance the stored iterator by a signed count of four-byte elements.
+extern "C" void __cdecl DwordIterator_Advance(BYTE** it, int n) { *it += n * 4; }
 
 // sorting players by how far the nearest other player is
-extern "C" void __cdecl Sort_LinearInsertByNearest(void** first, void** i, int, const BYTE** list)
+// [FUN_46a5d0]
+extern "C" void __cdecl ParkingSlots_InsertByNearestNode(void** first, void** i, int, const BYTE** list)
 {
     void* v = *i;
-    if (NearestTo(first, list) > NearestTo(&v, list)) {
+    volatile double candidateDistance = NearestTo(&v, list);
+    if (NearestTo(first, list) > candidateDistance) {
         for (void** p = i; p != first; p--)
             *p = p[-1];
         *first = v;
@@ -689,7 +723,10 @@ extern "C" void __cdecl Sort_LinearInsertByNearest(void** first, void** i, int, 
     void* w = v;
     void** d = i;
     void** s = i - 1;
-    while (NearestTo(s, list) > NearestTo(&w, list)) {
+    for (;;) {
+        candidateDistance = NearestTo(&w, list);
+        if (!(NearestTo(s, list) > candidateDistance))
+            break;
         *d = *s;
         d = s;
         s--;
@@ -697,6 +734,7 @@ extern "C" void __cdecl Sort_LinearInsertByNearest(void** first, void** i, int, 
     *d = w;
 }
 
+// [FUN_46aa80]
 extern "C" void** __cdecl Sort_MergeByNearest(void** f1, void** l1, void** f2, void** l2, void** d, const BYTE** list)
 {
     while (f1 != l1 && f2 != l2) {
@@ -713,6 +751,7 @@ extern "C" void** __cdecl Sort_MergeByNearest(void** f1, void** l1, void** f2, v
     return d;
 }
 
+// [FUN_46ab20] Insert by descending load weight; the caller supplies the sentinel.
 extern "C" void __cdecl Sort_UnguardedInsertByKey(Elem32* last, Elem32 v)
 {
     Elem32* d = last;
@@ -725,6 +764,7 @@ extern "C" void __cdecl Sort_UnguardedInsertByKey(Elem32* last, Elem32 v)
     *d = v;
 }
 
+// [FUN_46ad90] Shift pointers until their +504 field compares equal to the incoming one.
 extern "C" void __cdecl Sort_UnguardedInsertBy504(void** last, void* v)
 {
     void** d = last;
@@ -835,7 +875,8 @@ extern "C" BYTE** __fastcall Vec16_Assign(BYTE** d, void*, BYTE* const* s)
 }
 
 // operator= of a 24-byte record: two ints and a vector<char>
-extern "C" int* __fastcall Rec24b_Assign(int* self, void*, const int* src)
+// [FUN_45abe0]
+extern "C" int* __fastcall NamedRecord_AssignFieldsAndText(int* self, void*, const int* src)
 {
     self[0] = src[0];
     self[1] = src[1];
@@ -881,7 +922,7 @@ extern "C" BYTE** __fastcall Vec24_Assign(BYTE** d, void*, BYTE* const* s)
         BYTE* to = d[0];
         BYTE* from = s[0];
         for (int k = (s[1] - s[0]) / 24; k > 0; k--, from += 24, to += 24)
-            Rec24b_Assign((int*)to, 0, (const int*)from);
+            NamedRecord_AssignFieldsAndText((int*)to, 0, (const int*)from);
         for (; to != d[1]; to += 24)
             Rec40cc50_Destroy(to, 0);
     } else {
@@ -928,6 +969,7 @@ extern "C" DWORD** __fastcall Vec4_Assign(DWORD** d, void*, DWORD* const* s)
 }
 
 // copies [first, last) of string handles over dest
+// [FUN_45adf0]
 extern "C" BYTE* __cdecl StrRefs_Copy(const BYTE* first, const BYTE* last, BYTE* dest)
 {
     for (int n = (last - first) / 12; n > 0; n--, first += 12, dest += 12)
@@ -941,7 +983,8 @@ static bool Big(const void* first, const void* last, int limit)
 }
 
 // the introsort loop of unsigned values
-extern "C" void __cdecl Sort_IntroLoopU(unsigned* first, unsigned* last, int, int depth)
+// [FUN_45b290]
+extern "C" void __cdecl UnsignedRange_IntrosortLoop(unsigned* first, unsigned* last, int, int depth)
 {
     if (!Big(first, last, 64))
         return;
@@ -978,7 +1021,7 @@ extern "C" void __cdecl Sort_IntroLoopU(unsigned* first, unsigned* last, int, in
             *j = t;
             i++;
         }
-        Sort_IntroLoopU(i, last, 0, depth);
+        UnsignedRange_IntrosortLoop(i, last, 0, depth);
         last = i;
     } while (Big(first, last, 64));
 }
@@ -1091,7 +1134,7 @@ extern "C" void __cdecl Sort_FinalInsertion24(BYTE** first, BYTE** last)
 extern "C" BYTE* __fastcall Mult46c900_DeletingDestructor(BYTE* self, void*, int flags);
 extern "C" void FUN_466c50(); KING_ALIAS("_FUN_466c50", "_Rec24b_Copy")    // copy 24-byte records (first, last, dest, -, 0)
 extern "C" void FUN_46b300(); KING_ALIAS("_FUN_46b300", "_Copy32")    // copy 4-byte values (first, last, dest, -, 0)
-extern "C" BYTE* __cdecl Copy1(const BYTE* first, const BYTE* last, BYTE* dest);   // aimain.cpp
+extern "C" BYTE* __cdecl ByteRange_Move(const BYTE* first, const BYTE* last, BYTE* dest);   // aimain.cpp
 extern "C" void __cdecl Order144_AssignPlain(BYTE* d, const BYTE* s);              // aimain.cpp
 
 static void Copy4(BYTE* d, const BYTE* s, int from, int to)
@@ -1100,7 +1143,7 @@ static void Copy4(BYTE* d, const BYTE* s, int from, int to)
         F(DWORD, d, i) = F(DWORD, s, i);
 }
 
-// vector<char>::operator=, inlined; the split copy through memmove or Copy1
+// vector<char>::operator=, inlined; the split copy through memmove or ByteRange_Move
 static void CharVec_Copy(char** v, char* const* s, bool copy1)
 {
     if ((const void*)s == (void*)v)
@@ -1116,12 +1159,12 @@ static void CharVec_Copy(char** v, char* const* s, bool copy1)
         v[2] = p + n;
     } else if ((unsigned)(v[1] - v[0]) >= n) {
         if (copy1)
-            Copy1((BYTE*)first, (BYTE*)last, (BYTE*)v[0]);
+            ByteRange_Move((BYTE*)first, (BYTE*)last, (BYTE*)v[0]);
         else
             memmove(v[0], first, last - first);
     } else if (copy1) {
-        Copy1((BYTE*)first, (BYTE*)first + (v[1] - v[0]), (BYTE*)v[0]);
-        Copy1((BYTE*)s[0] + (v[1] - v[0]), (BYTE*)s[1], (BYTE*)v[1]);
+        ByteRange_Move((BYTE*)first, (BYTE*)first + (v[1] - v[0]), (BYTE*)v[0]);
+        ByteRange_Move((BYTE*)s[0] + (v[1] - v[0]), (BYTE*)s[1], (BYTE*)v[1]);
     } else {
         memmove(v[0], first, v[1] - v[0]);
         char* mid = s[0] + (v[1] - v[0]);
@@ -1194,7 +1237,7 @@ static void Rec36_Assign(BYTE* dest, const BYTE* src)
 
 static void CharVec12_Assign(BYTE* d, const BYTE* s) { CharVec_Copy((char**)d, (char* const*)s, false); }
 static void StrRef_Assign(BYTE* d, const BYTE* s) { Str_Assign(d, 0, s); }
-static void Rec24b_AssignP(BYTE* d, const BYTE* s) { Rec24b_Assign((int*)d, 0, (const int*)s); }
+static void Rec24b_AssignP(BYTE* d, const BYTE* s) { NamedRecord_AssignFieldsAndText((int*)d, 0, (const int*)s); }
 
 static void Rec56_Assign(BYTE* d, const BYTE* s)
 {
@@ -1247,7 +1290,11 @@ template <int N> static BYTE* CopyBwd(const BYTE* first, const BYTE* last, BYTE*
 
 extern "C" BYTE* __cdecl Order144_CopyA(const BYTE* f, const BYTE* l, BYTE* d) { return CopyFwd<144>(f, l, d, Order144_AssignPlain); }
 extern "C" BYTE* __cdecl Order144_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<144>(f, l, d, Order144_AssignPlain); }
-extern "C" BYTE* __cdecl Rec104_Copy(const BYTE* f, const BYTE* l, BYTE* d) { return CopyFwd<104>(f, l, d, Rec104_Assign); }
+// [FUN_4616c0]
+extern "C" BYTE* __cdecl GoodsTemplates_CopyRange(const BYTE* f, const BYTE* l, BYTE* d)
+{
+    return CopyFwd<104>(f, l, d, Rec104_Assign);
+}
 extern "C" BYTE* __cdecl Rec104_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<104>(f, l, d, Rec104_Assign); }
 extern "C" BYTE* __cdecl StrRefs_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<12>(f, l, d, StrRef_Assign); }
 extern "C" BYTE* __cdecl Rec24b_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<24>(f, l, d, Rec24b_AssignP); }
@@ -1258,7 +1305,8 @@ extern "C" BYTE* __cdecl Rec56_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) {
 extern "C" BYTE* __cdecl Rec192_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<192>(f, l, d, Rec192b_Assign); }
 
 // vector<16-byte record>::operator= (the other instance)
-extern "C" BYTE** __fastcall Vec16_AssignB(BYTE** d, void*, BYTE* const* s)
+// [FUN_4618c0]
+extern "C" BYTE** __fastcall MessageRecordVector_Assign(BYTE** d, void*, BYTE* const* s)
 {
     if ((const void*)s == (void*)d)
         return d;
@@ -1295,8 +1343,8 @@ extern "C" BYTE** __fastcall Vec16_AssignB(BYTE** d, void*, BYTE* const* s)
 // ---------------------------------------------------------------------------
 // partial sort, stable sorts and merges of pointers by an int key
 
-extern "C" void __cdecl Heap24_Adjust(BYTE** first, int hole, int n, BYTE* v);   // aimult.cpp
-extern "C" void __cdecl Heap24_Push(BYTE** first, int hole, int top, BYTE* v);
+extern "C" void __cdecl Heap_AdjustBySignedKey24(BYTE** first, int hole, int n, BYTE* v);   // aimult.cpp
+extern "C" void __cdecl Heap_SiftUpBySignedKey24(BYTE** first, int hole, int top, BYTE* v);
 
 #define KEY(p, k) F(int, p, k)
 
@@ -1307,7 +1355,7 @@ extern "C" void __cdecl Sort_Partial24(BYTE** first, BYTE** middle, BYTE** last,
     int len = bytes >> 2;
     if ((bytes & ~3) >= 8)
         for (int parent = (len - 2) / 2;; parent--) {
-            Heap24_Adjust(first, parent, len, first[parent]);
+            Heap_AdjustBySignedKey24(first, parent, len, first[parent]);
             if (parent == 0)
                 break;
         }
@@ -1354,11 +1402,11 @@ extern "C" void __cdecl Sort_Partial24(BYTE** first, BYTE** middle, BYTE** last,
             first[hole] = first[child - 1];
             hole = child - 1;
         }
-        Heap24_Push(first, hole, 0, v);
+        Heap_SiftUpBySignedKey24(first, hole, 0, v);
     }
 }
 
-// rotate(first, middle, last): returns the new position of *first
+// [FUN_469de0] Rotate the two pointer ranges and return the new middle.
 extern "C" BYTE** __cdecl Ptrs_Rotate(BYTE** first, BYTE** middle, BYTE** last)
 {
     if (first == middle)
@@ -1378,9 +1426,80 @@ extern "C" BYTE** __cdecl Ptrs_Rotate(BYTE** first, BYTE** middle, BYTE** last)
     return r;
 }
 
-// a stable merge without a buffer (the result of a stable merge is unique)
-template <int K> static void MergeKey(BYTE** first, BYTE** middle, BYTE** last, int len1, int len2)
+template <int K> static BYTE** MergeInto(BYTE** a, BYTE** ae, BYTE** b, BYTE** be, BYTE** out);
+extern "C" BYTE** __cdecl Ptrs_RotateAdaptive(BYTE**, BYTE**, BYTE**, int, int, BYTE**, int);
+
+// Binary searches used to split two runs for stable merging. An upper bound
+// skips equal values, while a lower bound leaves them in the right-hand run.
+template <bool Upper, class Less>
+static BYTE** RunBound(BYTE** first, BYTE** last, BYTE** value, Less less)
 {
+    for (int remaining = last - first; remaining > 0;) {
+        int half = remaining / 2;
+        BYTE** middle = first + half;
+        if (Upper ? !less(value, middle) : less(middle, value)) {
+            first = middle + 1;
+            remaining -= half + 1;
+        } else {
+            remaining = half;
+        }
+    }
+    return first;
+}
+
+template <int K> struct SignedKeyLess {
+    bool operator()(BYTE** a, BYTE** b) const { return KEY(*a, K) < KEY(*b, K); }
+};
+
+// [FUN_46bce0]
+extern "C" BYTE** __cdecl LowerBoundKey28(BYTE** first, BYTE** last, BYTE** value)
+{
+    return RunBound<false>(first, last, value, SignedKeyLess<28>());
+}
+
+// [FUN_46bd20]
+extern "C" BYTE** __cdecl UpperBoundKey28(BYTE** first, BYTE** last, BYTE** value)
+{
+    return RunBound<true>(first, last, value, SignedKeyLess<28>());
+}
+
+// [FUN_46bd60]
+extern "C" BYTE** __cdecl LowerBoundKey32(BYTE** first, BYTE** last, BYTE** value)
+{
+    return RunBound<false>(first, last, value, SignedKeyLess<32>());
+}
+
+// [FUN_46bda0]
+extern "C" BYTE** __cdecl UpperBoundKey32(BYTE** first, BYTE** last, BYTE** value)
+{
+    return RunBound<true>(first, last, value, SignedKeyLess<32>());
+}
+
+template <int K> static void MergeKey(BYTE** first, BYTE** middle, BYTE** last, int len1, int len2,
+                                      BYTE** buffer = 0, int capacity = 0)
+{
+    if (buffer && len1 <= len2 && len1 <= capacity) {
+        memcpy(buffer, first, len1 * sizeof(*first));
+        MergeInto<K>(buffer, buffer + len1, middle, last, first);
+        return;
+    }
+    if (buffer && len2 <= capacity) {
+        memcpy(buffer, middle, len2 * sizeof(*middle));
+        BYTE** left = middle;
+        BYTE** right = buffer + len2;
+        BYTE** out = last;
+        while (left != first && right != buffer) {
+            if (KEY(right[-1], K) < KEY(left[-1], K))
+                *--out = *--left;
+            else
+                *--out = *--right;
+        }
+        while (right != buffer)
+            *--out = *--right;
+        while (left != first)
+            *--out = *--left;
+        return;
+    }
     if (len1 == 0 || len2 == 0)
         return;
     if (len1 + len2 == 2) {
@@ -1394,35 +1513,17 @@ template <int K> static void MergeKey(BYTE** first, BYTE** middle, BYTE** last, 
     if (len1 > len2) {
         len11 = len1 / 2;
         cut1 = first + len11;
-        BYTE** lo = middle;
-        for (int n = last - middle; n > 0;) {
-            int h = n >> 1;
-            if (KEY(lo[h], K) < KEY(*cut1, K)) {
-                lo += h + 1;
-                n -= h + 1;
-            } else
-                n = h;
-        }
-        cut2 = lo;
+        cut2 = K == 28 ? LowerBoundKey28(middle, last, cut1) : LowerBoundKey32(middle, last, cut1);
         len22 = cut2 - middle;
     } else {
         len22 = len2 / 2;
         cut2 = middle + len22;
-        BYTE** lo = first;
-        for (int n = middle - first; n > 0;) {
-            int h = n >> 1;
-            if (KEY(lo[h], K) <= KEY(*cut2, K)) {
-                lo += h + 1;
-                n -= h + 1;
-            } else
-                n = h;
-        }
-        cut1 = lo;
+        cut1 = K == 28 ? UpperBoundKey28(first, middle, cut2) : UpperBoundKey32(first, middle, cut2);
         len11 = cut1 - first;
     }
-    BYTE** mid = Ptrs_Rotate(cut1, middle, cut2);
-    MergeKey<K>(first, cut1, mid, len11, len22);
-    MergeKey<K>(mid, cut2, last, len1 - len11, len2 - len22);
+    BYTE** mid = Ptrs_RotateAdaptive(cut1, middle, cut2, len1 - len11, len22, buffer, capacity);
+    MergeKey<K>(first, cut1, mid, len11, len22, buffer, capacity);
+    MergeKey<K>(mid, cut2, last, len1 - len11, len2 - len22, buffer, capacity);
 }
 
 template <int K> static void StableSortKey(BYTE** first, BYTE** last)
@@ -1450,9 +1551,13 @@ template <int K> static void StableSortKey(BYTE** first, BYTE** last)
     MergeKey<K>(first, mid, last, mid - first, last - mid);
 }
 
+// [FUN_464e20]
 extern "C" void __cdecl Sort_Stable28(BYTE** first, BYTE** last, int) { StableSortKey<28>(first, last); }
-extern "C" void __cdecl Sort_Stable32(BYTE** first, BYTE** last, int) { StableSortKey<32>(first, last); }
+// [FUN_465300] Stable in-place ordering of image pointers by their signed key at +32.
+extern "C" void __cdecl AiImage_StableSortByKey32(BYTE** first, BYTE** last, int) { StableSortKey<32>(first, last); }
+// [FUN_467d70]
 extern "C" void __cdecl Merge28(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, int) { MergeKey<28>(f, m, l, n1, n2); }
+// [FUN_468290]
 extern "C" void __cdecl Merge32(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, int) { MergeKey<32>(f, m, l, n1, n2); }
 
 // ---------------------------------------------------------------------------
@@ -1476,7 +1581,7 @@ template <int K> static void InsertionKey(BYTE** first, BYTE** last)
     }
 }
 
-// insertion sorts of the chunks of n elements, then of the rest
+// [FUN_469eb0] Stable insertion sort within each run by signed key at +28.
 extern "C" void __cdecl Sort_ChunkInsertion28(BYTE** first, BYTE** last, int n)
 {
     for (; last - first >= n; first += n)
@@ -1504,30 +1609,46 @@ template <int K> static void MergeSortLoop(BYTE** first, BYTE** last, BYTE** res
     MergeInto<K>(first, first + s, first + s, last, result);
 }
 
+// [FUN_46a010] Stable pairwise merge of pointer runs by signed key at +28.
 extern "C" void __cdecl Sort_MergeLoop28(BYTE** f, BYTE** l, BYTE** r, int step) { MergeSortLoop<28>(f, l, r, step); }
+// [FUN_46a3c0] Merge adjacent sorted runs by signed key at +32.
 extern "C" void __cdecl Sort_MergeLoop32(BYTE** f, BYTE** l, BYTE** r, int step) { MergeSortLoop<32>(f, l, r, step); }
 
 // merges with a buffer; the buffer is only scratch space
-extern "C" void __cdecl Merge28_Adaptive(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, BYTE**, int, int)
+// [FUN_467fe0]
+extern "C" void __cdecl Merge28_Adaptive(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, BYTE** buf, int capacity, int)
 {
-    MergeKey<28>(f, m, l, n1, n2);
+    MergeKey<28>(f, m, l, n1, n2, buf, capacity);
 }
 
-extern "C" void __cdecl Merge32_Adaptive(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, BYTE**, int, int)
+// [FUN_4684e0] Stable merge by signed key at +32, using the supplied scratch space.
+extern "C" void __cdecl Merge32_Adaptive(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, BYTE** buf, int capacity, int)
 {
-    MergeKey<32>(f, m, l, n1, n2);
+    MergeKey<32>(f, m, l, n1, n2, buf, capacity);
 }
 
-// rotate with a buffer: the same result as rotate
-extern "C" BYTE** __cdecl Ptrs_RotateAdaptive(BYTE** f, BYTE** m, BYTE** l, int, int, BYTE**, int)
+// [FUN_46a220] Use the smaller side as scratch when it fits.
+extern "C" BYTE** __cdecl Ptrs_RotateAdaptive(BYTE** f, BYTE** m, BYTE** l, int left, int right, BYTE** buf, int capacity)
 {
+    if (buf && right < left && right <= capacity) {
+        memcpy(buf, m, right * sizeof(*m));
+        memmove(f + right, f, left * sizeof(*f));
+        memcpy(f, buf, right * sizeof(*f));
+        return f + right;
+    }
+    if (buf && left <= capacity) {
+        memcpy(buf, f, left * sizeof(*f));
+        memmove(f, m, right * sizeof(*m));
+        memcpy(f + right, buf, left * sizeof(*f));
+        return f + right;
+    }
     return Ptrs_Rotate(f, m, l);
 }
 
 // ---------------------------------------------------------------------------
 // partial sort by +328, copies of 16- and 24-byte records
 
-extern "C" void __cdecl Heap328_Adjust(BYTE** first, int hole, int n, BYTE* v);   // aimult.cpp
+extern "C" void __cdecl Heap_AdjustBySignedKey328(BYTE** first, int hole, int n, BYTE* v);   // aimult.cpp
 
 // the heap's hole at the top moved down to a leaf, then v pushed up from it
 template <int K> static void HeapReplaceTop(BYTE** first, int n, BYTE* v)
@@ -1560,7 +1681,7 @@ extern "C" void __cdecl Sort_Partial328(BYTE** first, BYTE** middle, BYTE** last
     int len = bytes >> 2;
     if ((bytes & ~3) >= 8)
         for (int parent = (len - 2) / 2;; parent--) {
-            Heap328_Adjust(first, parent, len, first[parent]);
+            Heap_AdjustBySignedKey328(first, parent, len, first[parent]);
             if (parent == 0)
                 break;
         }
@@ -1601,7 +1722,8 @@ static void Rec16c_Assign(BYTE* d, const BYTE* s)
 }
 
 extern "C" BYTE* __cdecl Rec16m_Copy(const BYTE* f, const BYTE* l, BYTE* d) { return CopyFwd<16>(f, l, d, Rec16m_Assign); }
-extern "C" BYTE* __cdecl Rec16m_CopyBack(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<16>(f, l, d, Rec16m_Assign); }
+// [FUN_47c6a0]
+extern "C" BYTE* __cdecl KeyedByteVectors_CopyBackward(const BYTE* f, const BYTE* l, BYTE* d) { return CopyBwd<16>(f, l, d, Rec16m_Assign); }
 
 // vector<16-byte record>::erase(first, last)
 extern "C" BYTE* __fastcall Vec16c_Erase(BYTE** self, void*, BYTE* first, BYTE* last)
@@ -1643,10 +1765,10 @@ template <int N> static BYTE* RotateN(BYTE* first, BYTE* middle, BYTE* last)
     return first + (last - middle);
 }
 
-extern "C" BYTE* __cdecl Rotate8(BYTE* f, BYTE* m, BYTE* l) { return RotateN<8>(f, m, l); }
-extern "C" BYTE* __cdecl Rotate40(BYTE* f, BYTE* m, BYTE* l) { return RotateN<40>(f, m, l); }
-// rotate with a buffer: the same result
-extern "C" BYTE* __cdecl Rotate8_Adaptive(BYTE* f, BYTE* m, BYTE* l, int, int, BYTE*, int) { return RotateN<8>(f, m, l); }
+// [FUN_47e500]
+extern "C" BYTE* __cdecl Doubles_RotateRange(BYTE* f, BYTE* m, BYTE* l) { return RotateN<8>(f, m, l); }
+// [FUN_47ed30]
+extern "C" BYTE* __cdecl RoadRecords_RotateRange(BYTE* f, BYTE* m, BYTE* l) { return RotateN<40>(f, m, l); }
 
 // insertion sort of 40-byte records by the int at +32 (stable)
 extern "C" void __cdecl Road40_Insertion(BYTE* first, BYTE* last)
@@ -1699,7 +1821,8 @@ extern "C" void __cdecl Road40_MergeLoop(BYTE* first, BYTE* last, BYTE* result, 
 static unsigned Key12(const BYTE* p) { return F(unsigned, p, 8); }
 
 // inserts *last into the sorted [first, last)
-extern "C" void __cdecl Rec12_LinearInsert(BYTE* first, BYTE* last)
+// [FUN_46fb80]
+extern "C" void __cdecl OrderEntries_InsertByUnsignedKey(BYTE* first, BYTE* last)
 {
     BYTE v[12];
     memcpy(v, last, 12);
@@ -1719,10 +1842,11 @@ extern "C" void __cdecl Rec12_Insertion(BYTE* first, BYTE* last)
     if (first == last)
         return;
     for (BYTE* i = first + 12; i != last; i += 12)
-        Rec12_LinearInsert(first, i);
+        OrderEntries_InsertByUnsignedKey(first, i);
 }
 
-extern "C" BYTE* __cdecl Rotate12(BYTE* f, BYTE* m, BYTE* l) { return RotateN<12>(f, m, l); }
+// [FUN_46fc70]
+extern "C" BYTE* __cdecl OrderEntries_RotateRange(BYTE* f, BYTE* m, BYTE* l) { return RotateN<12>(f, m, l); }
 
 // merge of two sorted ranges into out
 extern "C" BYTE* __cdecl Rec12_Merge(BYTE* a, BYTE* ae, BYTE* b, BYTE* be, BYTE* out)
@@ -1751,7 +1875,7 @@ extern "C" void __cdecl Heap24_Make(BYTE** first, BYTE** last, int, int, int)
         return;
     int len = last - first;
     for (int p = (len - 2) / 2;; p--) {
-        Heap24_Adjust(first, p, len, first[p]);
+        Heap_AdjustBySignedKey24(first, p, len, first[p]);
         if (p == 0)
             return;
     }
@@ -1763,7 +1887,7 @@ extern "C" void __cdecl Heap328_Make(BYTE** first, BYTE** last, int, int, int)
         return;
     int len = last - first;
     for (int p = (len - 2) / 2;; p--) {
-        Heap328_Adjust(first, p, len, first[p]);
+        Heap_AdjustBySignedKey328(first, p, len, first[p]);
         if (p == 0)
             return;
     }
@@ -1804,6 +1928,7 @@ static double* MergeDesc(const double* a, const double* ae, const double* b, con
     return Copy8(b, be, out);
 }
 
+// [FUN_47e810] Stable pairwise merge of double runs in descending order.
 extern "C" void __cdecl Doubles_MergeLoop(double* first, double* last, double* result, int step)
 {
     for (; last - first >= step * 2; first += step * 2)
@@ -1812,9 +1937,26 @@ extern "C" void __cdecl Doubles_MergeLoop(double* first, double* last, double* r
     MergeDesc(first, first + s, first + s, last, result);
 }
 
-extern "C" BYTE* __cdecl Rotate8_Adaptive(BYTE* f, BYTE* m, BYTE* l, int, int, BYTE*, int);
+// [FUN_47ea70]
+extern "C" double* __cdecl Doubles_RotateWithBuffer(double* first, double* middle, double* last,
+                                            int left, int right, double* scratch, int capacity)
+{
+    if (right < left && right <= capacity) {
+        double* saved = Copy8(middle, last, scratch);
+        CopyBack8(first, middle, last);
+        return Copy8(scratch, saved, first);
+    }
+    if (left <= capacity) {
+        double* saved = Copy8(first, middle, scratch);
+        double* boundary = Copy8(middle, last, first);
+        CopyBack8(scratch, saved, last);
+        return boundary;
+    }
+    return (double*)Doubles_RotateRange((BYTE*)first, (BYTE*)middle, (BYTE*)last);
+}
 
 // merge of [first, middle) and [middle, last) with a buffer
+// [FUN_47d7c0] Merge descending runs of doubles using the available scratch space.
 extern "C" void __cdecl Doubles_MergeAdaptive(double* first, double* middle, double* last, int len1, int len2,
                                               double* buf, int bufSize, int pred)
 {
@@ -1876,8 +2018,7 @@ extern "C" void __cdecl Doubles_MergeAdaptive(double* first, double* middle, dou
             cut1 = CallC<double*>(FUN_47f7f0, first, middle, cut2, pred, 0);
             len11 = cut1 - first;
         }
-        double* mid = (double*)Rotate8_Adaptive((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2, len1 - len11, len22,
-                                                (BYTE*)buf, bufSize);
+        double* mid = Doubles_RotateWithBuffer(cut1, middle, cut2, len1 - len11, len22, buf, bufSize);
         Doubles_MergeAdaptive(first, cut1, mid, len11, len22, buf, bufSize, pred);
         first = mid;
         middle = cut2;
@@ -1887,32 +2028,67 @@ extern "C" void __cdecl Doubles_MergeAdaptive(double* first, double* middle, dou
 }
 
 // ---------------------------------------------------------------------------
-// the stable sort of players by Players_NearestTo(player, ctx): the pieces
+// the stable sort of players by PlayerNodes_MinDistance(player, ctx): the pieces
 // of stable_sort; each piece's result is unique, the key being a pure function
 
-extern "C" double __cdecl Players_NearestTo(const int* const* node, const BYTE** list);   // aimain.cpp
+extern "C" double __cdecl PlayerNodes_MinDistance(const int* const* node, const BYTE** list);   // aimain.cpp
 
 struct NearLess {
     int ctx;
-    double Key(BYTE* const* p) const { return Players_NearestTo((const int* const*)p, (const BYTE**)ctx); }
+    double Key(BYTE* const* p) const { return PlayerNodes_MinDistance((const int* const*)p, (const BYTE**)ctx); }
     bool operator()(BYTE* const* a, BYTE* const* b) const { return Key(a) < Key(b); }
 };
 
-template <class L> static void InsertionLess(BYTE** first, BYTE** last, L less)
+// [FUN_46bde0]
+extern "C" BYTE** __cdecl LowerBoundByRoadDistance(BYTE** first, BYTE** last, BYTE** value, int ctx)
+{
+    return RunBound<false>(first, last, value, NearLess{ctx});
+}
+
+// [FUN_46be50]
+extern "C" BYTE** __cdecl UpperBoundByRoadDistance(BYTE** first, BYTE** last, BYTE** value, int ctx)
+{
+    return RunBound<true>(first, last, value, NearLess{ctx});
+}
+
+static void InsertParkingSlots(BYTE** first, BYTE** last, NearLess less)
 {
     if (first == last)
         return;
-    for (BYTE** i = first + 1; i != last; i++) {
-        BYTE* v = *i;
-        BYTE** j = i;
-        for (; j != first && less(&v, j - 1); j--)
-            *j = j[-1];
-        *j = v;
-    }
+    for (BYTE** i = first + 1; i != last; i++)
+        ParkingSlots_InsertByNearestNode((void**)first, (void**)i, 0, (const BYTE**)less.ctx);
 }
 
-template <class L> static void MergeNoBufLess(BYTE** first, BYTE** middle, BYTE** last, int len1, int len2, L less)
+static void MergeParkingSlotRuns(BYTE** first, BYTE** middle, BYTE** last, int len1, int len2, NearLess less,
+                                BYTE** buffer = 0, int capacity = 0)
 {
+    if (buffer && len1 <= len2 && len1 <= capacity) {
+        BYTE** end = buffer;
+        for (BYTE** p = first; p != middle; ++p)
+            *end++ = *p;
+        Sort_MergeByNearest((void**)buffer, (void**)end, (void**)middle, (void**)last,
+                            (void**)first, (const BYTE**)less.ctx);
+        return;
+    }
+    if (buffer && len2 <= capacity) {
+        BYTE** right = buffer;
+        for (BYTE** p = middle; p != last; ++p)
+            *right++ = *p;
+        BYTE** left = middle;
+        BYTE** out = last;
+        const BYTE* context = (const BYTE*)less.ctx;
+        while (left != first && right != buffer) {
+            if (Nearest_Farther(&context, 0, (void**)(right - 1), (void**)(left - 1)))
+                *--out = *--left;
+            else
+                *--out = *--right;
+        }
+        while (right != buffer)
+            *--out = *--right;
+        while (left != first)
+            *--out = *--left;
+        return;
+    }
     if (len1 == 0 || len2 == 0)
         return;
     if (len1 + len2 == 2) {
@@ -1926,45 +2102,29 @@ template <class L> static void MergeNoBufLess(BYTE** first, BYTE** middle, BYTE*
     if (len1 > len2) {
         len11 = len1 / 2;
         cut1 = first + len11;
-        cut2 = middle;
-        for (int n = last - middle; n > 0;) {
-            int h = n >> 1;
-            if (less(cut2 + h, cut1)) {
-                cut2 += h + 1;
-                n -= h + 1;
-            } else
-                n = h;
-        }
+        cut2 = LowerBoundByRoadDistance(middle, last, cut1, less.ctx);
         len22 = cut2 - middle;
     } else {
         len22 = len2 / 2;
         cut2 = middle + len22;
-        cut1 = first;
-        for (int n = middle - first; n > 0;) {
-            int h = n >> 1;
-            if (!less(cut2, cut1 + h)) {
-                cut1 += h + 1;
-                n -= h + 1;
-            } else
-                n = h;
-        }
+        cut1 = UpperBoundByRoadDistance(first, middle, cut2, less.ctx);
         len11 = cut1 - first;
     }
-    BYTE** mid = Ptrs_Rotate(cut1, middle, cut2);
-    MergeNoBufLess(first, cut1, mid, len11, len22, less);
-    MergeNoBufLess(mid, cut2, last, len1 - len11, len2 - len22, less);
+    BYTE** mid = Ptrs_RotateAdaptive(cut1, middle, cut2, len1 - len11, len22, buffer, capacity);
+    MergeParkingSlotRuns(first, cut1, mid, len11, len22, less, buffer, capacity);
+    MergeParkingSlotRuns(mid, cut2, last, len1 - len11, len2 - len22, less, buffer, capacity);
 }
 
 template <class L> static void StableSortLess(BYTE** first, BYTE** last, L less)
 {
     if ((int)(((BYTE*)last - (BYTE*)first) & ~3) < 60) {
-        InsertionLess(first, last, less);
+        InsertParkingSlots(first, last, less);
         return;
     }
     BYTE** mid = first + (last - first) / 2;
     StableSortLess(first, mid, less);
     StableSortLess(mid, last, less);
-    MergeNoBufLess(first, mid, last, mid - first, last - mid, less);
+    MergeParkingSlotRuns(first, mid, last, mid - first, last - mid, less);
 }
 
 template <class L> static BYTE** MergeRunsLess(BYTE** a, BYTE** ae, BYTE** b, BYTE** be, BYTE** out, L less)
@@ -1986,25 +2146,31 @@ template <class L> static void MergeLoopLess(BYTE** first, BYTE** last, BYTE** o
     MergeRunsLess(first, first + s, first + s, last, out, less);
 }
 
-extern "C" void __cdecl Near_Insertion(BYTE** f, BYTE** l, int ctx) { NearLess k = {ctx}; InsertionLess(f, l, k); }
+// [FUN_468710]
+extern "C" void __cdecl Near_Insertion(BYTE** f, BYTE** l, int ctx) { NearLess k = {ctx}; InsertParkingSlots(f, l, k); }
+// [FUN_4657c0]
 extern "C" void __cdecl Near_StableSort(BYTE** f, BYTE** l, int ctx) { NearLess k = {ctx}; StableSortLess(f, l, k); }
+// [FUN_4687f0]
 extern "C" void __cdecl Near_Merge(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, int ctx)
 {
     NearLess k = {ctx};
-    MergeNoBufLess(f, m, l, n1, n2, k);
+    MergeParkingSlotRuns(f, m, l, n1, n2, k);
 }
-extern "C" void __cdecl Near_MergeAdaptive(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, BYTE**, int, int ctx)
+// [FUN_468ab0] Merge two pointer runs by proximity using the supplied context.
+extern "C" void __cdecl Near_MergeAdaptive(BYTE** f, BYTE** m, BYTE** l, int n1, int n2, BYTE** buffer, int capacity, int ctx)
 {
     NearLess k = {ctx};
-    MergeNoBufLess(f, m, l, n1, n2, k);
+    MergeParkingSlotRuns(f, m, l, n1, n2, k, buffer, capacity);
 }
+// [FUN_46a680] Sort each run by distance from the context's road node.
 extern "C" void __cdecl Near_ChunkInsertion(BYTE** f, BYTE** l, int chunk, int ctx)
 {
     NearLess k = {ctx};
     for (; l - f >= chunk; f += chunk)
-        InsertionLess(f, f + chunk, k);
-    InsertionLess(f, l, k);
+        InsertParkingSlots(f, f + chunk, k);
+    InsertParkingSlots(f, l, k);
 }
+// [FUN_46a8c0] Stable pairwise merge by minimum road-node distance.
 extern "C" void __cdecl Near_MergeLoop(BYTE** f, BYTE** l, BYTE** out, int step, int ctx)
 {
     NearLess k = {ctx};
@@ -2028,12 +2194,15 @@ static double DistFrom(BYTE* obj, double x, double y, double z)
 }
 
 // push_heap: value moves up while it is farther than its parent
-extern "C" void __cdecl Far_PushHeap(BYTE** first, int hole, int top, BYTE* value, double x, double y, double z)
+// [FUN_46cd70]
+extern "C" void __cdecl HolderHeap_SiftUpByDistance(BYTE** first, int hole, int top, BYTE* value, double x, double y, double z)
 {
     for (int parent = (hole - 1) / 2; hole > top; parent = (hole - 1) / 2) {
-        double dp = DistFrom(first[parent], x, y, z);
-        double dv = DistFrom(value, x, y, z);
-        if (!(dv > dp))
+        DVec3 parentPoint, valuePoint;
+        Road_PointOf(&parentPoint, *(PositionId*)(first[parent] + 40));
+        Road_PointOf(&valuePoint, *(PositionId*)(value + 40));
+        if (!x87_heap_value_farther(x - parentPoint.x, y - parentPoint.y, z - parentPoint.z,
+                                   x, valuePoint.x, y - valuePoint.y, z - valuePoint.z, false))
             break;
         first[hole] = first[parent];
         hole = parent;
@@ -2068,14 +2237,13 @@ static DVec3 PosOf(BYTE* obj)
 }
 
 // push_heap (the other instance): the parent's sum y, z, x; the value's x, y, z
-extern "C" void __cdecl Far_PushHeap2(BYTE** first, int hole, int top, BYTE* value, double x, double y, double z)
+// [FUN_46d2f0]
+extern "C" void __cdecl HolderHeap_SiftUpByDistanceXYZ(BYTE** first, int hole, int top, BYTE* value, double x, double y, double z)
 {
     for (int parent = (hole - 1) / 2; hole > top; parent = (hole - 1) / 2) {
         DVec3 a = PosOf(first[parent]);
         DVec3 b = PosOf(value);
-        double dp = SqrtYZX(x - a.x, y - a.y, z - a.z);
-        double dv = SqrtXYZ(x - b.x, y - b.y, z - b.z);
-        if (!(dv > dp))
+        if (!x87_heap_value_farther(x - a.x, y - a.y, z - a.z, x, b.x, y - b.y, z - b.z, true))
             break;
         first[hole] = first[parent];
         hole = parent;
@@ -2090,9 +2258,9 @@ extern "C" void __cdecl Far_AdjustHeap(BYTE** first, int hole, int len, BYTE* va
     int child = hole * 2 + 2;
     for (; child < len; child = child * 2 + 2) {
         DVec3 a = PosOf(first[child]);
-        double sr = SqrtYZX(x - a.x, y - a.y, z - a.z);
+        volatile double sr = x87_length3(y - a.y, z - a.z, x - a.x);
         DVec3 b = PosOf(first[child - 1]);
-        double sl = SqrtXYZ(x - b.x, y - b.y, z - b.z);
+        double sl = x87_xyz_node_distance(x, y, z, b.x, b.y, b.z);
         if (!(sr >= sl))
             child--;
         first[hole] = first[child];
@@ -2102,7 +2270,7 @@ extern "C" void __cdecl Far_AdjustHeap(BYTE** first, int hole, int len, BYTE* va
         first[hole] = first[child - 1];
         hole = child - 1;
     }
-    Far_PushHeap(first, hole, top, value, x, y, z);
+    HolderHeap_SiftUpByDistance(first, hole, top, value, x, y, z);
 }
 
 extern "C" void __cdecl Far_AdjustHeap2(BYTE** first, int hole, int len, BYTE* value, double x, double y, double z)
@@ -2111,9 +2279,9 @@ extern "C" void __cdecl Far_AdjustHeap2(BYTE** first, int hole, int len, BYTE* v
     int child = hole * 2 + 2;
     for (; child < len; child = child * 2 + 2) {
         DVec3 a = PosOf(first[child]);
-        double sr = SqrtXYZ(x - a.x, y - a.y, z - a.z);
+        volatile double sr = x87_length3(x - a.x, y - a.y, z - a.z);
         DVec3 b = PosOf(first[child - 1]);
-        double sl = SqrtXYZ(x - b.x, y - b.y, z - b.z);
+        double sl = x87_xyz_node_distance(x, y, z, b.x, b.y, b.z);
         if (!(sr >= sl))
             child--;
         first[hole] = first[child];
@@ -2123,7 +2291,7 @@ extern "C" void __cdecl Far_AdjustHeap2(BYTE** first, int hole, int len, BYTE* v
         first[hole] = first[child - 1];
         hole = child - 1;
     }
-    Far_PushHeap2(first, hole, top, value, x, y, z);
+    HolderHeap_SiftUpByDistanceXYZ(first, hole, top, value, x, y, z);
 }
 
 // make_heap of records whose object (the first dword) has its position at
@@ -2187,7 +2355,8 @@ static void InsertionDesc8(double* first, double* last)
     }
 }
 
-extern "C" void __cdecl Doubles_ChunkInsertion(double* first, double* last, int chunk)
+// [FUN_47e630]
+extern "C" void __cdecl Doubles_SortChunksDescending(double* first, double* last, int chunk)
 {
     for (; last - first >= chunk; first += chunk)
         InsertionDesc8(first, first + chunk);
@@ -2202,6 +2371,7 @@ static void Swap8(double* a, double* b)
 }
 
 // merge without a buffer; the bounds are found inline
+// [FUN_47d520]
 extern "C" void __cdecl Doubles_MergeNoBuf(double* first, double* middle, double* last, int len1, int len2, int pred)
 {
     while (len1 != 0 && len2 != 0) {
@@ -2239,7 +2409,7 @@ extern "C" void __cdecl Doubles_MergeNoBuf(double* first, double* middle, double
             }
             len11 = cut1 - first;
         }
-        double* mid = (double*)Rotate8((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2);
+        double* mid = (double*)Doubles_RotateRange((BYTE*)cut1, (BYTE*)middle, (BYTE*)cut2);
         Doubles_MergeNoBuf(first, cut1, mid, len11, len22, pred);
         first = mid;
         middle = cut2;
@@ -2279,7 +2449,7 @@ extern "C" void __cdecl Doubles_StableSort(double* first, double* last, int pred
         cut1 = CallC<double*>(FUN_47f7f0, first, mid, cut2, pred, 0);
         len11 = cut1 - first;
     }
-    double* m = (double*)Rotate8((BYTE*)cut1, (BYTE*)mid, (BYTE*)cut2);
+    double* m = (double*)Doubles_RotateRange((BYTE*)cut1, (BYTE*)mid, (BYTE*)cut2);
     Doubles_MergeNoBuf(first, cut1, m, len11, len22, pred);
     Doubles_MergeNoBuf(m, cut2, last, len1 - len11, len2 - len22, pred);
 }
@@ -2585,66 +2755,6 @@ extern "C" void __cdecl Names_InsertionSortRest(BYTE* first, BYTE* last, int, in
     }
 }
 
-// === adding a leaf to the rope balancing forest (FUN_469520)
-
-KING_VAR(AsmLabel, g_rf64b984, 64b984)
-extern "C" void __fastcall Rope_FreeTree(BYTE* n, void*);
-extern "C" BYTE* __cdecl Rope_Concat(BYTE* l, BYTE* r);
-
-static const unsigned* Rf_MinLen() { return (const unsigned*)(BYTE*)g_rf64b984; }
-
-// a reference to rope node n dropped (freed at zero)
-static void Rf_Unref(BYTE* n)
-{
-    if (n && InterlockedDecrement((LONG*)(n + 4)) == 0)
-        Rope_FreeTree(n, 0);
-}
-
-// l + r, flagged balanced (+12) when long enough for its depth (+13)
-static BYTE* Rf_Concat(BYTE* l, BYTE* r)
-{
-    BYTE* c = Rope_Concat(l, r);
-    if (F(unsigned, c, 0) >= Rf_MinLen()[F(BYTE, c, 13)])
-        F(BYTE, c, 12) = 1;
-    return c;
-}
-
-extern "C" {
-
-// [FUN_469520] rope::_S_add_leaf_to_forest: the smaller forest entries joined into a piece before r, then the
-// sum carried up the forest (46 Fibonacci buckets) to the first bucket it is shorter than
-void __cdecl Rope_AddLeafToForest(BYTE* r, BYTE** forest)
-{
-    BYTE* tiny = 0;
-    unsigned s = F(unsigned, r, 0);
-    int i = 0;
-    for (; s >= Rf_MinLen()[i + 1]; i++)
-        if (forest[i]) {
-            BYTE* old = tiny;
-            tiny = Rf_Concat(forest[i], tiny);
-            Rf_Unref(forest[i]);
-            forest[i] = 0;
-            Rf_Unref(old);
-        }
-    BYTE* ins = Rf_Concat(tiny, r);
-    Rf_Unref(tiny);
-    for (;; i++) {
-        if (forest[i]) {
-            BYTE* old = ins;
-            ins = Rf_Concat(forest[i], ins);
-            Rf_Unref(forest[i]);
-            forest[i] = 0;
-            Rf_Unref(old);
-        }
-        if (i == 45 || F(unsigned, ins, 0) < Rf_MinLen()[i + 1]) {
-            forest[i] = ins;
-            return;
-        }
-    }
-}
-
-} // extern "C"
-
 // === vector<1592 bytes>::insert_aux (FUN_45b570)
 
 extern "C" {
@@ -2816,7 +2926,7 @@ extern "C" void __cdecl Names_LinearInsert(BYTE* first, BYTE* last, int, int cmp
         } else {
             unsigned have = f[1] - f[0];
             memmove(f[0], v[0], have);
-            Copy1((BYTE*)v[0] + (f[1] - f[0]), (BYTE*)v[1], (BYTE*)f[1]);
+            ByteRange_Move((BYTE*)v[0] + (f[1] - f[0]), (BYTE*)v[1], (BYTE*)f[1]);
             f[1] = f[0] + m;
         }
     } else {
@@ -2891,7 +3001,7 @@ BYTE* __cdecl OrderInfos_UninitCopy(const BYTE* first, const BYTE* last, BYTE* d
 // Batch 33: uninitialized copies of records with a shared head
 
 extern "C" void Uc33_Reserve1(); KING_ALIAS("_Uc33_Reserve1", "@Vec1_Reserve@16")
-extern "C" BYTE* __cdecl Copy1(const BYTE* first, const BYTE* last, BYTE* dest);
+extern "C" BYTE* __cdecl ByteRange_Move(const BYTE* first, const BYTE* last, BYTE* dest);
 extern "C" void FUN_466200(); KING_ALIAS("_FUN_466200", "_Rec24_UninitCopy")    // uninitialized copy of 24-byte items (first, last, dest, -)
 
 // the shared head (object +0 with its count at +4, value +4, flags +8; flag 0x10000 means a plain value)
@@ -2953,7 +3063,7 @@ BYTE* __cdecl Recs104_UninitCopy(const BYTE* first, const BYTE* last, BYTE* dest
         F(DWORD, dest, 84) = F(DWORD, first, 84);
         BYTE alloc;
         CallThis(Uc33_Reserve1, dest + 88, (int)(F(BYTE*, first, 92) - F(BYTE*, first, 88)), &alloc);
-        F(BYTE*, dest, 92) = Copy1(F(BYTE*, first, 88), F(BYTE*, first, 92), F(BYTE*, dest, 88));
+        F(BYTE*, dest, 92) = ByteRange_Move(F(BYTE*, first, 88), F(BYTE*, first, 92), F(BYTE*, dest, 88));
     }
     return dest;
 }
@@ -2983,7 +3093,7 @@ BYTE* __cdecl Recs36_UninitCopy(const BYTE* first, const BYTE* last, BYTE* dest,
         b[0] = p;
         b[1] = p;
         b[2] = p + n;
-        b[1] = Copy1(F(BYTE*, first, 12), F(BYTE*, first, 16), p);
+        b[1] = ByteRange_Move(F(BYTE*, first, 12), F(BYTE*, first, 16), p);
         BYTE alloc;
         CallThis(Uc33_Reserve4, dest + 24, (int)(F(BYTE*, first, 28) - F(BYTE*, first, 24)) >> 2, &alloc);
         F(BYTE*, dest, 28) = CallC<BYTE*>(Uc33_CopyDwords, F(BYTE*, first, 24), F(BYTE*, first, 28),
@@ -3058,67 +3168,20 @@ BYTE* __cdecl Recs56_UninitCopy(const BYTE* first, const BYTE* last, BYTE* dest,
 
 }
 
-// Uninitialized copies (exceptions are fatal here, so the original's
-// unwinding of a partial copy is left out)
-static void Ac_CopyCharVec(BYTE* d, const BYTE* s)     // vector<char> at d from s (begin, end, capacity)
+// [FUN_469c20] Emit the root, then restore the shortened heap using the saved last holder.
+extern "C" void __cdecl HolderHeap_PopFarthest(BYTE** first, BYTE** end, BYTE** result, BYTE* replacement, Is33_Pt point, int)
 {
-    BYTE* b = F(BYTE*, s, 0);
-    unsigned n = (unsigned)(F(BYTE*, s, 4) - b);
-    BYTE* p = n ? (BYTE*)Stl_Allocate(n) : 0;
-    F(BYTE*, d, 0) = p;
-    F(BYTE*, d, 4) = p;
-    F(BYTE*, d, 8) = p + n;
-    memmove(p, b, F(BYTE*, s, 4) - b);
-    F(BYTE*, d, 4) = p + (F(BYTE*, s, 4) - b);
+    *result = *first;
+    DVec3 origin;
+    memcpy(&origin, &point, sizeof(origin));
+    Far_AdjustHeap(first, 0, (int)(end - first), replacement, origin.x, origin.y, origin.z);
 }
 
-// [FUN_466200] [FUN_466d50] 24-byte records {int, int, vector<char>} from [first, last) to dest
-extern "C" BYTE* __cdecl Rec24_UninitCopy(BYTE* first, BYTE* last, BYTE* dest, BYTE*)
-{
-    for (; first != last; first += 24, dest += 24)
-        if (dest) {
-            F(int, dest, 0) = F(int, first, 0);
-            F(int, dest, 4) = F(int, first, 4);
-            Ac_CopyCharVec(dest + 8, first + 8);
-        }
-    return dest;
-}
-
-// [FUN_467320] vector<char>s from [first, last) to dest
-extern "C" BYTE* __cdecl CharVec_UninitCopy(BYTE* first, BYTE* last, BYTE* dest, BYTE*)
-{
-    for (; first != last; first += 12, dest += 12)
-        if (dest)
-            Ac_CopyCharVec(dest, first);
-    return dest;
-}
-
-// [FUN_466440] n copies of the vector<int> v at dest
-extern "C" BYTE* __cdecl IntVec_UninitFillN(BYTE* dest, unsigned n, const BYTE* v, int)
-{
-    for (; n; n--, dest += 12)
-        if (dest) {
-            int* b = F(int*, v, 0);
-            unsigned k = (unsigned)(F(int*, v, 4) - b);
-            int* p = k ? (int*)Stl_Allocate(k * 4) : 0;
-            F(int*, dest, 0) = p;
-            F(int*, dest, 4) = p;
-            F(int*, dest, 8) = p + k;
-            memmove(p, F(int*, v, 0), (F(int*, v, 4) - F(int*, v, 0)) * 4);
-            F(int*, dest, 4) = p + (F(int*, v, 4) - F(int*, v, 0));
-        }
-    return dest;
-}
-
-// [FUN_469bc0] [FUN_469c20] sort_heap of holders by distance to the point pt
-// (pop_heap until one is left)
+// [FUN_469bc0] Sort holders by ascending distance to the point.
 extern "C" void __cdecl Holders_SortHeap469bc0(BYTE** first, BYTE** last, Is33_Pt pt)
 {
-    const double* p = (const double*)pt.d;
     while (((BYTE*)last - (BYTE*)first & ~3) > 4) {
         last--;
-        BYTE* v = *last;
-        *last = *first;
-        Far_AdjustHeap(first, 0, (int)(last - first), v, p[0], p[1], p[2]);
+        HolderHeap_PopFarthest(first, last, last, *last, pt, 0);
     }
 }
